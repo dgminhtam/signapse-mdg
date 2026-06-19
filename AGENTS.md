@@ -2,13 +2,11 @@
 
 ## Project Structure & Module Organization
 
-This repository currently contains design documentation for the Signapse Market Data Gateway crypto MVP.
+This repository contains the FastAPI scaffold and design documentation for the Signapse Market Data Gateway crypto MVP.
 
 - `docs/spec.md` is the product and API contract source of truth.
 - `docs/system-design.md` describes architecture, components, data flow, persistence, and rollout plan.
 - `docs/tech-stack.md` records stack decisions and implementation tooling.
-
-When implementation starts, use this planned layout:
 
 - `app/` for FastAPI source code.
 - `app/api/` for HTTP and WebSocket routes.
@@ -20,7 +18,7 @@ When implementation starts, use this planned layout:
 
 ## Build, Test, and Development Commands
 
-Use `uv` once Python code is added.
+Use `uv` for dependency and command execution.
 
 - `uv sync`: install locked dependencies.
 - `uv run uvicorn app.main:app --reload`: run the local FastAPI server.
@@ -29,13 +27,21 @@ Use `uv` once Python code is added.
 - `uv run ruff format .`: format Python files.
 - `uv run mypy app`: run static type checks.
 
-Until source exists, keep documentation changes focused and check Markdown headings manually.
+Run `uv run alembic upgrade head` after configuring `DATABASE_URL`.
 
 ## Coding Style & Naming Conventions
 
 Use Python 3.14.6, FastAPI 0.137.2, Pydantic 2.13.4, SQLAlchemy 2.0.51 async, and async-first I/O. Keep typed boundaries between API DTOs, domain models, provider adapters, and persistence.
 
 Use 4-space indentation. Name modules `snake_case.py`, classes `PascalCase`, functions and variables `snake_case`, and constants `UPPER_SNAKE_CASE`. Store price and volume as `Decimal`; serialize API decimals as strings.
+
+## Provider Integration Guidelines
+
+When researching a market-data provider, check for an official, actively maintained SDK before designing direct HTTP or WebSocket calls. Prefer the official SDK when it supports the required APIs, Python version, async/concurrency model, timeout controls, and testability.
+
+Keep every SDK behind an adapter in `app/providers/`. Do not expose SDK request models, response models, or exceptions to domain, service, or API layers. Normalize provider data into repository-owned domain models.
+
+Use direct protocol integration only when the SDK is unavailable, incompatible, missing required functionality, or introduces a documented operational risk. Record that exception and its trade-offs in the relevant OpenSpec design or technical decision before implementation.
 
 ## Testing Guidelines
 

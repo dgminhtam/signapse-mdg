@@ -78,7 +78,7 @@ The gateway contract is provider-agnostic for clients. Provider-specific details
 ### FastAPI Application
 
 - Owns process startup, shutdown, dependency wiring, and route registration.
-- Exposes `/health`, `/v1/symbols`, `/v1/quotes`, `/v1/candles`, and `/v1/stream`.
+- Currently exposes `/health`, `/v1/symbols`, and `/v1/quotes`.
 - Converts validation and service exceptions into stable error responses.
 - Wires shared dependencies; provider streams are opened lazily when clients subscribe.
 
@@ -116,9 +116,11 @@ Recommended initial timeframes:
 
 ### Binance Spot Adapter
 
-- Encapsulates Binance REST and WebSocket details.
+- Encapsulates the official `binance-sdk-spot==9.2.0` REST integration and future SDK-backed
+  WebSocket details.
 - Maps provider payloads into internal normalized quote and candle models.
-- Owns upstream timeouts, retry policy, reconnect behavior, and lazy resubscription.
+- Runs synchronous SDK REST calls through `asyncio.to_thread`, serializes shared SDK client
+  access, and owns upstream timeout and retry policy.
 - Does not expose Binance-specific payloads outside the adapter boundary.
 
 ### Quote Cache
@@ -155,13 +157,17 @@ Client -> GET /v1/quotes?symbols=BTC/USD,ETH/USD
   -> Symbol Registry validates every symbol
   -> Market Data Service checks Quote Cache
   -> If cache hit and not expired, return normalized quotes
-  -> If cache miss or expired, fetch latest quote from Binance Adapter
+  -> If cache miss or expired, batch missing provider symbols through
+     Binance SDK ticker_price(symbols=[...])
   -> Adapter normalizes provider payload
   -> Service updates Quote Cache
   -> API returns normalized response
 ```
 
-Quote responses include successful `quotes` and per-symbol `errors`. A malformed request such as an empty symbols list still fails at request level.
+Quote responses include successful `quotes` and per-symbol `errors`. Missing or empty symbols
+return `400 INVALID_SYMBOLS`; exceeding `MAX_QUOTE_SYMBOLS` returns
+`400 TOO_MANY_SYMBOLS`. The Binance ticker-price payload has no timestamp, so
+`providerTime` is `null` and `receivedAt` is recorded by the gateway.
 
 ### Candle HTTP Flow
 
@@ -204,13 +210,13 @@ If upstream reconnects, the stream should emit `RECONNECTING`. If data exceeds t
 | `GET` | `/health` | Process health and current gateway time. |
 | `GET` | `/v1/symbols` | Supported canonical symbol registry. |
 | `GET` | `/v1/quotes` | Latest normalized quotes for one or more symbols. |
-| `GET` | `/v1/candles` | Normalized candles for one symbol and timeframe. |
+| `GET` | `/v1/candles` | Planned; not implemented in the current scope. |
 
 ### WebSocket
 
 | Path | Purpose |
 | --- | --- |
-| `/v1/stream?symbols=...&timeframe=...` | Quote and candle events for requested symbols. |
+| `/v1/stream?symbols=...&timeframe=...` | Planned; not implemented in the current scope. |
 
 ## 8. Internal Models
 
@@ -263,7 +269,28 @@ External DTOs serialize OHLCV fields as decimal strings.
 
 ## 9. Persistence Design
 
-Initial table:
+Initial symbol registry table:
+
+```sql
+CREATE TABLE supported_symbols (
+    id BIGSERIAL PRIMARY KEY,
+    symbol TEXT NOT NULL UNIQUE,
+    asset_class TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    provider_symbol TEXT NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (provider, provider_symbol)
+);
+```
+
+The initial Alembic migration seeds `BTC/USD -> BINANCE_SPOT:BTCUSD` and
+`ETH/USD -> BINANCE_SPOT:ETHUSD`. `/v1/symbols` queries enabled rows from this
+table and returns `503 DATABASE_UNAVAILABLE` when the registry cannot be queried.
+`/health` remains independent of database configuration and connectivity.
+
+Initial candle table:
 
 ```sql
 CREATE TABLE market_data_candles (
@@ -303,7 +330,10 @@ ON market_data_candles (provider, provider_symbol, timeframe, open_time);
 | --- | --- | --- |
 | `APP_ENV` | `local` | Runtime environment. |
 | `LOG_LEVEL` | `INFO` | Application log level. |
-| `DATABASE_URL` | required | Async PostgreSQL connection string. |
+| `DATABASE_URL` | unset | Async PostgreSQL connection string; required by migrations and database-backed endpoints. |
+| `DATABASE_POOL_SIZE` | `5` | Base async connection pool size. |
+| `DATABASE_POOL_MAX_OVERFLOW` | `5` | Additional connections allowed above the pool size. |
+| `DATABASE_POOL_TIMEOUT_SECONDS` | `5` | Maximum wait for a pooled connection. |
 | `BINANCE_REST_BASE_URL` | `https://api.binance.com` | Binance REST base URL. |
 | `BINANCE_WS_BASE_URL` | `wss://stream.binance.com:9443` | Binance WebSocket base URL. |
 | `QUOTE_STALE_AFTER_SECONDS` | `30` | Quote freshness threshold. |
@@ -345,6 +375,8 @@ Multi-symbol quote responses use a per-symbol error list:
 
 | Code | HTTP status | Trigger |
 | --- | --- | --- |
+| `INVALID_SYMBOLS` | `400` | Missing or empty quote symbols parameter. |
+| `TOO_MANY_SYMBOLS` | `400` | Too many distinct symbols in a quote request. |
 | `UNSUPPORTED_SYMBOL` | `400` | Unknown or disabled canonical symbol. |
 | `UNSUPPORTED_TIMEFRAME` | `400` | Unknown timeframe. |
 | `INVALID_TIME_RANGE` | `400` | Missing, invalid, inverted, or too-wide time range. |
@@ -365,7 +397,9 @@ Multi-symbol quote responses use a per-symbol error list:
 ## 13. Concurrency Model
 
 - Use FastAPI on ASGI with async route handlers.
-- Use HTTPX async client for provider REST.
+- Use the official Binance Spot SDK for provider REST.
+- Offload synchronous SDK REST operations with `asyncio.to_thread` and serialize shared SDK
+  client access.
 - Use SQLAlchemy 2 async sessions for PostgreSQL access.
 - Run provider WebSocket consumers as background asyncio tasks created on demand by subscriptions.
 - Protect in-memory quote and current-candle caches with an `asyncio.Lock` or a small cache abstraction that owns mutation.

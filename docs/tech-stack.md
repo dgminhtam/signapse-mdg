@@ -13,8 +13,8 @@ This document records the recommended technology stack for the crypto MVP descri
 | Runtime server | Uvicorn 0.49.0 | Standard ASGI server fit for FastAPI. |
 | DTO validation | Pydantic 2.13.4 | Type-hint driven validation, serialization, JSON Schema support. |
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
-| REST client | HTTPX 0.28.1 | Async HTTP client with timeout support and HTTP/2 option. |
-| Provider WebSocket client | websockets 16.0 | Focused WebSocket client/server library built for asyncio. |
+| Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation and generated models/errors. |
+| HTTP test client | HTTPX 0.28.1 | ASGI route and integration tests; not used for production Binance transport. |
 | Database | PostgreSQL 18.4 | Reliable relational store for candle cache and future asset metadata. |
 | DB driver | asyncpg 0.31.0 | PostgreSQL driver designed for Python asyncio. |
 | ORM/query layer | SQLAlchemy 2.0.51 | Mature Core/ORM APIs with asyncio-compatible engine/session support. |
@@ -24,7 +24,7 @@ This document records the recommended technology stack for the crypto MVP descri
 | Metrics | prometheus-client 0.25.0 | Simple counters, gauges, histograms exposed through HTTP. |
 | Test runner | pytest 9.1.0 | Readable unit/integration tests and strong plugin ecosystem. |
 | Async test support | pytest-asyncio 1.4.0 | Async pytest support. |
-| HTTPX mocking | respx 0.23.1 | Mock provider REST calls in adapter tests. |
+| Provider test doubles | Repository-owned fake SDK boundaries | Test normalization and errors without direct HTTP transport fixtures. |
 | Coverage | coverage.py 7.14.1 | Coverage reporting for test quality gates. |
 | Lint/format | Ruff 0.15.18 | Fast linter and formatter with one configuration surface. |
 | Type checking | mypy 2.1.0 | Static type checks for DTOs, adapters, repositories, and service boundaries. |
@@ -45,8 +45,8 @@ These versions are locked as the project baseline from 2026-06-19. Use latest st
 | Uvicorn | `0.49.0` |
 | Pydantic | `2.13.4` |
 | pydantic-settings | `2.14.1` |
-| HTTPX | `0.28.1` |
-| websockets | `16.0` |
+| binance-sdk-spot | `9.2.0` |
+| HTTPX (dev) | `0.28.1` |
 | asyncpg | `0.31.0` |
 | SQLAlchemy | `2.0.51` |
 | Alembic | `1.18.4` |
@@ -54,7 +54,6 @@ These versions are locked as the project baseline from 2026-06-19. Use latest st
 | prometheus-client | `0.25.0` |
 | pytest | `9.1.0` |
 | pytest-asyncio | `1.4.0` |
-| respx | `0.23.1` |
 | coverage.py | `7.14.1` |
 | Ruff | `0.15.18` |
 | mypy | `2.1.0` |
@@ -99,7 +98,7 @@ fastapi[standard-no-fastapi-cloud-cli]==0.137.2
 
 Reason:
 
-- Standard dependencies include server/test-friendly integrations such as Uvicorn and HTTPX.
+- Standard dependencies include server tooling such as Uvicorn; HTTPX remains a dev-only ASGI test client.
 - Excluding FastAPI Cloud CLI keeps the service dependency tree leaner.
 
 ### Uvicorn
@@ -152,18 +151,22 @@ Rules:
 
 ## 5. Provider Integration
 
-### Binance REST
+### Binance SDK
 
-Use HTTPX async client for provider REST calls.
+Use the official `binance-sdk-spot==9.2.0` package for Binance Spot integration.
 
-Initial endpoints:
+Initial SDK operation:
 
-- `GET /api/v3/ticker/price` for latest price fallback or cache fill.
+- `ticker_price(symbols=[...])` for latest price fallback or cache fill.
 - Defer `GET /api/v3/ticker/24hr`; quote `volume` is `null` in the MVP.
-- `GET /api/v3/klines` for candle backfill and historical cache fill.
+- Use the SDK kline operation for future candle backfill and historical cache fill.
 
 Important constraints:
 
+- The SDK REST client is synchronous; call it through `asyncio.to_thread`.
+- Serialize access to the shared SDK REST client.
+- Configure timeout in milliseconds and set `retries=0`.
+- Keep generated SDK models and exceptions inside `app/providers/`.
 - Binance kline intervals are case-sensitive; `1M` is month, while our public contract uses `1mo`.
 - `startTime` and `endTime` are interpreted in UTC by Binance.
 - Klines are uniquely identified by open time, matching our DB uniqueness model.
@@ -171,7 +174,8 @@ Important constraints:
 
 ### Binance WebSocket
 
-Use the `websockets` package for upstream provider streams.
+WebSocket implementation is deferred. Research and prefer the official Binance SDK WebSocket
+APIs before introducing a separate protocol client.
 
 Initial streams:
 
@@ -208,11 +212,16 @@ Reason:
 - `NUMERIC` is appropriate for exact price/volume values.
 - Unique indexes can enforce the candle identity rule.
 
-Initial database object:
+Initial database objects:
 
 ```text
+supported_symbols
 market_data_candles
 ```
+
+The `supported_symbols` table is the runtime source of truth for canonical-to-provider
+mapping. Alembic seeds the required BTC/USD and ETH/USD mappings; the application does not
+carry a hard-coded fallback registry.
 
 Primary uniqueness:
 
@@ -328,13 +337,12 @@ Recommended packages:
 pytest==9.1.0
 pytest-asyncio==1.4.0
 httpx==0.28.1
-respx==0.23.1
 ```
 
 Test layers:
 
 - Unit: registry, timeframe mapping, freshness, decimal serialization, error mapping.
-- Adapter: Binance REST payload normalization and WebSocket payload normalization.
+- Adapter: Binance SDK response normalization, error mapping, and async offloading.
 - Route: FastAPI HTTP response shape and validation behavior.
 - Repository: candle upsert/query behavior against a test PostgreSQL database.
 - WebSocket: subscription validation and event fanout.
@@ -448,8 +456,7 @@ Suggested `pyproject.toml` grouping:
 fastapi[standard-no-fastapi-cloud-cli]==0.137.2
 pydantic==2.13.4
 pydantic-settings==2.14.1
-httpx==0.28.1
-websockets==16.0
+binance-sdk-spot==9.2.0
 sqlalchemy[asyncio]==2.0.51
 asyncpg==0.31.0
 alembic==1.18.4
@@ -457,9 +464,9 @@ structlog==26.1.0
 prometheus-client==0.25.0
 
 [dependency-groups.dev]
+httpx==0.28.1
 pytest==9.1.0
 pytest-asyncio==1.4.0
-respx==0.23.1
 coverage==7.14.1
 ruff==0.15.18
 mypy==2.1.0
@@ -472,8 +479,8 @@ mypy==2.1.0
 - Python/FastAPI async stack.
 - Latest stable dependency versions are locked in this document and should be reflected in `pyproject.toml` and `uv.lock`.
 - Pydantic v2 for DTOs and settings.
-- HTTPX for REST provider calls.
-- `websockets` for provider streams.
+- Official Binance Spot SDK for provider integration.
+- HTTPX only for ASGI route and integration tests.
 - Canonical `BTC/USD` and `ETH/USD` mapped to Binance `BTCUSD` and `ETHUSD`.
 - Quote `volume` returns `null` in the MVP.
 - Multi-symbol quote failures return per-symbol errors.
@@ -502,8 +509,8 @@ mypy==2.1.0
 - FastAPI documentation: https://fastapi.tiangolo.com/
 - Pydantic documentation: https://docs.pydantic.dev/latest/
 - Uvicorn documentation: https://www.uvicorn.org/
+- Binance Python connector SDK: https://github.com/binance/binance-connector-python
 - HTTPX documentation: https://www.python-httpx.org/
-- websockets documentation: https://websockets.readthedocs.io/
 - Binance Spot market data REST: https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints
 - Binance Spot WebSocket streams: https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams
 - PostgreSQL numeric types: https://www.postgresql.org/docs/current/datatype-numeric.html

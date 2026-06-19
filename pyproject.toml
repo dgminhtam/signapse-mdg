@@ -4,9 +4,13 @@ version = "0.1.0"
 description = "Signapse Market Data Gateway"
 requires-python = "==3.14.*"
 dependencies = [
+    "alembic==1.18.4",
+    "asyncpg==0.31.0",
+    "binance-sdk-spot==9.2.0",
     "fastapi[standard-no-fastapi-cloud-cli]==0.137.2",
     "pydantic==2.13.4",
     "pydantic-settings==2.14.1",
+    "sqlalchemy[asyncio]==2.0.51",
     "uvicorn==0.49.0",
 ]
 
@@ -24,6 +28,10 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: requires TEST_DATABASE_URL pointing to a disposable PostgreSQL database",
+]
 
 [tool.ruff]
 target-version = "py314"
@@ -36,4 +44,3 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.14"
 strict = true
 files = ["app"]
-

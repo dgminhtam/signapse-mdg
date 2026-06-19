@@ -191,6 +191,11 @@ Semantics:
 - `stale = true` when the quote exceeds the freshness threshold.
 - Multi-symbol requests return per-symbol errors for unsupported, stale, or provider-failed symbols.
 - Request-level errors are reserved for malformed input such as missing or empty `symbols`.
+- The Binance MVP uses the official Spot SDK `ticker_price` operation for cache misses; the SDK
+  maps this operation to Binance `/api/v3/ticker/price`.
+- `providerTime` is `null` because the selected Binance response has no provider timestamp.
+- Missing or empty `symbols` returns `400 INVALID_SYMBOLS`; exceeding `MAX_QUOTE_SYMBOLS`
+  returns `400 TOO_MANY_SYMBOLS`.
 
 ### Get candles
 
@@ -323,11 +328,14 @@ Recommended error codes:
 
 | Code | HTTP status | Meaning |
 | --- | --- | --- |
+| `INVALID_SYMBOLS` | `400` | The quote symbols parameter is missing or empty. |
+| `TOO_MANY_SYMBOLS` | `400` | A quote request exceeds the configured distinct-symbol limit. |
 | `UNSUPPORTED_SYMBOL` | `400` | Symbol is not in the supported registry. |
 | `UNSUPPORTED_TIMEFRAME` | `400` | Timeframe is not supported. |
 | `INVALID_TIME_RANGE` | `400` | `from`/`to` is missing, invalid, or too wide. |
 | `PROVIDER_UNAVAILABLE` | `503` | Provider request or stream is unavailable. |
 | `DATA_STALE` | `503` or event status | Data is too stale for the requested operation. |
+| `DATABASE_UNAVAILABLE` | `503` | A database-backed capability cannot query PostgreSQL. |
 | `INTERNAL_ERROR` | `500` | Unexpected gateway failure. |
 
 ## Cache Policy
@@ -343,11 +351,21 @@ MVP can start with in-memory cache because only 2 symbols are supported. Redis s
 
 ## Persistence Model
 
-MVP only needs a candle cache table.
+MVP uses PostgreSQL for the supported-symbol registry and the candle cache.
 
 Logical model:
 
 ```text
+supported_symbols
+  id
+  symbol
+  asset_class
+  provider
+  provider_symbol
+  enabled
+  created_at
+  updated_at
+
 market_data_candles
   id
   symbol
@@ -370,11 +388,16 @@ market_data_candles
 Recommended uniqueness:
 
 ```text
+unique(symbol)
+unique(provider, provider_symbol)
 unique(provider, provider_symbol, timeframe, open_time)
 ```
 
 Notes:
 
+- `GET /v1/symbols` reads enabled rows from `supported_symbols`; no hard-coded runtime fallback is used.
+- The initial migration seeds `BTC/USD -> BINANCE_SPOT:BTCUSD` and
+  `ETH/USD -> BINANCE_SPOT:ETHUSD`.
 - `symbol` stores canonical symbol such as `BTC/USD`.
 - `provider_symbol` stores provider symbol such as `BTCUSD`.
 - Decimal values should use database decimal/numeric types, not float.
@@ -417,8 +440,8 @@ Recommended stack:
 | Runtime server | Uvicorn 0.49.0 | Common ASGI server for FastAPI. |
 | DTO validation | Pydantic 2.13.4 | Typed models, JSON serialization, validation. |
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
-| HTTP client | HTTPX 0.28.1 async | Async HTTP client with timeout control. |
-| WebSocket client | websockets 16.0 | Lightweight async WebSocket client for provider streams. |
+| Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation; synchronous REST calls are offloaded from the event loop. |
+| HTTP test client | HTTPX 0.28.1 | ASGI route and integration testing only. |
 | Database | PostgreSQL 18.4 | Reuse relational persistence for candle cache. |
 | DB driver | asyncpg 0.31.0 | Async PostgreSQL driver. |
 | ORM/migration | SQLAlchemy 2.0.51 async + Alembic 1.18.4 | Async database access and explicit migrations. |
@@ -443,8 +466,10 @@ LOG_LEVEL=INFO
 DATABASE_URL=postgresql+asyncpg://...
 BINANCE_REST_BASE_URL=https://api.binance.com
 BINANCE_WS_BASE_URL=wss://stream.binance.com:9443
+PROVIDER_HTTP_TIMEOUT_SECONDS=5
 QUOTE_STALE_AFTER_SECONDS=30
 QUOTE_CACHE_TTL_SECONDS=10
+MAX_QUOTE_SYMBOLS=10
 MAX_CANDLE_RANGE_DAYS=30
 ```
 
@@ -491,9 +516,9 @@ Authentication and per-client quota are out of scope for the first design. If ga
 
 - Binance Spot WebSocket Streams: <https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams>
 - Binance Spot Market Data endpoints: <https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints>
+- Binance Python connector SDK: <https://github.com/binance/binance-connector-python>
 - FastAPI documentation: <https://fastapi.tiangolo.com/>
-- HTTPX documentation: <https://www.python-httpx.org/>
-- websockets documentation: <https://websockets.readthedocs.io/>
+- HTTPX documentation (tests): <https://www.python-httpx.org/>
 - SQLAlchemy asyncio documentation: <https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html>
 - Alembic documentation: <https://alembic.sqlalchemy.org/>
 
