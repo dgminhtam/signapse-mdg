@@ -1,0 +1,41 @@
+# Virtual environments and uv
+.venv/
+.uv-cache/
+.uv-python/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test, type-check, and lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Coverage reports
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Build and packaging artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+
+# Editors and operating systems
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

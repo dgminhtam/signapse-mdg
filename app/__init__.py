@@ -1,0 +1,1 @@
+"""Signapse Market Data Gateway."""
