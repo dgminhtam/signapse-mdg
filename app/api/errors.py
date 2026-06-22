@@ -4,7 +4,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.domain.errors import QuoteRequestError
+from app.domain.errors import CandleRequestError, QuoteRequestError
 
 
 class ErrorDetail(BaseModel):
@@ -24,7 +24,7 @@ async def database_unavailable_handler(
     response = ErrorResponse(
         error=ErrorDetail(
             code="DATABASE_UNAVAILABLE",
-            message="The symbol registry is temporarily unavailable.",
+            message="The requested database-backed capability is temporarily unavailable.",
         )
     )
     return JSONResponse(status_code=503, content=response.model_dump(mode="json"))
@@ -43,3 +43,32 @@ async def quote_request_error_handler(
         )
     )
     return JSONResponse(status_code=400, content=response.model_dump(mode="json"))
+
+
+async def candle_request_error_handler(
+    _request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    if not isinstance(exc, CandleRequestError):
+        raise exc
+    response = ErrorResponse(
+        error=ErrorDetail(
+            code=exc.code,
+            message=exc.message,
+            details=exc.details,
+        )
+    )
+    return JSONResponse(status_code=400, content=response.model_dump(mode="json"))
+
+
+async def provider_unavailable_handler(
+    _request: Request,
+    _exc: Exception,
+) -> JSONResponse:
+    response = ErrorResponse(
+        error=ErrorDetail(
+            code="PROVIDER_UNAVAILABLE",
+            message="The market data provider is temporarily unavailable.",
+        )
+    )
+    return JSONResponse(status_code=503, content=response.model_dump(mode="json"))

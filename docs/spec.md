@@ -1,5 +1,8 @@
 # Signapse Market Data Gateway Crypto MVP
 
+External integration contract: see `docs/api-contract.md` for field-level HTTP and WebSocket
+schemas, required fields, types, error shapes, and close codes.
+
 - Loại tài liệu: Design
 - Độc giả chính: Engineering, product, data/AI
 - Source of truth cho: Contract và kiến trúc mục tiêu của Market Data Gateway crypto MVP
@@ -57,7 +60,9 @@ Nếu sau này provider đổi từ Binance sang nguồn khác, contract bên ng
 
 ### Freshness explicit
 
-Response phải nói rõ dữ liệu có stale hay không. Dữ liệu giá realtime không nên bị trình bày như dữ liệu chắc chắn mới nếu gateway đang mất kết nối upstream.
+Gateway phải kiểm tra freshness trước khi trả dữ liệu. Latest quote HTTP quá cũ phải được trả
+thành lỗi `DATA_STALE`; trạng thái freshness nội bộ không được expose trong successful quote.
+WebSocket dùng status event riêng để báo dữ liệu stale hoặc upstream đang reconnect.
 
 ### Decimal as string
 
@@ -168,14 +173,8 @@ Response:
   "quotes": [
     {
       "symbol": "BTC/USD",
-      "assetClass": "CRYPTO",
-      "provider": "BINANCE_SPOT",
-      "providerSymbol": "BTCUSD",
       "price": "104250.12",
-      "volume": null,
-      "providerTime": "2026-06-19T10:30:00Z",
-      "receivedAt": "2026-06-19T10:30:01Z",
-      "stale": false
+      "receivedAt": "2026-06-19T10:30:01Z"
     }
   ],
   "errors": []
@@ -184,16 +183,22 @@ Response:
 
 Semantics:
 
-- `price` is the latest trade/market price from the provider adapter.
-- `volume` is `null` in the MVP.
-- `providerTime` is the provider timestamp when available.
+- A successful quote contains exactly `symbol`, `price`, and `receivedAt`.
+- `symbol` is the canonical gateway symbol; provider identity and mapping remain internal.
+- `price` is the latest trade/market price and is serialized as a decimal string.
 - `receivedAt` is the gateway receive/snapshot timestamp.
-- `stale = true` when the quote exceeds the freshness threshold.
+- Asset class, provider metadata, volume, provider time, and freshness state are not exposed.
 - Multi-symbol requests return per-symbol errors for unsupported, stale, or provider-failed symbols.
 - Request-level errors are reserved for malformed input such as missing or empty `symbols`.
-- The Binance MVP uses the official Spot SDK `ticker_price` operation for cache misses; the SDK
-  maps this operation to Binance `/api/v3/ticker/price`.
-- `providerTime` is `null` because the selected Binance response has no provider timestamp.
+- Crypto cache misses are grouped by their persisted `BINANCE_SPOT` mapping and fetched with the
+  official Binance Spot SDK `ticker_price` operation.
+- Twelve Data cache misses for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`, `AAPL`,
+  `TSLA`, `NVDA`, and `MSFT` are grouped by their persisted `TWELVE_DATA` mapping and fetched
+  through the Twelve Data SDK.
+- A provider-group failure affects only symbols routed to that provider; mixed requests can return
+  successful crypto quotes and Forex errors, or the reverse.
+- Quotes older than the configured threshold are omitted and returned as per-symbol `DATA_STALE`
+  errors when refresh fails.
 - Missing or empty `symbols` returns `400 INVALID_SYMBOLS`; exceeding `MAX_QUOTE_SYMBOLS`
   returns `400 TOO_MANY_SYMBOLS`.
 
@@ -208,9 +213,6 @@ Response:
 ```json
 {
   "symbol": "BTC/USD",
-  "assetClass": "CRYPTO",
-  "provider": "BINANCE_SPOT",
-  "providerSymbol": "BTCUSD",
   "timeframe": "1m",
   "from": "2026-06-19T00:00:00Z",
   "to": "2026-06-19T01:00:00Z",
@@ -231,11 +233,31 @@ Response:
 
 Semantics:
 
+- A successful response contains exactly `symbol`, `timeframe`, `from`, `to`, and `candles`.
+- Asset class, provider identity, and provider symbol remain internal to the gateway.
 - Closed candles should be cacheable.
 - Current forming candle may be returned with `complete = false`.
-- Candle windows use UTC.
+- Candle windows use aligned UTC half-open ranges: `from` is inclusive and `to` is exclusive.
 - Gateway should reject unsupported timeframe values.
-- Gateway should enforce a maximum range per request to protect provider quota and database load.
+- MVP timeframes are `1m`, `5m`, `15m`, `1h`, and `1d`.
+- Gateway enforces both `MAX_CANDLE_RANGE_DAYS` and `MAX_CANDLES_PER_REQUEST`.
+- Closed candles are read from PostgreSQL first; only missing contiguous ranges are fetched.
+- Missing crypto ranges are routed through the persisted `BINANCE_SPOT` mapping; missing Twelve
+  Data ranges for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`, `AAPL`, `TSLA`, `NVDA`,
+  and `MSFT` are routed through `TWELVE_DATA`.
+- Missing or null Twelve Data Forex volume is serialized as decimal zero because the contract
+  requires volume; this means upstream volume is unavailable, not measured zero trading activity.
+- Forex intraday candles are filtered by the Signapse weekly quote session: Sunday 17:00 inclusive
+  through Friday 17:00 exclusive in `America/New_York`. The boundary is DST-aware, so the matching
+  UTC instant changes between EDT and EST.
+- Forex `1d` candles use a separate pragmatic chart rule: UTC day labels Monday through Friday are
+  eligible, while UTC Saturday and Sunday labels are excluded.
+- Persisted rows, provider rows, and current cached candles outside the Forex session are excluded;
+  closed-session slots do not count as expected gaps and are never requested or synthesized.
+- Forex holidays, early closes, late opens, exceptional venue closures, and provider maintenance
+  windows are out of scope for this policy.
+- Natural provider gaps such as omitted open-session Forex candles remain absent and are never
+  synthesized.
 
 ## WebSocket Stream Contract
 
@@ -243,9 +265,17 @@ Semantics:
 
 ```text
 WS /v1/stream?symbols=BTC/USD,ETH/USD&timeframe=1m
+WS /v1/stream?symbols=BTC/USD,EUR/USD&timeframe=1m
 ```
 
 On connect, gateway should validate all requested symbols and timeframe before subscribing upstream.
+Invalid subscription shape closes with WebSocket code `1008` and a stable reason such as
+`INVALID_SYMBOLS`, `TOO_MANY_SYMBOLS`, `UNSUPPORTED_SYMBOL`, or `UNSUPPORTED_TIMEFRAME`.
+Registry or provider failures close with `1011` and a sanitized reason.
+
+Stream interests route through each enabled symbol's persisted provider mapping. Binance-backed
+crypto symbols use Binance WebSocket quote/kline streams. Twelve Data-backed Forex symbols use one
+shared process-local Twelve Data WebSocket price stream for all active Forex interests.
 
 ### Quote event
 
@@ -253,14 +283,8 @@ On connect, gateway should validate all requested symbols and timeframe before s
 {
   "type": "quote",
   "symbol": "BTC/USD",
-  "assetClass": "CRYPTO",
-  "provider": "BINANCE_SPOT",
-  "providerSymbol": "BTCUSD",
   "price": "104250.12",
-  "volume": null,
-  "providerTime": "2026-06-19T10:30:00Z",
-  "receivedAt": "2026-06-19T10:30:01Z",
-  "stale": false
+  "receivedAt": "2026-06-19T10:30:01Z"
 }
 ```
 
@@ -270,9 +294,6 @@ On connect, gateway should validate all requested symbols and timeframe before s
 {
   "type": "candle",
   "symbol": "BTC/USD",
-  "assetClass": "CRYPTO",
-  "provider": "BINANCE_SPOT",
-  "providerSymbol": "BTCUSD",
   "timeframe": "1m",
   "openTime": "2026-06-19T10:30:00Z",
   "closeTime": "2026-06-19T10:30:59.999Z",
@@ -293,10 +314,16 @@ On connect, gateway should validate all requested symbols and timeframe before s
   "type": "status",
   "state": "SUBSCRIBED",
   "symbols": ["BTC/USD", "ETH/USD"],
-  "provider": "BINANCE_SPOT",
+  "channels": ["quote", "candle"],
   "observedAt": "2026-06-19T10:30:01Z"
 }
 ```
+
+`ERROR` status events additionally include stable `code` and sanitized `message` fields.
+
+When a Forex candle channel is outside the Signapse weekly quote session, the stream emits
+`MARKET_CLOSED` with the same status shape. The connection stays open; the candle channel is not
+reported as stale and returns to `CONNECTING` when the weekly session reopens.
 
 Allowed stream states:
 
@@ -306,7 +333,15 @@ Allowed stream states:
 | `SUBSCRIBED` | Gateway is receiving data for requested symbols. |
 | `STALE` | Gateway has not received fresh provider data within threshold. |
 | `RECONNECTING` | Gateway is reconnecting upstream and may send stale snapshots. |
+| `MARKET_CLOSED` | Requested candle channel is outside the configured market session. |
 | `ERROR` | Gateway cannot serve the stream. |
+
+Twelve Data Forex WebSocket events are price ticks, not upstream OHLC candles. The gateway derives
+Forex stream candles locally by bucketizing price ticks into `1m`, `5m`, `15m`, `1h`, and `1d`
+timeframes with tick price as OHLC and decimal zero volume. It does not synthesize skipped buckets;
+REST historical candles remain authoritative for backfill. Forex stream candles use the same weekly
+session filter as `/v1/candles`; holidays, early closes, late opens, exceptional closures, and
+provider maintenance windows remain out of scope.
 
 ## Error Contract
 
@@ -412,9 +447,9 @@ BINANCE_SPOT
 
 Responsibilities:
 
-- Map canonical symbol to Binance symbol.
-- Fetch latest quote through Binance market data endpoint.
-- Fetch candles through Binance kline endpoint.
+- Map canonical symbols to their persisted provider symbols.
+- Fetch latest quotes through the selected Binance or Twelve Data REST adapter.
+- Fetch candles through Binance klines or Twelve Data time series based on registry mapping.
 - Subscribe to Binance WebSocket streams for quote/kline events.
 - Normalize provider-specific payloads into gateway DTOs.
 
@@ -452,7 +487,7 @@ Deferred until needed:
 
 - Redis for shared quote cache and stream pub/sub.
 - TimescaleDB for large time-series retention/query volume.
-- Multi-provider routing engine.
+- Provider fallback and aggregation engine.
 - Provider scoring or fallback policy.
 - Raw tick storage.
 
@@ -466,14 +501,25 @@ LOG_LEVEL=INFO
 DATABASE_URL=postgresql+asyncpg://...
 BINANCE_REST_BASE_URL=https://api.binance.com
 BINANCE_WS_BASE_URL=wss://stream.binance.com:9443
+TWELVEDATA_API_KEY=...
+TWELVEDATA_REST_BASE_URL=https://api.twelvedata.com
 PROVIDER_HTTP_TIMEOUT_SECONDS=5
+PROVIDER_WS_RECONNECT_DELAY_SECONDS=5
 QUOTE_STALE_AFTER_SECONDS=30
 QUOTE_CACHE_TTL_SECONDS=10
 MAX_QUOTE_SYMBOLS=10
 MAX_CANDLE_RANGE_DAYS=30
+MAX_CANDLES_PER_REQUEST=1000
+STREAM_CLIENT_QUEUE_CAPACITY=256
+STREAM_PROVIDER_QUEUE_CAPACITY=1024
+STREAM_PERSISTENCE_QUEUE_CAPACITY=256
+STREAM_IDLE_GRACE_SECONDS=5
+STREAM_FRESHNESS_CHECK_SECONDS=1
 ```
 
-Configuration should not hardcode secrets for MVP because Binance public market-data endpoints do not require API keys.
+Binance public market-data endpoints do not require API keys. `TWELVEDATA_API_KEY` is optional at
+application startup, for crypto-only requests, and for fully persisted Forex candle reads; live
+Forex quote or candle refreshes require it.
 
 ## Observability
 
@@ -529,7 +575,7 @@ Authentication and per-client quota are out of scope for the first design. If ga
 - The initial consumer is one internal Java backend service.
 - The gateway remains internal-only for the MVP, but design should allow future public exposure.
 - Multi-symbol quote responses return per-symbol errors instead of failing the full request.
-- Quote `volume` is `null` in the MVP.
+- Successful latest quotes expose only `symbol`, `price`, and `receivedAt`.
 - Candle data has no automatic retention/deletion job in the MVP.
 - Provider WebSocket streams are opened lazily only when clients subscribe.
 - Deployment target is Docker Compose on the existing server.

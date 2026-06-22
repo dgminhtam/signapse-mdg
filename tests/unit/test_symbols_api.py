@@ -98,7 +98,7 @@ async def test_symbols_sanitizes_database_errors(client: AsyncClient) -> None:
     assert response.json() == {
         "error": {
             "code": "DATABASE_UNAVAILABLE",
-            "message": "The symbol registry is temporarily unavailable.",
+            "message": "The requested database-backed capability is temporarily unavailable.",
             "details": None,
         }
     }

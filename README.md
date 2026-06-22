@@ -63,10 +63,15 @@ DATABASE_POOL_SIZE=5
 DATABASE_POOL_MAX_OVERFLOW=5
 DATABASE_POOL_TIMEOUT_SECONDS=5
 BINANCE_REST_BASE_URL=https://api.binance.com
+TWELVEDATA_API_KEY=<twelve-data-api-key>
+TWELVEDATA_REST_BASE_URL=https://api.twelvedata.com
+TWELVEDATA_WS_HEARTBEAT_SECONDS=15
 PROVIDER_HTTP_TIMEOUT_SECONDS=5
 QUOTE_CACHE_TTL_SECONDS=10
 QUOTE_STALE_AFTER_SECONDS=30
 MAX_QUOTE_SYMBOLS=10
+MAX_CANDLE_RANGE_DAYS=30
+MAX_CANDLES_PER_REQUEST=1000
 ```
 
 Apply the schema and seed the supported symbols:
@@ -92,7 +97,11 @@ The API is available at:
 - Health check: <http://127.0.0.1:8000/health>
 - Supported symbols: <http://127.0.0.1:8000/v1/symbols>
 - Latest quotes: <http://127.0.0.1:8000/v1/quotes?symbols=BTC%2FUSD%2CETH%2FUSD>
+- Historical candles: <http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSD&timeframe=1m&from=2026-06-19T00%3A00%3A00Z&to=2026-06-19T00%3A02%3A00Z>
 - OpenAPI docs: <http://127.0.0.1:8000/docs>
+
+For external client implementation details, including required fields, response types, WebSocket
+events, and close codes, see [docs/api-contract.md](docs/api-contract.md).
 
 Verify the health endpoint from another terminal:
 
@@ -117,8 +126,99 @@ Fetch the two supported Binance-backed quotes:
 Invoke-RestMethod "http://127.0.0.1:8000/v1/quotes?symbols=BTC%2FUSD%2CETH%2FUSD"
 ```
 
-Quote responses contain ordered `quotes` and per-symbol `errors`. Price values are
-decimal strings; `volume` and `providerTime` are `null` in this MVP.
+Fetch the supported Twelve Data-backed Forex, metal, and US stock quotes:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/v1/quotes?symbols=EUR%2FUSD%2CGBP%2FUSD%2CUSD%2FJPY%2CAUD%2FUSD%2CXAU%2FUSD%2CAAPL%2CTSLA%2CNVDA%2CMSFT"
+```
+
+Quote responses contain ordered `quotes` and per-symbol `errors`. Successful items expose only
+the canonical `symbol`, decimal-string `price`, and gateway `receivedAt`. The application can
+start and serve crypto quotes without `TWELVEDATA_API_KEY`; live Forex refreshes require the key.
+
+Fetch an aligned half-open UTC candle range:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSD&timeframe=1m&from=2026-06-19T00%3A00%3A00Z&to=2026-06-19T00%3A02%3A00Z"
+```
+
+Fetch a Twelve Data-backed Forex candle range:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=EUR%2FUSD&timeframe=1m&from=2026-06-22T00%3A00%3A00Z&to=2026-06-22T00%3A05%3A00Z"
+```
+
+Verify Forex weekend filtering with a Friday-to-Monday hourly range:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=EUR%2FUSD&timeframe=1h&from=2026-06-19T00%3A00%3A00Z&to=2026-06-22T00%3A00%3A00Z"
+```
+
+For this June 2026 example, New York is on EDT. Signapse excludes the closed Forex session from
+Friday `2026-06-19T21:00:00Z` through Sunday `2026-06-21T21:00:00Z`, so the response should contain
+Friday open-session candles through `20:00Z` and Sunday candles from `21:00Z` onward. Holidays,
+early closes, late opens, and exceptional closures are intentionally not modeled yet.
+
+The response exposes only canonical series context:
+
+```json
+{
+  "symbol": "BTC/USD",
+  "timeframe": "1m",
+  "from": "2026-06-19T00:00:00Z",
+  "to": "2026-06-19T00:02:00Z",
+  "candles": [
+    {
+      "openTime": "2026-06-19T00:00:00Z",
+      "closeTime": "2026-06-19T00:00:59.999000Z",
+      "open": "104000.00",
+      "high": "104300.00",
+      "low": "103900.00",
+      "close": "104250.12",
+      "volume": "12.345",
+      "complete": true
+    }
+  ]
+}
+```
+
+`assetClass`, `provider`, and `providerSymbol` remain internal. Requests are limited by both
+`MAX_CANDLE_RANGE_DAYS` and `MAX_CANDLES_PER_REQUEST`. Live Forex fills require
+`TWELVEDATA_API_KEY`; fully persisted Forex ranges do not. Twelve Data Forex may omit volume, in
+which case the API returns `"volume": "0"` as an unavailable-volume placeholder rather than a
+measured zero-activity value.
+
+### Test WebSocket streams
+
+Postman can test `WS /v1/stream` directly with a WebSocket request:
+
+```text
+ws://127.0.0.1:8000/v1/stream?symbols=BTC%2FUSD,EUR%2FUSD&timeframe=1m
+```
+
+Forex-only example:
+
+```text
+ws://127.0.0.1:8000/v1/stream?symbols=EUR%2FUSD,GBP%2FUSD&timeframe=1m
+```
+
+Expected status events keep the same shape:
+
+```json
+{
+  "type": "status",
+  "state": "CONNECTING",
+  "symbols": ["BTC/USD", "EUR/USD"],
+  "channels": ["quote", "candle"],
+  "observedAt": "2026-06-22T00:00:00Z"
+}
+```
+
+During the closed weekly Forex candle session, the candle channel can emit `MARKET_CLOSED` instead
+of `STALE`. Quote events may still arrive if Twelve Data sends prices. Forex stream candles are
+derived from Twelve Data price ticks and use decimal zero volume; `/v1/candles` remains the
+authoritative backfill path. Holidays, early closes, late opens, and exceptional closures are not
+modeled yet.
 
 ## Development Checks
 

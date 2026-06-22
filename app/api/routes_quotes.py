@@ -2,17 +2,20 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.serialization import format_datetime, format_decimal
 from app.cache.quote_cache import QuoteCache
 from app.core.config import Settings, get_settings
 from app.db.repositories import PostgresSymbolRepository
 from app.db.session import get_db_session
-from app.domain.quotes import QuoteError, QuoteProvider, QuoteResult
+from app.domain.quotes import ProviderSymbolQuoteProvider, QuoteError, QuoteProvider, QuoteResult
 from app.domain.symbols import SymbolRepository
 from app.providers.binance_spot import build_binance_spot_quote_provider
+from app.providers.twelvedata_forex import build_twelvedata_forex_provider
+from app.services.quote_provider_router import QuoteProviderRouter
 from app.services.quotes import QuoteService, parse_symbols
 
 router = APIRouter(prefix="/v1", tags=["quotes"])
@@ -22,18 +25,8 @@ class QuoteResponse(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     symbol: str
-    asset_class: str
-    provider: str
-    provider_symbol: str
     price: str
-    volume: str | None
-    provider_time: str | None
     received_at: str
-    stale: bool
-
-    @field_serializer("price", "volume")
-    def serialize_decimal_string(self, value: str | None) -> str | None:
-        return value
 
 
 class QuoteErrorResponse(BaseModel):
@@ -56,17 +49,35 @@ def get_quote_cache() -> QuoteCache:
 def get_binance_quote_provider(
     base_url: str,
     timeout_seconds: float,
-) -> QuoteProvider:
+) -> ProviderSymbolQuoteProvider:
     return build_binance_spot_quote_provider(base_url, timeout_seconds)
+
+
+@lru_cache
+def get_twelvedata_quote_provider(
+    api_key: str,
+    base_url: str,
+    timeout_seconds: float,
+) -> ProviderSymbolQuoteProvider:
+    return build_twelvedata_forex_provider(api_key, base_url, timeout_seconds)
 
 
 def get_quote_provider(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> QuoteProvider:
-    return get_binance_quote_provider(
-        settings.binance_rest_base_url,
-        settings.provider_http_timeout_seconds,
-    )
+    providers = {
+        "BINANCE_SPOT": get_binance_quote_provider(
+            settings.binance_rest_base_url,
+            settings.provider_http_timeout_seconds,
+        )
+    }
+    if settings.twelvedata_api_key is not None and settings.twelvedata_api_key.strip():
+        providers["TWELVE_DATA"] = get_twelvedata_quote_provider(
+            settings.twelvedata_api_key,
+            settings.twelvedata_rest_base_url,
+            settings.provider_http_timeout_seconds,
+        )
+    return QuoteProviderRouter(providers)
 
 
 def get_quote_repository(
@@ -106,16 +117,8 @@ def _to_response(result: QuoteResult) -> QuoteListResponse:
         quotes=[
             QuoteResponse(
                 symbol=quote.symbol,
-                asset_class=quote.asset_class,
-                provider=quote.provider,
-                provider_symbol=quote.provider_symbol,
-                price=str(quote.price),
-                volume=None if quote.volume is None else str(quote.volume),
-                provider_time=(
-                    None if quote.provider_time is None else quote.provider_time.isoformat()
-                ),
-                received_at=quote.received_at.isoformat().replace("+00:00", "Z"),
-                stale=quote.stale,
+                price=format_decimal(quote.price),
+                received_at=format_datetime(quote.received_at),
             )
             for quote in result.quotes
         ],

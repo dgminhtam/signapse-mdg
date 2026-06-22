@@ -14,6 +14,7 @@ This document records the recommended technology stack for the crypto MVP descri
 | DTO validation | Pydantic 2.13.4 | Type-hint driven validation, serialization, JSON Schema support. |
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation and generated models/errors. |
+| Twelve Data provider SDK | twelvedata 1.4.0 | Official SDK foundation for low-cost Forex REST validation, latest price, and time series. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration tests; not used for production Binance transport. |
 | Database | PostgreSQL 18.4 | Reliable relational store for candle cache and future asset metadata. |
 | DB driver | asyncpg 0.31.0 | PostgreSQL driver designed for Python asyncio. |
@@ -46,6 +47,7 @@ These versions are locked as the project baseline from 2026-06-19. Use latest st
 | Pydantic | `2.13.4` |
 | pydantic-settings | `2.14.1` |
 | binance-sdk-spot | `9.2.0` |
+| twelvedata | `1.4.0` |
 | HTTPX (dev) | `0.28.1` |
 | asyncpg | `0.31.0` |
 | SQLAlchemy | `2.0.51` |
@@ -130,7 +132,8 @@ Patterns:
 - Keep domain models separate from API response models.
 - Store monetary/market numeric values internally as `Decimal`.
 - Serialize API-facing decimals as strings, matching the spec.
-- Use explicit field aliases for external camelCase fields such as `assetClass`, `providerSymbol`, `providerTime`, and `receivedAt`.
+- Keep rich provider metadata in domain models and project only contract-approved fields into API
+  DTOs. The latest-quote DTO exposes `symbol`, `price`, and camel-case `receivedAt`.
 - Use strict validation for public request models where practical.
 
 Recommended packages:
@@ -158,7 +161,7 @@ Use the official `binance-sdk-spot==9.2.0` package for Binance Spot integration.
 Initial SDK operation:
 
 - `ticker_price(symbols=[...])` for latest price fallback or cache fill.
-- Defer `GET /api/v3/ticker/24hr`; quote `volume` is `null` in the MVP.
+- Defer `GET /api/v3/ticker/24hr`; latest quotes do not expose volume.
 - Use the SDK kline operation for future candle backfill and historical cache fill.
 
 Important constraints:
@@ -174,8 +177,9 @@ Important constraints:
 
 ### Binance WebSocket
 
-WebSocket implementation is deferred. Research and prefer the official Binance SDK WebSocket
-APIs before introducing a separate protocol client.
+WebSocket implementation uses the official Binance SDK WebSocket Streams APIs behind a gateway
+adapter. The adapter owns SDK models, callbacks, handles, reconnect delay, and provider stream
+names so application services only see normalized domain events.
 
 Initial streams:
 
@@ -199,6 +203,53 @@ Provider-symbol decision:
 - Map them to Binance Spot `BTCUSD` and `ETHUSD` for the MVP.
 - Add a startup or CI smoke check against Binance exchange metadata so unsupported provider symbols fail loudly.
 - Open upstream WebSocket streams lazily when downstream clients subscribe, not at app startup.
+- Share matching upstream interests across downstream clients with process-local reference counts.
+- Keep SDK callbacks non-blocking by enqueueing normalized events into bounded async queues.
+- Run one application worker per process for the MVP because live stream state is process-local.
+
+### Twelve Data Forex Foundation
+
+Use the official `twelvedata==1.4.0` SDK as the Forex provider foundation for:
+
+- Forex pair discovery/validation.
+- Latest-price REST normalization.
+- OHLC time-series REST normalization.
+- WebSocket price streaming for the current Forex catalog.
+
+Current seeded Forex catalog:
+
+```text
+EUR/USD -> TWELVE_DATA:EUR/USD
+GBP/USD -> TWELVE_DATA:GBP/USD
+USD/JPY -> TWELVE_DATA:USD/JPY
+AUD/USD -> TWELVE_DATA:AUD/USD
+XAU/USD -> TWELVE_DATA:XAU/USD
+AAPL -> TWELVE_DATA:AAPL
+TSLA -> TWELVE_DATA:TSLA
+NVDA -> TWELVE_DATA:NVDA
+MSFT -> TWELVE_DATA:MSFT
+```
+
+Important constraints:
+
+- Keep Twelve Data SDK imports and exceptions inside `app/providers/`.
+- The SDK REST surface is synchronous; call it through `asyncio.to_thread`.
+- Serialize shared SDK client access.
+- Configure API key, REST base URL, and timeout through environment settings.
+- Route Forex latest quotes and historical candles through Twelve Data using persisted registry
+  mappings.
+- Keep Twelve Data SDK request builders, raw payloads, callback threads, and exceptions inside
+  `app/providers/`.
+- The SDK WebSocket is thread-based and emits raw dictionaries through `on_event`; bridge callbacks
+  into the asyncio loop with `loop.call_soon_threadsafe`.
+- Run blocking WebSocket `connect`, `disconnect`, `subscribe`, `unsubscribe`, and `heartbeat`
+  interactions outside the ASGI event loop.
+- Use one shared process-local Twelve Data WebSocket connection for active Forex streams, matching
+  the free-plan constraint and the MVP single-worker assumption.
+- Treat Twelve Data WebSocket as price-only upstream. Gateway Forex candles are derived from price
+  tick buckets with decimal zero volume; REST historical candles remain authoritative for backfill.
+- Apply the weekly Forex session filter to derived stream candles. Holidays and exceptional
+  closures remain out of scope.
 
 ## 6. Persistence
 
@@ -440,11 +491,20 @@ LOG_LEVEL
 DATABASE_URL
 BINANCE_REST_BASE_URL
 BINANCE_WS_BASE_URL
+TWELVEDATA_API_KEY
+TWELVEDATA_REST_BASE_URL
+PROVIDER_WS_RECONNECT_DELAY_SECONDS
 QUOTE_STALE_AFTER_SECONDS
 QUOTE_CACHE_TTL_SECONDS
 MAX_CANDLE_RANGE_DAYS
 MAX_QUOTE_SYMBOLS
+MAX_CANDLES_PER_REQUEST
 PROVIDER_HTTP_TIMEOUT_SECONDS
+STREAM_CLIENT_QUEUE_CAPACITY
+STREAM_PROVIDER_QUEUE_CAPACITY
+STREAM_PERSISTENCE_QUEUE_CAPACITY
+STREAM_IDLE_GRACE_SECONDS
+STREAM_FRESHNESS_CHECK_SECONDS
 ```
 
 ## 12. Dependency Groups
@@ -457,6 +517,7 @@ fastapi[standard-no-fastapi-cloud-cli]==0.137.2
 pydantic==2.13.4
 pydantic-settings==2.14.1
 binance-sdk-spot==9.2.0
+twelvedata==1.4.0
 sqlalchemy[asyncio]==2.0.51
 asyncpg==0.31.0
 alembic==1.18.4
@@ -480,9 +541,11 @@ mypy==2.1.0
 - Latest stable dependency versions are locked in this document and should be reflected in `pyproject.toml` and `uv.lock`.
 - Pydantic v2 for DTOs and settings.
 - Official Binance Spot SDK for provider integration.
+- Official Twelve Data SDK for the low-cost Forex REST foundation.
 - HTTPX only for ASGI route and integration tests.
 - Canonical `BTC/USD` and `ETH/USD` mapped to Binance `BTCUSD` and `ETHUSD`.
-- Quote `volume` returns `null` in the MVP.
+- Successful latest quotes expose only `symbol`, `price`, and `receivedAt`.
+- Provider identity, symbol mapping, and freshness metadata remain internal to the gateway.
 - Multi-symbol quote failures return per-symbol errors.
 - Upstream WebSocket streams open only when clients subscribe.
 - PostgreSQL + SQLAlchemy async + Alembic for candle cache.
@@ -498,10 +561,7 @@ mypy==2.1.0
 - Public auth and quota middleware.
 - Multi-provider routing engine.
 - Provider fallback strategy.
-
-### Needs Validation Before Coding
-
-- Whether `/v1/quotes` may return stale data with `stale = true`, or should fail with `DATA_STALE`.
+- Twelve Data WebSocket integration.
 
 ## 14. Primary References
 
@@ -510,6 +570,7 @@ mypy==2.1.0
 - Pydantic documentation: https://docs.pydantic.dev/latest/
 - Uvicorn documentation: https://www.uvicorn.org/
 - Binance Python connector SDK: https://github.com/binance/binance-connector-python
+- Twelve Data Python SDK: https://github.com/twelvedata/twelvedata-python
 - HTTPX documentation: https://www.python-httpx.org/
 - Binance Spot market data REST: https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints
 - Binance Spot WebSocket streams: https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams

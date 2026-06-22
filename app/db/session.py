@@ -45,3 +45,30 @@ async def get_db_session(
     )
     async with session_factory() as session:
         yield session
+
+
+def get_session_factory(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> async_sessionmaker[AsyncSession]:
+    if settings.database_url is None:
+        raise DatabaseUnavailableError
+    _, session_factory = _build_database(
+        settings.database_url,
+        settings.database_pool_size,
+        settings.database_pool_max_overflow,
+        settings.database_pool_timeout_seconds,
+    )
+    return session_factory
+
+
+def build_session_factory(
+    settings: Settings,
+) -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]] | None:
+    if settings.database_url is None:
+        return None
+    return _build_database(
+        settings.database_url,
+        settings.database_pool_size,
+        settings.database_pool_max_overflow,
+        settings.database_pool_timeout_seconds,
+    )

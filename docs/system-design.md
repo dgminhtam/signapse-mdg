@@ -11,12 +11,28 @@ Market Data Gateway is an independent service that exposes normalized market dat
 
 The gateway contract is provider-agnostic for clients. Provider-specific details stay inside the registry and adapter layer.
 
+A Twelve Data foundation now exists for the current Forex/metal catalog symbols:
+
+| Canonical symbol | Asset class | Provider | Provider symbol |
+| --- | --- | --- | --- |
+| `EUR/USD` | `FOREX` | `TWELVE_DATA` | `EUR/USD` |
+| `GBP/USD` | `FOREX` | `TWELVE_DATA` | `GBP/USD` |
+| `USD/JPY` | `FOREX` | `TWELVE_DATA` | `USD/JPY` |
+| `AUD/USD` | `FOREX` | `TWELVE_DATA` | `AUD/USD` |
+| `XAU/USD` | `COMMODITY` | `TWELVE_DATA` | `XAU/USD` |
+| `AAPL` | `US_STOCK` | `TWELVE_DATA` | `AAPL` |
+| `TSLA` | `US_STOCK` | `TWELVE_DATA` | `TSLA` |
+| `NVDA` | `US_STOCK` | `TWELVE_DATA` | `NVDA` |
+| `MSFT` | `US_STOCK` | `TWELVE_DATA` | `MSFT` |
+
+These rows are seeded in the registry and enabled through the provider routers.
+
 ## 2. Goals
 
 - Serve normalized latest quotes through HTTP.
 - Serve normalized historical candles through HTTP.
 - Stream normalized quote and candle events through WebSocket.
-- Keep freshness explicit through `stale`, `providerTime`, and `receivedAt`.
+- Enforce latest-quote freshness internally and expose stale HTTP data as `DATA_STALE`.
 - Cache latest quotes and current candles in memory.
 - Persist closed candles in PostgreSQL.
 - Keep the MVP deployable as a small isolated FastAPI service.
@@ -28,7 +44,7 @@ The gateway contract is provider-agnostic for clients. Provider-specific details
 - Public authentication, multi-tenant quota, or billing.
 - Raw tick storage.
 - Support for crypto assets beyond `BTC/USD` and `ETH/USD`.
-- Support for FX, commodities, equities, ETFs, or indexes.
+- Public market-data routing for FX, commodities, equities, ETFs, or indexes.
 
 ## 4. Architecture
 
@@ -71,6 +87,16 @@ The gateway contract is provider-agnostic for clients. Provider-specific details
                               | Binance Spot Market   |
                               | Data APIs             |
                               +-----------------------+
+
+                              +-----------------------+
+                              | Twelve Data Adapter   |
+                              | Forex REST foundation |
+                              +-----------+-----------+
+                                          |
+                                          v
+                              +-----------------------+
+                              | Twelve Data REST APIs |
+                              +-----------------------+
 ```
 
 ## 5. Component Responsibilities
@@ -78,7 +104,7 @@ The gateway contract is provider-agnostic for clients. Provider-specific details
 ### FastAPI Application
 
 - Owns process startup, shutdown, dependency wiring, and route registration.
-- Currently exposes `/health`, `/v1/symbols`, and `/v1/quotes`.
+- Currently exposes `/health`, `/v1/symbols`, `/v1/quotes`, `/v1/candles`, and `/v1/stream`.
 - Converts validation and service exceptions into stable error responses.
 - Wires shared dependencies; provider streams are opened lazily when clients subscribe.
 
@@ -123,6 +149,26 @@ Recommended initial timeframes:
   access, and owns upstream timeout and retry policy.
 - Does not expose Binance-specific payloads outside the adapter boundary.
 
+### Twelve Data Forex Adapter
+
+- Encapsulates the official `twelvedata==1.4.0` SDK for Forex REST and WebSocket foundations.
+- Supports provider-symbol discovery/validation, latest-price normalization, and OHLC
+  time-series normalization for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`,
+  `AAPL`, `TSLA`, `NVDA`, and `MSFT`.
+- Uses one process-local Twelve Data WebSocket connection for active Forex streams and shares
+  dynamic provider-symbol subscriptions across clients.
+- Bridges the SDK's thread-based `on_event` callback into the asyncio runtime with
+  thread-safe loop scheduling; blocking SDK connect, disconnect, subscribe, unsubscribe, and
+  heartbeat calls run outside the ASGI event loop.
+- Runs synchronous SDK REST calls through `asyncio.to_thread`, serializes shared SDK client
+  access, and maps SDK/provider failures to the sanitized provider-unavailable boundary.
+- Does not expose Twelve Data SDK request builders, payloads, or exceptions outside
+  `app/providers/`.
+- Is wired to public `/v1/quotes`, `/v1/candles`, and `/v1/stream` through provider routers.
+- Maps the gateway's half-open candle range to Twelve Data UTC time-series boundaries.
+- Normalizes missing Forex volume to zero as an unavailable-volume placeholder.
+- Normalizes Forex WebSocket price ticks into quote events and derives stream candles locally.
+
 ### Quote Cache
 
 - Stores latest quote per canonical symbol in memory.
@@ -141,65 +187,97 @@ Recommended initial timeframes:
 
 - Accepts client WebSocket subscriptions.
 - Validates all symbols and timeframe before accepting a stream.
-- Opens upstream Binance streams only when at least one client is subscribed.
+- Routes upstream interests by persisted provider mapping through a multi-provider stream router.
+- Opens upstream Binance or Twelve Data streams only when at least one client is subscribed.
 - Closes upstream streams when no matching clients remain, optionally after a short idle grace period.
 - Subscribes to normalized provider events from the adapter.
 - Fans out quote and candle events to matching clients.
-- Emits status events such as `SUBSCRIBED`, `STALE`, `RECONNECTING`, and `ERROR`.
+- Emits status events such as `SUBSCRIBED`, `STALE`, `RECONNECTING`, `MARKET_CLOSED`, and `ERROR`.
 
 ## 6. Data Flow
 
 ### Latest Quote HTTP Flow
 
 ```text
-Client -> GET /v1/quotes?symbols=BTC/USD,ETH/USD
+Client -> GET /v1/quotes?symbols=BTC/USD,EUR/USD
   -> API validates query shape
   -> Symbol Registry validates every symbol
   -> Market Data Service checks Quote Cache
   -> If cache hit and not expired, return normalized quotes
-  -> If cache miss or expired, batch missing provider symbols through
-     Binance SDK ticker_price(symbols=[...])
-  -> Adapter normalizes provider payload
+  -> Quote Provider Router groups cache misses by persisted provider mapping
+  -> Binance Adapter batch-fetches missing crypto provider symbols
+  -> Twelve Data Adapter fetches missing Forex provider symbols
+  -> Adapters normalize provider payloads
   -> Service updates Quote Cache
   -> API returns normalized response
 ```
 
 Quote responses include successful `quotes` and per-symbol `errors`. Missing or empty symbols
 return `400 INVALID_SYMBOLS`; exceeding `MAX_QUOTE_SYMBOLS` returns
-`400 TOO_MANY_SYMBOLS`. The Binance ticker-price payload has no timestamp, so
-`providerTime` is `null` and `receivedAt` is recorded by the gateway.
+`400 TOO_MANY_SYMBOLS`. Each successful quote exposes only canonical `symbol`, decimal-string
+`price`, and gateway-recorded `receivedAt`; provider and freshness metadata remain internal.
+Provider failures are isolated by group, so a Twelve Data failure does not block a successful
+Binance result in the same request.
 
 ### Candle HTTP Flow
 
 ```text
-Client -> GET /v1/candles?symbol=BTC/USD&timeframe=1m&from=...&to=...
+Client -> GET /v1/candles?symbol=EUR/USD&timeframe=1m&from=...&to=...
   -> API validates required query params
   -> Symbol Registry validates symbol and timeframe
-  -> Service validates UTC range and max range
+  -> Service validates aligned UTC [from,to), max range, and max candle count
+  -> Service selects market-session policy from persisted asset class
   -> Repository loads persisted closed candles
-  -> Service fetches missing range from Binance Adapter if needed
+  -> Service discards persisted rows outside the selected session policy
+  -> Service calculates missing eligible slots and coalesces provider ranges
+  -> Candle Provider Router selects the persisted provider mapping
+  -> Service fetches missing ranges from Binance or Twelve Data if needed
+  -> Provider adapters normalize and discard known session-ineligible rows
   -> Service persists newly fetched closed candles
-  -> Service merges closed candles with current forming candle if applicable
+  -> Service merges closed candles with current forming candle if policy-eligible
   -> API returns normalized response
 ```
 
 The current candle may have `complete = false`; closed candles should have `complete = true`.
+The public response contains only `symbol`, `timeframe`, `from`, `to`, and `candles`; provider
+identity and mapping remain internal.
+Forex intraday candles follow the Signapse weekly quote session from Sunday 17:00 inclusive through
+Friday 17:00 exclusive in `America/New_York`; `zoneinfo` and `tzdata` keep the boundary DST-aware
+instead of relying on a fixed UTC offset. Forex `1d` candles use UTC weekday labels: Monday through
+Friday are eligible and Saturday/Sunday are excluded. The policy intentionally does not model
+holidays, early closes, late opens, exceptional closures, or provider maintenance windows. Natural
+open-session provider gaps remain absent. Missing or null Twelve Data volume is represented as
+decimal zero to satisfy the existing contract and does not mean measured zero activity.
 
 ### WebSocket Stream Flow
 
 ```text
-Client -> WS /v1/stream?symbols=BTC/USD,ETH/USD&timeframe=1m
+Client -> WS /v1/stream?symbols=BTC/USD,EUR/USD&timeframe=1m
   -> API validates all symbols and timeframe
   -> Stream Manager registers client subscription
-  -> Stream Manager opens the matching upstream Binance stream if needed
+  -> Stream Manager sends CONNECTING
+  -> Stream Router opens matching upstream Binance and Twelve Data streams if needed
   -> Stream Manager sends status SUBSCRIBED when upstream data is available
   -> Binance Adapter receives provider ticker/kline events
-  -> Adapter normalizes events
+  -> Twelve Data Adapter receives Forex price ticks from one shared SDK WebSocket
+  -> Adapters normalize quote events
+  -> Twelve Data Adapter derives Forex candle events from price tick buckets
   -> Quote/Candle caches are updated
+  -> Completed candles are queued for idempotent PostgreSQL persistence
   -> Stream Manager fans out events to matching clients
 ```
 
-If upstream reconnects, the stream should emit `RECONNECTING`. If data exceeds the freshness threshold, it should emit `STALE`.
+Forex stream candles are derived from price ticks for the requested timeframe. Volume is decimal
+zero because Twelve Data price events do not provide gateway-compatible volume. The gateway does
+not synthesize skipped buckets; REST historical candles remain authoritative for backfill.
+
+If upstream reconnects, the stream should emit `RECONNECTING`. If open-session data exceeds the
+freshness threshold, it should emit `STALE`. If a Forex candle channel is outside the weekly quote
+session, it emits `MARKET_CLOSED`, is excluded from stale evaluation, and returns to `CONNECTING`
+when the session reopens. The same scope limit applies as HTTP candles: holidays, early closes,
+late opens, exceptional closures, and provider maintenance windows are not modeled yet.
+Per-client bounded queues isolate slow consumers; an overloaded client is closed with `1013`
+without blocking provider consumption or other clients.
 
 ## 7. API Surface
 
@@ -210,13 +288,13 @@ If upstream reconnects, the stream should emit `RECONNECTING`. If data exceeds t
 | `GET` | `/health` | Process health and current gateway time. |
 | `GET` | `/v1/symbols` | Supported canonical symbol registry. |
 | `GET` | `/v1/quotes` | Latest normalized quotes for one or more symbols. |
-| `GET` | `/v1/candles` | Planned; not implemented in the current scope. |
+| `GET` | `/v1/candles` | Historical normalized candles for one symbol and timeframe. |
 
 ### WebSocket
 
 | Path | Purpose |
 | --- | --- |
-| `/v1/stream?symbols=...&timeframe=...` | Planned; not implemented in the current scope. |
+| `/v1/stream?symbols=...&timeframe=...` | Realtime normalized quote, candle, and status events. |
 
 ## 8. Internal Models
 
@@ -244,7 +322,16 @@ received_at: datetime
 stale: boolean
 ```
 
-External DTOs serialize `price` as a decimal string. Quote `volume` is `null` for the MVP.
+The normalized quote is an internal model. The public latest-quote DTO projects exactly:
+
+```text
+symbol
+price: decimal string
+receivedAt: UTC datetime
+```
+
+Provider identity, provider symbol, asset class, volume, provider time, and freshness state are
+not exposed by `GET /v1/quotes`.
 
 ### Normalized Candle
 
@@ -286,8 +373,11 @@ CREATE TABLE supported_symbols (
 ```
 
 The initial Alembic migration seeds `BTC/USD -> BINANCE_SPOT:BTCUSD` and
-`ETH/USD -> BINANCE_SPOT:ETHUSD`. `/v1/symbols` queries enabled rows from this
-table and returns `503 DATABASE_UNAVAILABLE` when the registry cannot be queried.
+`ETH/USD -> BINANCE_SPOT:ETHUSD`. A later Forex seed migration adds
+`EUR/USD`, `GBP/USD`, `USD/JPY`, and `AUD/USD` as enabled `FOREX` records, `XAU/USD` as an enabled
+`COMMODITY` record, and `AAPL`, `TSLA`, `NVDA`, and `MSFT` as enabled `US_STOCK` records, all
+mapped to `TWELVE_DATA`. `/v1/symbols` queries enabled rows from this table and returns
+`503 DATABASE_UNAVAILABLE` when the registry cannot be queried.
 `/health` remains independent of database configuration and connectivity.
 
 Initial candle table:
@@ -336,11 +426,21 @@ ON market_data_candles (provider, provider_symbol, timeframe, open_time);
 | `DATABASE_POOL_TIMEOUT_SECONDS` | `5` | Maximum wait for a pooled connection. |
 | `BINANCE_REST_BASE_URL` | `https://api.binance.com` | Binance REST base URL. |
 | `BINANCE_WS_BASE_URL` | `wss://stream.binance.com:9443` | Binance WebSocket base URL. |
+| `TWELVEDATA_API_KEY` | unset | Required for live Forex quote/candle refreshes; optional for startup, crypto requests, and persisted Forex candle reads. |
+| `TWELVEDATA_REST_BASE_URL` | `https://api.twelvedata.com` | Twelve Data REST base URL. |
+| `PROVIDER_WS_RECONNECT_DELAY_SECONDS` | `5` | SDK WebSocket reconnect delay. |
+| `TWELVEDATA_WS_HEARTBEAT_SECONDS` | `15` | Twelve Data WebSocket heartbeat cadence while the shared Forex stream connection is active. |
 | `QUOTE_STALE_AFTER_SECONDS` | `30` | Quote freshness threshold. |
 | `QUOTE_CACHE_TTL_SECONDS` | `10` | Latest quote cache TTL. |
 | `MAX_CANDLE_RANGE_DAYS` | `30` | Max candle query range. |
+| `MAX_CANDLES_PER_REQUEST` | `1000` | Max expected timeframe slots in one candle request. |
 | `MAX_QUOTE_SYMBOLS` | `10` | Max symbols in one quote request. |
 | `PROVIDER_HTTP_TIMEOUT_SECONDS` | `5` | Provider REST timeout. |
+| `STREAM_CLIENT_QUEUE_CAPACITY` | `256` | Per-client downstream event queue size. |
+| `STREAM_PROVIDER_QUEUE_CAPACITY` | `1024` | Provider adapter ingress queue size. |
+| `STREAM_PERSISTENCE_QUEUE_CAPACITY` | `256` | Completed-candle persistence queue size. |
+| `STREAM_IDLE_GRACE_SECONDS` | `5` | Delay before closing unused upstream interests. |
+| `STREAM_FRESHNESS_CHECK_SECONDS` | `1` | Freshness monitor interval. |
 
 ## 11. Error Handling
 
@@ -386,9 +486,9 @@ Multi-symbol quote responses use a per-symbol error list:
 
 ## 12. Freshness and Cache Rules
 
-- `receivedAt` is set by the gateway when it receives or creates the normalized data point.
-- `providerTime` is set from provider payload when available.
-- `stale = true` when `now - receivedAt > QUOTE_STALE_AFTER_SECONDS`.
+- Internal `received_at` is set by the gateway when it receives or creates a normalized quote.
+- Internal `provider_time` is set from provider payload when available.
+- A quote is stale internally when `now - received_at > QUOTE_STALE_AFTER_SECONDS`.
 - Latest quote HTTP responses return per-symbol `DATA_STALE` errors when a symbol has no fresh quote.
 - WebSocket streams should emit a `STALE` status when no fresh upstream event arrives within the threshold.
 - Closed candles are cacheable and authoritative after persistence.
@@ -398,6 +498,7 @@ Multi-symbol quote responses use a per-symbol error list:
 
 - Use FastAPI on ASGI with async route handlers.
 - Use the official Binance Spot SDK for provider REST.
+- Use the official Twelve Data SDK for the Forex REST foundation.
 - Offload synchronous SDK REST operations with `asyncio.to_thread` and serialize shared SDK
   client access.
 - Use SQLAlchemy 2 async sessions for PostgreSQL access.

@@ -29,6 +29,21 @@ def load_migration_module() -> ModuleType:
     return module
 
 
+def load_forex_migration_module() -> ModuleType:
+    migration_path = (
+        Path(__file__).parents[2] / "alembic" / "versions" / "20260622_0003_seed_forex_symbols.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "forex_supported_symbols_migration",
+        migration_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Unable to load Forex supported-symbol migration.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 async def test_migration_creates_schema_and_exact_seed_mappings(
     database_engine: AsyncEngine,
 ) -> None:
@@ -72,8 +87,17 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
     assert ("symbol",) in constraints
     assert ("provider", "provider_symbol") in constraints
     assert rows == [
+        ("AAPL", "US_STOCK", "TWELVE_DATA", "AAPL", True),
+        ("AUD/USD", "FOREX", "TWELVE_DATA", "AUD/USD", True),
         ("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True),
+        ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
         ("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True),
+        ("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True),
+        ("MSFT", "US_STOCK", "TWELVE_DATA", "MSFT", True),
+        ("NVDA", "US_STOCK", "TWELVE_DATA", "NVDA", True),
+        ("TSLA", "US_STOCK", "TWELVE_DATA", "TSLA", True),
+        ("USD/JPY", "FOREX", "TWELVE_DATA", "USD/JPY", True),
+        ("XAU/USD", "COMMODITY", "TWELVE_DATA", "XAU/USD", True),
     ]
 
 
@@ -106,8 +130,60 @@ async def test_seed_is_idempotent_and_restores_required_mapping(
         ).all()
 
     assert rows == [
+        ("AAPL", "AAPL", True),
+        ("AUD/USD", "AUD/USD", True),
         ("BTC/USD", "BTCUSD", True),
+        ("EUR/USD", "EUR/USD", True),
         ("ETH/USD", "ETHUSD", True),
+        ("GBP/USD", "GBP/USD", True),
+        ("MSFT", "MSFT", True),
+        ("NVDA", "NVDA", True),
+        ("TSLA", "TSLA", True),
+        ("USD/JPY", "USD/JPY", True),
+        ("XAU/USD", "XAU/USD", True),
+    ]
+
+
+async def test_forex_seed_is_idempotent_and_preserves_crypto_mappings(
+    database_engine: AsyncEngine,
+) -> None:
+    migration = load_forex_migration_module()
+    async with database_engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                UPDATE supported_symbols
+                SET provider_symbol = 'OLD_EUR', enabled = false
+                WHERE symbol = 'EUR/USD'
+                """
+            )
+        )
+        await connection.run_sync(migration.seed_forex_supported_symbols)
+        await connection.run_sync(migration.seed_forex_supported_symbols)
+        rows = (
+            await connection.execute(
+                text(
+                    """
+                    SELECT symbol, asset_class, provider, provider_symbol, enabled
+                    FROM supported_symbols
+                    ORDER BY symbol
+                    """
+                )
+            )
+        ).all()
+
+    assert rows == [
+        ("AAPL", "US_STOCK", "TWELVE_DATA", "AAPL", True),
+        ("AUD/USD", "FOREX", "TWELVE_DATA", "AUD/USD", True),
+        ("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True),
+        ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
+        ("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True),
+        ("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True),
+        ("MSFT", "US_STOCK", "TWELVE_DATA", "MSFT", True),
+        ("NVDA", "US_STOCK", "TWELVE_DATA", "NVDA", True),
+        ("TSLA", "US_STOCK", "TWELVE_DATA", "TSLA", True),
+        ("USD/JPY", "FOREX", "TWELVE_DATA", "USD/JPY", True),
+        ("XAU/USD", "COMMODITY", "TWELVE_DATA", "XAU/USD", True),
     ]
 
 
@@ -138,8 +214,17 @@ async def test_api_lists_seed_symbols_in_canonical_order(
 
     assert response.status_code == 200
     assert [symbol["symbol"] for symbol in response.json()["symbols"]] == [
+        "AAPL",
+        "AUD/USD",
         "BTC/USD",
+        "EUR/USD",
         "ETH/USD",
+        "GBP/USD",
+        "MSFT",
+        "NVDA",
+        "TSLA",
+        "USD/JPY",
+        "XAU/USD",
     ]
 
 
@@ -169,12 +254,75 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
     assert response.json() == {
         "symbols": [
             {
+                "symbol": "AAPL",
+                "assetClass": "US_STOCK",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "AAPL",
+                "enabled": True,
+            },
+            {
+                "symbol": "AUD/USD",
+                "assetClass": "FOREX",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "AUD/USD",
+                "enabled": True,
+            },
+            {
                 "symbol": "BTC/USD",
                 "assetClass": "CRYPTO",
                 "provider": "BINANCE_SPOT",
                 "providerSymbol": "BTCUSD_TEST",
                 "enabled": True,
-            }
+            },
+            {
+                "symbol": "EUR/USD",
+                "assetClass": "FOREX",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "EUR/USD",
+                "enabled": True,
+            },
+            {
+                "symbol": "GBP/USD",
+                "assetClass": "FOREX",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "GBP/USD",
+                "enabled": True,
+            },
+            {
+                "symbol": "MSFT",
+                "assetClass": "US_STOCK",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "MSFT",
+                "enabled": True,
+            },
+            {
+                "symbol": "NVDA",
+                "assetClass": "US_STOCK",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "NVDA",
+                "enabled": True,
+            },
+            {
+                "symbol": "TSLA",
+                "assetClass": "US_STOCK",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "TSLA",
+                "enabled": True,
+            },
+            {
+                "symbol": "USD/JPY",
+                "assetClass": "FOREX",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "USD/JPY",
+                "enabled": True,
+            },
+            {
+                "symbol": "XAU/USD",
+                "assetClass": "COMMODITY",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "XAU/USD",
+                "enabled": True,
+            },
         ]
     }
 
@@ -224,5 +372,8 @@ async def test_quotes_use_persisted_provider_mapping(
 
     assert response.status_code == 200
     assert provider.requested_provider_symbols == ["BTCUSD_TEST"]
-    assert response.json()["quotes"][0]["providerSymbol"] == "BTCUSD_TEST"
-    assert response.json()["quotes"][0]["price"] == "123.4500"
+    quote = response.json()["quotes"][0]
+    assert set(quote) == {"symbol", "price", "receivedAt"}
+    assert quote["symbol"] == "BTC/USD"
+    assert quote["price"] == "123.4500"
+    assert quote["receivedAt"].endswith("Z")

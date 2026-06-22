@@ -8,6 +8,7 @@ from app.cache.quote_cache import QuoteCache
 from app.domain.errors import ProviderUnavailableError, QuoteRequestError
 from app.domain.quotes import ProviderQuoteBatch, Quote
 from app.domain.symbols import SupportedSymbol
+from app.services.quote_provider_router import QuoteProviderRouter
 from app.services.quotes import QuoteService, parse_symbols
 
 
@@ -33,7 +34,8 @@ class FakeProvider:
         self.gate = gate
         self.calls: list[list[str]] = []
 
-    async def fetch_latest_prices(self, provider_symbols: list[str]) -> ProviderQuoteBatch:
+    async def fetch_latest_prices(self, symbols: list[SupportedSymbol]) -> ProviderQuoteBatch:
+        provider_symbols = [symbol.provider_symbol for symbol in symbols]
         self.calls.append(provider_symbols)
         if self.gate is not None:
             await self.gate.wait()
@@ -45,8 +47,32 @@ class FakeProvider:
         )
 
 
+class FakeProviderSymbolProvider:
+    def __init__(
+        self,
+        prices: dict[str, Decimal] | None = None,
+        error: bool = False,
+    ) -> None:
+        self.prices = prices or {}
+        self.error = error
+        self.calls: list[list[str]] = []
+
+    async def fetch_latest_prices(self, provider_symbols: list[str]) -> ProviderQuoteBatch:
+        self.calls.append(provider_symbols)
+        if self.error:
+            raise ProviderUnavailableError
+        return ProviderQuoteBatch(
+            prices={
+                symbol: self.prices[symbol] for symbol in provider_symbols if symbol in self.prices
+            },
+            unavailable_symbols=frozenset(),
+        )
+
+
 BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
 ETH = SupportedSymbol("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
+GBP = SupportedSymbol("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True)
 NOW = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
 
 
@@ -57,6 +83,21 @@ def build_service(
 ) -> QuoteService:
     return QuoteService(
         repository=FakeSymbolRepository([BTC, ETH]),
+        provider=provider,
+        cache=cache or QuoteCache(),
+        cache_ttl_seconds=10,
+        stale_after_seconds=30,
+        clock=lambda: now,
+    )
+
+
+def build_mixed_service(
+    provider: QuoteProviderRouter,
+    cache: QuoteCache | None = None,
+    now: datetime = NOW,
+) -> QuoteService:
+    return QuoteService(
+        repository=FakeSymbolRepository([BTC, ETH, EUR, GBP]),
         provider=provider,
         cache=cache or QuoteCache(),
         cache_ttl_seconds=10,
@@ -185,3 +226,48 @@ async def test_service_coalesces_concurrent_refreshes() -> None:
     assert provider.calls == [["BTCUSD"]]
     assert first_result.quotes[0].price == Decimal("10")
     assert second_result.quotes[0].price == Decimal("10")
+
+
+async def test_service_preserves_request_order_for_mixed_provider_quotes() -> None:
+    binance = FakeProviderSymbolProvider({"BTCUSD": Decimal("10")})
+    twelvedata = FakeProviderSymbolProvider({"EUR/USD": Decimal("1.10")})
+    service = build_mixed_service(
+        QuoteProviderRouter({"BINANCE_SPOT": binance, "TWELVE_DATA": twelvedata})
+    )
+
+    result = await service.get_latest_quotes(["EUR/USD", "BTC/USD"])
+
+    assert [quote.symbol for quote in result.quotes] == ["EUR/USD", "BTC/USD"]
+    assert [quote.price for quote in result.quotes] == [Decimal("1.10"), Decimal("10")]
+    assert result.errors == []
+    assert binance.calls == [["BTCUSD"]]
+    assert twelvedata.calls == [["EUR/USD"]]
+
+
+async def test_service_returns_crypto_when_twelvedata_provider_is_missing() -> None:
+    binance = FakeProviderSymbolProvider({"BTCUSD": Decimal("10")})
+    service = build_mixed_service(QuoteProviderRouter({"BINANCE_SPOT": binance}))
+
+    result = await service.get_latest_quotes(["BTC/USD", "EUR/USD"])
+
+    assert [quote.symbol for quote in result.quotes] == ["BTC/USD"]
+    assert result.quotes[0].price == Decimal("10")
+    assert [(error.symbol, error.code) for error in result.errors] == [
+        ("EUR/USD", "PROVIDER_UNAVAILABLE")
+    ]
+
+
+async def test_service_isolates_twelvedata_failure_from_binance_success() -> None:
+    binance = FakeProviderSymbolProvider({"BTCUSD": Decimal("10")})
+    twelvedata = FakeProviderSymbolProvider(error=True)
+    service = build_mixed_service(
+        QuoteProviderRouter({"BINANCE_SPOT": binance, "TWELVE_DATA": twelvedata})
+    )
+
+    result = await service.get_latest_quotes(["BTC/USD", "GBP/USD"])
+
+    assert [quote.symbol for quote in result.quotes] == ["BTC/USD"]
+    assert result.quotes[0].price == Decimal("10")
+    assert [(error.symbol, error.code) for error in result.errors] == [
+        ("GBP/USD", "PROVIDER_UNAVAILABLE")
+    ]

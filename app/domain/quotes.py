@@ -3,6 +3,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Protocol
 
+from app.domain.symbols import SupportedSymbol
+
 
 @dataclass(frozen=True, slots=True)
 class Quote:
@@ -36,8 +38,15 @@ class ProviderQuoteBatch:
     unavailable_symbols: frozenset[str]
 
 
-class QuoteProvider(Protocol):
+class ProviderSymbolQuoteProvider(Protocol):
     async def fetch_latest_prices(
         self,
         provider_symbols: list[str],
+    ) -> ProviderQuoteBatch: ...
+
+
+class QuoteProvider(Protocol):
+    async def fetch_latest_prices(
+        self,
+        symbols: list[SupportedSymbol],
     ) -> ProviderQuoteBatch: ...

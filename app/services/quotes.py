@@ -115,9 +115,7 @@ class QuoteService:
         errors: dict[str, QuoteError],
     ) -> None:
         try:
-            batch = await self._provider.fetch_latest_prices(
-                [item.provider_symbol for item in pending]
-            )
+            batch = await self._provider.fetch_latest_prices(pending)
         except ProviderUnavailableError:
             self._use_fallbacks(pending, cached, resolved, errors)
             return

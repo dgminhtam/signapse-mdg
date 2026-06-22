@@ -1,0 +1,343 @@
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from app.api import routes_candles as routes_candles_module
+from app.api.routes_candles import (
+    get_candle_cache,
+    get_candle_provider,
+    get_candle_repository,
+    get_candle_service,
+)
+from app.cache.candle_cache import CandleCache
+from app.core.config import Settings, get_settings
+from app.domain.candles import Candle, CandleResult
+from app.domain.errors import DatabaseUnavailableError, ProviderUnavailableError
+from app.domain.symbols import SupportedSymbol
+from app.main import app
+from app.services.candle_provider_router import CandleProviderRouter
+
+START = datetime(2026, 6, 19, 0, 0, tzinfo=UTC)
+
+
+class StubCandleService:
+    def __init__(
+        self,
+        result: CandleResult | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        self.result = result or CandleResult(
+            "BTC/USD",
+            "1m",
+            START,
+            START + timedelta(minutes=1),
+            [],
+        )
+        self.error = error
+
+    async def get_candles(self, request: object) -> CandleResult:
+        del request
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
+
+
+class FakeCandleRepository:
+    def __init__(self) -> None:
+        self.upserted: list[Candle] = []
+
+    async def get_enabled_symbol(self, symbol: str) -> SupportedSymbol | None:
+        return EUR if symbol == EUR.symbol else None
+
+    async def list_complete(
+        self,
+        symbol: SupportedSymbol,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
+    ) -> list[Candle]:
+        del symbol, timeframe, start, end
+        return []
+
+    async def upsert_complete(self, candles: list[Candle]) -> None:
+        self.upserted.extend(candles)
+
+
+class FakeCandleProvider:
+    def __init__(self) -> None:
+        self.calls: list[SupportedSymbol] = []
+
+    async def fetch_candles(
+        self,
+        symbol: SupportedSymbol,
+        timeframe: str,
+        provider_interval: str,
+        start: datetime,
+        end: datetime,
+        limit: int,
+    ) -> list[Candle]:
+        del provider_interval, end, limit
+        self.calls.append(symbol)
+        return [
+            Candle(
+                symbol.symbol,
+                symbol.asset_class,
+                symbol.provider,
+                symbol.provider_symbol,
+                timeframe,
+                start,
+                start + timedelta(minutes=1) - timedelta(milliseconds=1),
+                Decimal("1.1000"),
+                Decimal("1.2000"),
+                Decimal("1.0000"),
+                Decimal("1.1500"),
+                Decimal("0"),
+                False,
+            )
+        ]
+
+
+@pytest.fixture
+async def client() -> AsyncIterator[AsyncClient]:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+def valid_params() -> dict[str, str]:
+    return {
+        "symbol": "BTC/USD",
+        "timeframe": "1m",
+        "from": "2026-06-19T00:00:00Z",
+        "to": "2026-06-19T00:01:00Z",
+    }
+
+
+async def test_candles_serializes_minimal_provider_agnostic_contract(
+    client: AsyncClient,
+) -> None:
+    candle = Candle(
+        "BTC/USD",
+        "CRYPTO",
+        "BINANCE_SPOT",
+        "BTCUSD",
+        "1m",
+        START,
+        START + timedelta(minutes=1) - timedelta(milliseconds=1),
+        Decimal("10.00"),
+        Decimal("11.00"),
+        Decimal("9.00"),
+        Decimal("10.50"),
+        Decimal("0E-8"),
+        True,
+    )
+    app.dependency_overrides[get_candle_service] = lambda: StubCandleService(
+        CandleResult(
+            "BTC/USD",
+            "1m",
+            START,
+            START + timedelta(minutes=1),
+            [candle],
+        )
+    )
+
+    response = await client.get("/v1/candles", params=valid_params())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == {"symbol", "timeframe", "from", "to", "candles"}
+    assert set(payload["candles"][0]) == {
+        "openTime",
+        "closeTime",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "complete",
+    }
+    assert "provider" not in response.text
+    assert payload["candles"][0]["close"] == "10.50"
+    assert payload["candles"][0]["volume"] == "0.00000000"
+    assert payload["candles"][0]["openTime"].endswith("Z")
+
+
+async def test_candles_returns_empty_series(client: AsyncClient) -> None:
+    app.dependency_overrides[get_candle_service] = lambda: StubCandleService()
+
+    response = await client.get("/v1/candles", params=valid_params())
+
+    assert response.status_code == 200
+    assert response.json()["candles"] == []
+
+
+@pytest.mark.parametrize(
+    ("params", "code"),
+    [
+        ({}, "UNSUPPORTED_SYMBOL"),
+        ({"symbol": "BTC/USD"}, "UNSUPPORTED_TIMEFRAME"),
+        (
+            {
+                "symbol": "BTC/USD",
+                "timeframe": "1m",
+                "from": "bad",
+                "to": "2026-06-19T00:01:00Z",
+            },
+            "INVALID_TIME_RANGE",
+        ),
+    ],
+)
+async def test_candles_returns_contract_400_not_422(
+    client: AsyncClient,
+    params: dict[str, str],
+    code: str,
+) -> None:
+    app.dependency_overrides[get_candle_service] = lambda: StubCandleService()
+
+    response = await client.get("/v1/candles", params=params)
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == code
+
+
+async def test_candles_applies_configured_count_limit(client: AsyncClient) -> None:
+    app.dependency_overrides[get_candle_service] = lambda: StubCandleService()
+    app.dependency_overrides[get_settings] = lambda: Settings(max_candles_per_request=1)
+    params = valid_params()
+    params["to"] = "2026-06-19T00:02:00Z"
+
+    response = await client.get("/v1/candles", params=params)
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_TIME_RANGE"
+
+
+@pytest.mark.parametrize(
+    ("error", "code"),
+    [
+        (DatabaseUnavailableError("postgresql://secret"), "DATABASE_UNAVAILABLE"),
+        (ProviderUnavailableError("raw sdk payload"), "PROVIDER_UNAVAILABLE"),
+    ],
+)
+async def test_candles_sanitizes_service_failures(
+    client: AsyncClient,
+    error: Exception,
+    code: str,
+) -> None:
+    app.dependency_overrides[get_candle_service] = lambda: StubCandleService(error=error)
+
+    response = await client.get("/v1/candles", params=valid_params())
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == code
+    assert "secret" not in response.text
+    assert "raw sdk payload" not in response.text
+
+
+async def test_candles_routes_forex_through_fake_twelvedata_provider(
+    client: AsyncClient,
+) -> None:
+    repository = FakeCandleRepository()
+    twelvedata = FakeCandleProvider()
+    app.dependency_overrides[get_candle_repository] = lambda: repository
+    app.dependency_overrides[get_candle_provider] = lambda: CandleProviderRouter(
+        {"TWELVE_DATA": twelvedata}
+    )
+    app.dependency_overrides[get_candle_cache] = CandleCache
+
+    response = await client.get(
+        "/v1/candles",
+        params={
+            "symbol": "EUR/USD",
+            "timeframe": "1m",
+            "from": "2026-06-22T00:00:00Z",
+            "to": "2026-06-22T00:01:00Z",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == {"symbol", "timeframe", "from", "to", "candles"}
+    assert payload["symbol"] == "EUR/USD"
+    assert payload["candles"][0]["volume"] == "0"
+    assert set(payload["candles"][0]) == {
+        "openTime",
+        "closeTime",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "complete",
+    }
+    assert twelvedata.calls == [EUR]
+    assert repository.upserted[0].provider == "TWELVE_DATA"
+
+
+async def test_missing_twelvedata_provider_returns_sanitized_503(
+    client: AsyncClient,
+) -> None:
+    app.dependency_overrides[get_candle_repository] = FakeCandleRepository
+    app.dependency_overrides[get_candle_provider] = lambda: CandleProviderRouter({})
+    app.dependency_overrides[get_candle_cache] = CandleCache
+
+    response = await client.get(
+        "/v1/candles",
+        params={
+            "symbol": "EUR/USD",
+            "timeframe": "1m",
+            "from": "2026-06-22T00:00:00Z",
+            "to": "2026-06-22T00:01:00Z",
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "PROVIDER_UNAVAILABLE"
+
+
+async def test_candle_dependency_without_twelvedata_key_keeps_binance_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binance = FakeCandleProvider()
+    twelvedata_builds = 0
+
+    def fake_twelvedata_builder(
+        api_key: str,
+        base_url: str,
+        timeout_seconds: float,
+    ) -> FakeCandleProvider:
+        del api_key, base_url, timeout_seconds
+        nonlocal twelvedata_builds
+        twelvedata_builds += 1
+        return FakeCandleProvider()
+
+    monkeypatch.setattr(
+        routes_candles_module,
+        "get_binance_candle_provider",
+        lambda base_url, timeout_seconds: binance,
+    )
+    monkeypatch.setattr(
+        routes_candles_module,
+        "get_twelvedata_candle_provider",
+        fake_twelvedata_builder,
+    )
+    provider = get_candle_provider(Settings(twelvedata_api_key=None))
+
+    candles = await provider.fetch_candles(
+        SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True),
+        "1m",
+        "1m",
+        START,
+        START + timedelta(minutes=1),
+        1,
+    )
+
+    assert candles[0].symbol == "BTC/USD"
+    assert twelvedata_builds == 0
