@@ -27,12 +27,7 @@ Signapse đang chia asset theo các nhóm sản phẩm sau:
 | Forex | US Dollar / Japanese Yen | `USD/JPY` |
 | Forex | Australian Dollar / US Dollar | `AUD/USD` |
 | Commodity | Gold / US Dollar | `XAU/USD` |
-| Commodity | Silver / US Dollar | `XAG/USD` |
 | Commodity | WTI Crude Oil | `WTI` |
-| Commodity | Brent Crude Oil | `BRENT` |
-| Stock Index | S&P 500 | `SPX` |
-| Stock Index | NASDAQ-100 | `NDX` |
-| Stock Index | Dow Jones Industrial Average | `DJI` |
 | US Stock | Apple | `AAPL` |
 | US Stock | Tesla | `TSLA` |
 | US Stock | NVIDIA | `NVDA` |
@@ -48,6 +43,11 @@ Các asset dưới đây nằm trong phạm vi mong muốn nhưng chưa được
 
 | Nhóm | Asset | Canonical symbol đề xuất |
 | --- | --- | --- |
+| Commodity | Silver / US Dollar | `XAG/USD` |
+| Commodity | Brent Crude Oil | `BRENT` |
+| Stock Index | S&P 500 | `SPX` |
+| Stock Index | NASDAQ-100 | `NDX` |
+| Stock Index | Dow Jones Industrial Average | `DJI` |
 | Commodity | Natural Gas | `NATGAS` |
 | Commodity | Coffee / Cà phê | `COFFEE` |
 | Commodity | Sugar / Đường | `SUGAR` |

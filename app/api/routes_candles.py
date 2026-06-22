@@ -1,3 +1,5 @@
+from collections.abc import Callable
+from datetime import datetime
 from functools import lru_cache
 from typing import Annotated
 
@@ -9,11 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.serialization import format_datetime, format_decimal
 from app.cache.candle_cache import CandleCache
 from app.core.config import Settings, get_settings
+from app.core.time import utc_now
 from app.db.repositories import PostgresCandleRepository
 from app.db.session import get_session_factory
 from app.domain.candles import CandleProvider, CandleRepository, CandleResult
 from app.providers.binance_spot import build_binance_spot_candle_provider
-from app.providers.twelvedata_forex import build_twelvedata_forex_provider
+from app.providers.twelvedata_market_data import build_twelvedata_market_data_provider
 from app.services.candle_provider_router import CandleProviderRouter
 from app.services.candles import CandleService, parse_candle_request
 
@@ -57,7 +60,7 @@ def get_twelvedata_candle_provider(
     base_url: str,
     timeout_seconds: float,
 ) -> CandleProvider:
-    return build_twelvedata_forex_provider(api_key, base_url, timeout_seconds)
+    return build_twelvedata_market_data_provider(api_key, base_url, timeout_seconds)
 
 
 def get_candle_provider(
@@ -96,8 +99,18 @@ def get_candle_service(
     repository: Annotated[CandleRepository, Depends(get_candle_repository)],
     provider: Annotated[CandleProvider, Depends(get_candle_provider)],
     cache: Annotated[CandleCache, Depends(get_candle_cache)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> CandleService:
-    return CandleService(repository=repository, provider=provider, cache=cache)
+    return CandleService(
+        repository=repository,
+        provider=provider,
+        cache=cache,
+        max_candles=settings.max_candles_per_request,
+    )
+
+
+def get_candle_request_clock() -> Callable[[], datetime]:
+    return utc_now
 
 
 @router.get("/candles", response_model=CandleListResponse)
@@ -105,6 +118,7 @@ async def get_candles(
     request: Request,
     service: Annotated[CandleService, Depends(get_candle_service)],
     settings: Annotated[Settings, Depends(get_settings)],
+    clock: Annotated[Callable[[], datetime], Depends(get_candle_request_clock)],
 ) -> CandleListResponse:
     candle_request = parse_candle_request(
         request.query_params.get("symbol"),
@@ -113,6 +127,7 @@ async def get_candles(
         request.query_params.get("to"),
         max_range_days=settings.max_candle_range_days,
         max_candles=settings.max_candles_per_request,
+        clock=clock,
     )
     result = await service.get_candles(candle_request)
     return _to_response(result)

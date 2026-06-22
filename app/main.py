@@ -26,7 +26,9 @@ from app.domain.errors import (
     QuoteRequestError,
 )
 from app.providers.binance_spot_stream import build_binance_spot_stream_provider
-from app.providers.twelvedata_forex_stream import build_twelvedata_forex_stream_provider
+from app.providers.twelvedata_market_data_stream import (
+    build_twelvedata_market_data_stream_provider,
+)
 from app.services.stream_manager import StreamManager
 from app.services.stream_provider_router import MultiProviderStreamProvider
 
@@ -41,7 +43,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         settings.provider_ws_reconnect_delay_seconds,
         settings.stream_provider_queue_capacity,
     )
-    twelvedata_provider = build_twelvedata_forex_stream_provider(
+    twelvedata_provider = build_twelvedata_market_data_stream_provider(
         settings.twelvedata_api_key,
         queue_capacity=settings.stream_provider_queue_capacity,
         heartbeat_seconds=settings.twelvedata_ws_heartbeat_seconds,
@@ -67,7 +69,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     application.state.stream_manager = manager
     application.state.stream_provider = provider
     application.state.binance_stream_provider = binance_provider
-    application.state.twelvedata_stream_provider = twelvedata_provider
+    application.state.twelvedata_market_data_stream_provider = twelvedata_provider
     yield
     await manager.stop()
     if database is not None:

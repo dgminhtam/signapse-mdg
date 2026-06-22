@@ -26,6 +26,8 @@ from app.services.stream_manager import StreamManager
 BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
 ETH = SupportedSymbol("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
 START = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
 
 
@@ -376,6 +378,107 @@ async def test_manager_filters_ineligible_forex_stream_candles_from_cache_and_pe
         await asyncio.sleep(0.01)
 
         assert await candle_cache.get("EUR/USD", "1h") is None
+        assert repository.upserted == []
+        assert registration.queue.empty()
+    finally:
+        await manager.stop()
+
+
+@pytest.mark.parametrize(
+    ("symbol", "closed_time", "open_time"),
+    [
+        (
+            SPY,
+            datetime(2026, 6, 22, 12, 0, tzinfo=UTC),
+            datetime(2026, 6, 22, 14, 0, tzinfo=UTC),
+        ),
+        (
+            WTI,
+            datetime(2026, 6, 22, 21, 0, tzinfo=UTC),
+            datetime(2026, 6, 22, 22, 0, tzinfo=UTC),
+        ),
+    ],
+)
+async def test_manager_marks_new_asset_candle_sessions_closed_and_reopens(
+    symbol: SupportedSymbol,
+    closed_time: datetime,
+    open_time: datetime,
+) -> None:
+    provider = FakeProvider()
+    current = closed_time
+    manager = StreamManager(
+        provider=provider,
+        quote_cache=QuoteCache(),
+        candle_cache=CandleCache(),
+        candle_repository=None,
+        client_queue_capacity=20,
+        persistence_queue_capacity=20,
+        idle_grace_seconds=0,
+        stale_after_seconds=1,
+        freshness_check_seconds=3600,
+        clock=lambda: current,
+    )
+    try:
+        registration = await manager.register(
+            StreamRequest((symbol.symbol,), "1h"),
+            [symbol],
+        )
+        assert (await next_event(registration.queue)).state == "CONNECTING"
+        closed = await next_event(registration.queue)
+        assert isinstance(closed, StatusEvent)
+        assert closed.state == "MARKET_CLOSED"
+        assert closed.channels == ("candle",)
+
+        current = open_time
+        manager._update_market_session_states(current)  # noqa: SLF001
+        reopened = await next_event(registration.queue)
+        assert isinstance(reopened, StatusEvent)
+        assert reopened.state == "CONNECTING"
+        assert reopened.channels == ("candle",)
+    finally:
+        await manager.stop()
+
+
+@pytest.mark.parametrize(
+    ("symbol", "closed_time"),
+    [
+        (SPY, datetime(2026, 6, 22, 12, 0, tzinfo=UTC)),
+        (WTI, datetime(2026, 6, 22, 21, 0, tzinfo=UTC)),
+    ],
+)
+async def test_manager_filters_closed_wti_and_etf_stream_candles(
+    symbol: SupportedSymbol,
+    closed_time: datetime,
+) -> None:
+    provider = FakeProvider()
+    candle_cache = CandleCache()
+    repository = FakeRepository()
+    manager = make_manager(
+        provider,
+        candle_cache=candle_cache,
+        repository=repository,
+        now=closed_time,
+    )
+    try:
+        registration = await manager.register(
+            StreamRequest((symbol.symbol,), "1h"),
+            [symbol],
+        )
+        await next_event(registration.queue)
+        await next_event(registration.queue)
+
+        await provider.events.put(make_candle(symbol, timeframe="1h", open_time=closed_time))
+        await provider.events.put(
+            make_candle(
+                symbol,
+                complete=True,
+                timeframe="1h",
+                open_time=closed_time,
+            )
+        )
+        await asyncio.sleep(0.01)
+
+        assert await candle_cache.get(symbol.symbol, "1h") is None
         assert repository.upserted == []
         assert registration.queue.empty()
     finally:

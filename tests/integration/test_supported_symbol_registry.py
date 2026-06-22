@@ -44,6 +44,24 @@ def load_forex_migration_module() -> ModuleType:
     return module
 
 
+def load_wti_etf_migration_module() -> ModuleType:
+    migration_path = (
+        Path(__file__).parents[2]
+        / "alembic"
+        / "versions"
+        / "20260622_0007_seed_twelvedata_wti_etfs.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "wti_etf_supported_symbols_migration",
+        migration_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Unable to load WTI and ETF supported-symbol migration.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 async def test_migration_creates_schema_and_exact_seed_mappings(
     database_engine: AsyncEngine,
 ) -> None:
@@ -95,8 +113,11 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
         ("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True),
         ("MSFT", "US_STOCK", "TWELVE_DATA", "MSFT", True),
         ("NVDA", "US_STOCK", "TWELVE_DATA", "NVDA", True),
+        ("QQQ", "ETF", "TWELVE_DATA", "QQQ", True),
+        ("SPY", "ETF", "TWELVE_DATA", "SPY", True),
         ("TSLA", "US_STOCK", "TWELVE_DATA", "TSLA", True),
         ("USD/JPY", "FOREX", "TWELVE_DATA", "USD/JPY", True),
+        ("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
         ("XAU/USD", "COMMODITY", "TWELVE_DATA", "XAU/USD", True),
     ]
 
@@ -138,8 +159,11 @@ async def test_seed_is_idempotent_and_restores_required_mapping(
         ("GBP/USD", "GBP/USD", True),
         ("MSFT", "MSFT", True),
         ("NVDA", "NVDA", True),
+        ("QQQ", "QQQ", True),
+        ("SPY", "SPY", True),
         ("TSLA", "TSLA", True),
         ("USD/JPY", "USD/JPY", True),
+        ("WTI", "WTI", True),
         ("XAU/USD", "XAU/USD", True),
     ]
 
@@ -181,10 +205,80 @@ async def test_forex_seed_is_idempotent_and_preserves_crypto_mappings(
         ("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True),
         ("MSFT", "US_STOCK", "TWELVE_DATA", "MSFT", True),
         ("NVDA", "US_STOCK", "TWELVE_DATA", "NVDA", True),
+        ("QQQ", "ETF", "TWELVE_DATA", "QQQ", True),
+        ("SPY", "ETF", "TWELVE_DATA", "SPY", True),
         ("TSLA", "US_STOCK", "TWELVE_DATA", "TSLA", True),
         ("USD/JPY", "FOREX", "TWELVE_DATA", "USD/JPY", True),
+        ("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
         ("XAU/USD", "COMMODITY", "TWELVE_DATA", "XAU/USD", True),
     ]
+
+
+async def test_wti_etf_seed_is_idempotent_and_preserves_existing_mappings(
+    database_engine: AsyncEngine,
+) -> None:
+    migration = load_wti_etf_migration_module()
+    async with database_engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                UPDATE supported_symbols
+                SET asset_class = 'OLD', provider_symbol = 'OLD_WTI', enabled = false
+                WHERE symbol = 'WTI'
+                """
+            )
+        )
+        await connection.run_sync(migration.seed_twelvedata_wti_etf_symbols)
+        await connection.run_sync(migration.seed_twelvedata_wti_etf_symbols)
+        rows = (
+            await connection.execute(
+                text(
+                    """
+                    SELECT symbol, asset_class, provider, provider_symbol, enabled
+                    FROM supported_symbols
+                    WHERE symbol IN ('WTI', 'SPY', 'QQQ')
+                    ORDER BY symbol
+                    """
+                )
+            )
+        ).all()
+
+    assert rows == [
+        ("QQQ", "ETF", "TWELVE_DATA", "QQQ", True),
+        ("SPY", "ETF", "TWELVE_DATA", "SPY", True),
+        ("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
+    ]
+
+
+async def test_wti_etf_downgrade_preserves_changed_mapping(
+    database_engine: AsyncEngine,
+) -> None:
+    migration = load_wti_etf_migration_module()
+    async with database_engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                UPDATE supported_symbols
+                SET provider_symbol = 'SPY_CUSTOM'
+                WHERE symbol = 'SPY'
+                """
+            )
+        )
+        await connection.run_sync(migration.delete_twelvedata_wti_etf_symbols)
+        rows = (
+            await connection.execute(
+                text(
+                    """
+                    SELECT symbol, provider_symbol
+                    FROM supported_symbols
+                    WHERE symbol IN ('WTI', 'SPY', 'QQQ')
+                    ORDER BY symbol
+                    """
+                )
+            )
+        ).all()
+
+    assert rows == [("SPY", "SPY_CUSTOM")]
 
 
 async def test_registry_constraints_reject_duplicate_provider_mapping(
@@ -222,8 +316,11 @@ async def test_api_lists_seed_symbols_in_canonical_order(
         "GBP/USD",
         "MSFT",
         "NVDA",
+        "QQQ",
+        "SPY",
         "TSLA",
         "USD/JPY",
+        "WTI",
         "XAU/USD",
     ]
 
@@ -303,6 +400,20 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
                 "enabled": True,
             },
             {
+                "symbol": "QQQ",
+                "assetClass": "ETF",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "QQQ",
+                "enabled": True,
+            },
+            {
+                "symbol": "SPY",
+                "assetClass": "ETF",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "SPY",
+                "enabled": True,
+            },
+            {
                 "symbol": "TSLA",
                 "assetClass": "US_STOCK",
                 "provider": "TWELVE_DATA",
@@ -314,6 +425,13 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
                 "assetClass": "FOREX",
                 "provider": "TWELVE_DATA",
                 "providerSymbol": "USD/JPY",
+                "enabled": True,
+            },
+            {
+                "symbol": "WTI",
+                "assetClass": "COMMODITY",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "WTI",
                 "enabled": True,
             },
             {

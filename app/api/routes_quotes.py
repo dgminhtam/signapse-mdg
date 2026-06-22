@@ -14,7 +14,7 @@ from app.db.session import get_db_session
 from app.domain.quotes import ProviderSymbolQuoteProvider, QuoteError, QuoteProvider, QuoteResult
 from app.domain.symbols import SymbolRepository
 from app.providers.binance_spot import build_binance_spot_quote_provider
-from app.providers.twelvedata_forex import build_twelvedata_forex_provider
+from app.providers.twelvedata_market_data import build_twelvedata_market_data_provider
 from app.services.quote_provider_router import QuoteProviderRouter
 from app.services.quotes import QuoteService, parse_symbols
 
@@ -59,7 +59,7 @@ def get_twelvedata_quote_provider(
     base_url: str,
     timeout_seconds: float,
 ) -> ProviderSymbolQuoteProvider:
-    return build_twelvedata_forex_provider(api_key, base_url, timeout_seconds)
+    return build_twelvedata_market_data_provider(api_key, base_url, timeout_seconds)
 
 
 def get_quote_provider(

@@ -195,3 +195,40 @@ This change SHALL NOT implement or wire Twelve Data WebSocket streaming.
 - **THEN** it continues to use the existing Binance-backed stream provider behavior
 - **AND** no Twelve Data WebSocket client is opened by application startup or downstream
   subscriptions
+
+### Requirement: Twelve Data adapter supports validated commodity and ETF instruments
+
+The gateway SHALL use the official Twelve Data SDK behind a repository-owned adapter for `WTI`,
+`SPY`, and `QQQ`.
+
+#### Scenario: Validated instrument is requested
+- **WHEN** the adapter receives `WTI`, `SPY`, or `QQQ`
+- **THEN** it invokes the SDK with the matching provider symbol
+
+#### Scenario: Instrument is outside the allowlist
+- **WHEN** an unsupported Twelve Data symbol is requested
+- **THEN** no provider request is made for that symbol
+
+### Requirement: Twelve Data adapter terminology is asset-neutral
+
+The Twelve Data adapter boundary SHALL use asset-neutral runtime names.
+
+#### Scenario: Application providers are wired
+- **WHEN** REST and WebSocket providers are built for `TWELVE_DATA`
+- **THEN** their types and factories do not imply Forex-only support
+
+### Requirement: Twelve Data volume normalization is asset-aware
+
+The adapter SHALL preserve valid supplied volume and use decimal zero for absent or null volume.
+
+#### Scenario: ETF candle includes volume
+- **WHEN** SPY or QQQ supplies valid volume
+- **THEN** the exact decimal volume is preserved
+
+#### Scenario: WTI candle omits volume
+- **WHEN** WTI omits volume or returns null
+- **THEN** exact decimal zero is used
+
+#### Scenario: Supplied volume is malformed
+- **WHEN** volume is malformed, negative, or non-finite
+- **THEN** the provider payload is rejected

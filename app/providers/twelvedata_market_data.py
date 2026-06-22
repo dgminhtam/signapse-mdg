@@ -15,7 +15,7 @@ from app.domain.market_sessions import get_market_session_policy
 from app.domain.quotes import ProviderQuoteBatch
 from app.domain.symbols import SupportedSymbol
 
-SUPPORTED_FOREX_PROVIDER_SYMBOLS = frozenset(
+SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS = frozenset(
     {
         "EUR/USD",
         "GBP/USD",
@@ -26,6 +26,9 @@ SUPPORTED_FOREX_PROVIDER_SYMBOLS = frozenset(
         "TSLA",
         "NVDA",
         "MSFT",
+        "WTI",
+        "SPY",
+        "QQQ",
     }
 )
 
@@ -52,6 +55,10 @@ class JsonEndpoint(Protocol):
 
 class TimeSeriesEndpoint(Protocol):
     def as_json(self) -> object: ...
+
+
+class TwelveDataNoDataError(Exception):
+    pass
 
 
 class TwelveDataClient(Protocol):
@@ -87,15 +94,17 @@ class TwelveDataHttpClient:
             or response.headers.get("Content-Type") == "text/csv"
         ):
             return response
+        payload = response.json()
+        if _is_no_data_time_series_response(relative_url, payload):
+            raise TwelveDataNoDataError
         if not response.ok:
             raise TwelveDataError("Twelve Data request failed.")
-        payload = response.json()
         if isinstance(payload, dict) and payload.get("status") == "error":
             raise TwelveDataError("Twelve Data request failed.")
         return response
 
 
-class TwelveDataForexProvider:
+class TwelveDataMarketDataProvider:
     def __init__(self, client_factory: Callable[[], TwelveDataClient]) -> None:
         self._client_factory = client_factory
         self._client: TwelveDataClient | None = None
@@ -118,7 +127,7 @@ class TwelveDataForexProvider:
         if not provider_symbols:
             return ProviderQuoteBatch(prices={}, unavailable_symbols=frozenset())
         requested = set(provider_symbols)
-        unsupported = requested - SUPPORTED_FOREX_PROVIDER_SYMBOLS
+        unsupported = requested - SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS
         try:
             async with self._client_lock:
                 prices = await asyncio.to_thread(
@@ -141,6 +150,8 @@ class TwelveDataForexProvider:
         end: datetime,
         limit: int,
     ) -> list[Candle]:
+        if symbol.provider_symbol not in SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS:
+            raise ProviderUnavailableError
         interval = _TWELVEDATA_INTERVALS.get(provider_interval)
         duration = _INTERVAL_DURATIONS.get(provider_interval)
         if interval is None or duration is None:
@@ -155,6 +166,8 @@ class TwelveDataForexProvider:
                     end - duration,
                     limit,
                 )
+        except TwelveDataNoDataError:
+            return []
         except TwelveDataError as exc:
             raise ProviderUnavailableError from exc
         except Exception as exc:
@@ -176,7 +189,7 @@ class TwelveDataForexProvider:
     def _discover_supported_provider_symbols_sync(self) -> frozenset[str]:
         payload = self._get_client().get_forex_pairs_list().as_json()
         discovered = _extract_forex_symbols(payload)
-        return discovered & SUPPORTED_FOREX_PROVIDER_SYMBOLS
+        return discovered & SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS
 
     def _fetch_latest_prices_sync(self, provider_symbols: Iterable[str]) -> dict[str, Decimal]:
         prices: dict[str, Decimal] = {}
@@ -211,11 +224,11 @@ class TwelveDataForexProvider:
         )
 
 
-def build_twelvedata_forex_provider(
+def build_twelvedata_market_data_provider(
     api_key: str | None,
     base_url: str,
     timeout_seconds: float,
-) -> TwelveDataForexProvider:
+) -> TwelveDataMarketDataProvider:
     if api_key is None or not api_key.strip():
         raise ProviderUnavailableError
 
@@ -232,7 +245,7 @@ def build_twelvedata_forex_provider(
             ),
         )
 
-    return TwelveDataForexProvider(client_factory)
+    return TwelveDataMarketDataProvider(client_factory)
 
 
 def _extract_forex_symbols(payload: object) -> frozenset[str]:
@@ -360,3 +373,15 @@ def _parse_datetime(value: object) -> datetime | None:
 
 def _format_twelvedata_datetime(value: datetime) -> str:
     return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _is_no_data_time_series_response(relative_url: str, payload: object) -> bool:
+    if "time_series" not in relative_url or not isinstance(payload, dict):
+        return False
+    message = payload.get("message")
+    return (
+        payload.get("status") == "error"
+        and payload.get("code") == 400
+        and isinstance(message, str)
+        and message.lower().startswith("no data is available on the specified dates")
+    )

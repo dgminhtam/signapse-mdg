@@ -34,6 +34,9 @@ contains these public symbols:
 | `TSLA` | `US_STOCK` |
 | `NVDA` | `US_STOCK` |
 | `MSFT` | `US_STOCK` |
+| `WTI` | `COMMODITY` |
+| `SPY` | `ETF` |
+| `QQQ` | `ETF` |
 
 Supported timeframe values are `1m`, `5m`, `15m`, `1h`, and `1d`.
 
@@ -74,7 +77,7 @@ Symbol object:
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `symbol` | string | yes | Canonical symbol clients must use in all other endpoints. |
-| `assetClass` | string enum | yes | Current values: `CRYPTO`, `FOREX`, `COMMODITY`, `US_STOCK`. |
+| `assetClass` | string enum | yes | Current values: `CRYPTO`, `FOREX`, `COMMODITY`, `US_STOCK`, `ETF`. |
 | `provider` | string | yes | Current provider mapping. This is diagnostic registry data and should not drive client business logic. |
 | `providerSymbol` | string | yes | Current provider symbol mapping. This is diagnostic registry data and may change without changing `symbol`. |
 | `enabled` | boolean | yes | Whether the symbol is enabled for gateway use. This endpoint returns enabled rows. |
@@ -175,12 +178,13 @@ GET /v1/candles?symbol=BTC%2FUSD&timeframe=1m&from=2026-06-22T00%3A00%3A00Z&to=2
 | --- | --- | --- | --- |
 | `symbol` | string | yes | One canonical symbol. |
 | `timeframe` | string enum | yes | One of `1m`, `5m`, `15m`, `1h`, `1d`. |
-| `from` | UTC datetime string | yes | Inclusive range start. Must align to the selected timeframe. |
-| `to` | UTC datetime string | yes | Exclusive range end. Must align to the selected timeframe and be greater than `from`. |
+| `from` | UTC datetime string | yes | Exact inclusive range start. Must be explicitly UTC. |
+| `to` | UTC datetime string | no | Exact exclusive range end. When omitted, the gateway captures the current UTC time once for the request. |
 
 Limits:
 
 - Range is half-open: `[from, to)`.
+- Public range boundaries do not need to align to timeframe boundaries.
 - Maximum range is configured by `MAX_CANDLE_RANGE_DAYS`; default is `30`.
 - Maximum expected candles is configured by `MAX_CANDLES_PER_REQUEST`; default and maximum is `1000`.
 
@@ -228,10 +232,21 @@ Candle object:
 }
 ```
 
+The response always contains `to`. When the request omits it, this field contains the exact UTC
+instant captured by the gateway for that request. Provider candle timestamps remain authoritative;
+for example, a valid Twelve Data hourly candle labeled `13:30Z` is returned as `13:30Z` rather than
+shifted to `13:00Z`. A valid provider range with no rows returns HTTP `200` and `candles: []`.
+
 Forex intraday candles follow the Signapse weekly quote session: Sunday 17:00 inclusive through
 Friday 17:00 exclusive in `America/New_York`. Forex `1d` candles include UTC weekday labels Monday
 through Friday and exclude UTC Saturday/Sunday labels. Holidays, early closes, late opens, and
 provider maintenance windows are not modeled yet.
+
+SPY and QQQ intraday candles use the regular US ETF session, Monday through Friday from 09:30
+inclusive to 16:00 exclusive in `America/New_York`. WTI intraday candles use Sunday 18:00
+inclusive through Friday 17:00 exclusive in `America/New_York`, excluding the recurring
+Monday-through-Thursday 17:00-18:00 maintenance window. ETF and WTI `1d` candles include UTC
+weekday labels only. Holidays and exceptional closures are not modeled.
 
 ## HTTP Error Response
 
@@ -269,7 +284,7 @@ HTTP error codes:
 | `TOO_MANY_SYMBOLS` | `400` | `/v1/quotes`, `/v1/stream` | More than `MAX_QUOTE_SYMBOLS` distinct symbols. |
 | `UNSUPPORTED_SYMBOL` | `400` | `/v1/candles`; per-symbol in `/v1/quotes`; close reason in `/v1/stream` | Unknown or disabled symbol. |
 | `UNSUPPORTED_TIMEFRAME` | `400` | `/v1/candles`; close reason in `/v1/stream` | Unknown timeframe. |
-| `INVALID_TIME_RANGE` | `400` | `/v1/candles` | Missing, invalid, unaligned, inverted, or too-wide time range. |
+| `INVALID_TIME_RANGE` | `400` | `/v1/candles` | Missing required `from`, invalid UTC values, empty explicit `to`, inverted, or oversized range. |
 | `DATABASE_UNAVAILABLE` | `503` | database-backed endpoints | Gateway cannot query PostgreSQL. |
 | `PROVIDER_UNAVAILABLE` | `503` | REST provider failures; close reason or status event in `/v1/stream` | Upstream provider is unavailable. |
 | `DATA_STALE` | `503` or quote item error | Fresh data is required but only stale data exists. |

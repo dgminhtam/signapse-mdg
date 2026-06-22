@@ -55,17 +55,25 @@ the corresponding interval inside the selected provider adapter boundary.
 - **AND** the sanitized error details identify the rejected timeframe
 
 ### Requirement: Candle ranges use aligned half-open UTC semantics
-The gateway SHALL interpret the requested range as `[from, to)`, with `from` inclusive and `to`
-exclusive. Both values MUST be timezone-aware UTC timestamps, `from` MUST be earlier than `to`, and
-both values MUST align to boundaries of the requested timeframe.
+The gateway SHALL interpret the requested range as exact half-open instants `[from, to)`.
+`from` MUST be explicitly UTC. An explicit `to` MUST be explicitly UTC; when omitted, the gateway
+SHALL resolve it to one captured request-time UTC instant. `from` MUST be earlier than resolved
+`to`. Public boundaries are not required to align to timeframe boundaries.
 
 #### Scenario: Boundary candles are selected
 - **WHEN** a valid request covers `[from, to)`
 - **THEN** a candle whose open time equals `from` is eligible for the response
 - **AND** a candle whose open time equals `to` is excluded
+- **AND** candles strictly between the exact boundaries are eligible
+
+#### Scenario: To parameter is omitted
+- **WHEN** a valid request omits `to`
+- **THEN** the gateway captures current UTC once and uses it for validation, provider access, and
+  response serialization
 
 #### Scenario: Time range parameter is missing or malformed
-- **WHEN** `from` or `to` is missing, is not a valid timestamp, or is not explicitly UTC
+- **WHEN** `from` is missing, an explicit `to` is empty, or either supplied value is not explicitly
+  UTC
 - **THEN** the gateway responds with HTTP status `400`
 - **AND** the error code is `INVALID_TIME_RANGE`
 
@@ -76,12 +84,13 @@ both values MUST align to boundaries of the requested timeframe.
 
 #### Scenario: Time range is not timeframe-aligned
 - **WHEN** either boundary is not aligned to the requested timeframe
-- **THEN** the gateway responds with HTTP status `400`
-- **AND** the error code is `INVALID_TIME_RANGE`
+- **THEN** the gateway accepts the range and filters actual provider open times within it
 
 ### Requirement: Candle requests are bounded
 The gateway SHALL reject a request that exceeds either `MAX_CANDLE_RANGE_DAYS` or
 `MAX_CANDLES_PER_REQUEST`, with defaults of 30 days and 1,000 expected candles respectively.
+Pre-validation SHALL use the ceiling of elapsed duration divided by timeframe duration; after
+symbol resolution the exact provider/market schedule count SHALL also be enforced.
 
 #### Scenario: Elapsed range is too wide
 - **WHEN** the difference between `from` and `to` exceeds `MAX_CANDLE_RANGE_DAYS`
@@ -89,7 +98,7 @@ The gateway SHALL reject a request that exceeds either `MAX_CANDLE_RANGE_DAYS` o
 - **AND** the error code is `INVALID_TIME_RANGE`
 
 #### Scenario: Expected candle count is too large
-- **WHEN** the aligned range contains more than `MAX_CANDLES_PER_REQUEST` timeframe slots
+- **WHEN** either the conservative or exact scheduled count exceeds `MAX_CANDLES_PER_REQUEST`
 - **THEN** the gateway responds with HTTP status `400`
 - **AND** the error code is `INVALID_TIME_RANGE`
 
@@ -113,21 +122,24 @@ registry before accessing candle persistence or the provider.
 
 The gateway SHALL query persisted complete candles before calling the selected provider, SHALL
 discard candles that violate the symbol's market-session policy, and SHALL identify missing
-eligible timeframe slots within the requested range.
+expected opens using the symbol's provider/market candle schedule.
 
 #### Scenario: Complete eligible range is persisted
 
-- **WHEN** every eligible requested candle slot is available as a persisted complete candle
+- **WHEN** every expected eligible candle open is available as a persisted complete candle
 - **THEN** the gateway returns the persisted candles
 - **AND** it makes no provider candle request
 
 #### Scenario: Part of the eligible range is missing
 
-- **WHEN** one or more contiguous eligible sections of the requested range are absent from
-  persistence
-- **THEN** the gateway requests only those missing eligible sections from the provider selected by
+- **WHEN** one or more expected eligible opens are absent from persistence
+- **THEN** the gateway requests only provider windows covering those missing sections from
   the symbol's persisted mapping
 - **AND** it merges valid fetched candles with eligible persisted candles by open time
+
+#### Scenario: Provider schedule is offset from UTC epoch
+- **WHEN** a provider labels hourly candles at minute thirty
+- **THEN** gap detection uses that schedule and recognizes persisted minute-thirty rows
 
 #### Scenario: Provider omits an expected eligible slot
 
@@ -499,3 +511,62 @@ closed-session slots are not considered expected gaps.
 - **WHEN** a Forex request includes slots outside the weekly quote session
 - **THEN** those slots are excluded from expected-gap calculation
 - **AND** the gateway does not synthesize or request candles for them
+
+### Requirement: WTI and ETF historical candles use the existing endpoint
+
+The gateway SHALL serve enabled `WTI`, `SPY`, and `QQQ` through `GET /v1/candles`.
+
+#### Scenario: Missing WTI or ETF range is requested
+- **WHEN** eligible slots are absent from persistence and current cache
+- **THEN** only missing eligible ranges are requested from Twelve Data
+
+### Requirement: ETF candles use the regular US market session
+
+ETF intraday slots SHALL be eligible Monday-Friday 09:30-16:00 in `America/New_York`; daily slots
+SHALL use UTC weekdays.
+
+#### Scenario: ETF range spans session boundaries
+- **WHEN** a range includes closed and regular-session slots
+- **THEN** only regular-session slots count as expected candles
+
+### Requirement: WTI candles use the configured energy session
+
+WTI intraday slots SHALL use Sunday 18:00-Friday 17:00 in `America/New_York`, excluding the
+Monday-Thursday 17:00-18:00 maintenance window.
+
+#### Scenario: WTI range spans a closure
+- **WHEN** a range includes weekly closure or daily maintenance
+- **THEN** closed slots do not count as missing candles
+
+### Requirement: Natural WTI and ETF provider gaps are preserved
+
+The gateway MUST NOT synthesize missing WTI, SPY, or QQQ candles.
+
+#### Scenario: Provider returns a partial eligible range
+- **WHEN** Twelve Data omits eligible rows
+- **THEN** valid rows are retained without fabricating omitted candles
+
+### Requirement: Provider candle timestamps remain authoritative
+
+The gateway MUST preserve valid provider candle open timestamps and MUST NOT shift them to fit a
+universal epoch-aligned grid.
+
+#### Scenario: Twelve Data returns an hourly candle at minute thirty
+- **WHEN** a valid Twelve Data hourly candle opens at `13:30Z`
+- **THEN** its normalized `openTime` remains `13:30Z`
+- **AND** its close time is derived from that actual open time
+
+### Requirement: Twelve Data no-data ranges are successful empty results
+
+The Twelve Data adapter SHALL distinguish its recognized no-data time-series condition from
+operational and contract failures.
+
+#### Scenario: Provider reports no data for specified dates
+- **WHEN** Twelve Data returns the recognized no-data condition for a valid range
+- **THEN** the adapter returns zero candles
+- **AND** the endpoint can respond with HTTP `200` and an empty `candles` array
+
+#### Scenario: Provider returns another error
+- **WHEN** Twelve Data reports authentication, entitlement, rate-limit, invalid-parameter,
+  unknown-symbol, timeout, transport, or unrecognized failure
+- **THEN** the adapter raises the sanitized provider-unavailable boundary

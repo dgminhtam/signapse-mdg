@@ -153,3 +153,24 @@ this change.
 - **THEN** existing Binance-backed crypto quote, candle, and stream behavior remains unchanged
 - **AND** no Twelve Data provider call is made by public quote, candle, or WebSocket routes until
   a later provider-routing change explicitly enables it
+
+### Requirement: Validated WTI and ETF symbols are seeded
+
+The database SHALL seed enabled `WTI`, `SPY`, and `QQQ` mappings through `TWELVE_DATA`.
+
+#### Scenario: WTI and ETF seed is applied
+- **WHEN** the WTI and ETF seed migration is applied
+- **THEN** `WTI` is enabled as `COMMODITY` mapped to `TWELVE_DATA:WTI`
+- **AND** `SPY` and `QQQ` are enabled as `ETF` with matching provider symbols
+
+#### Scenario: WTI and ETF seed is repeated
+- **WHEN** a required canonical symbol already exists
+- **THEN** the migration restores its required mapping without duplication
+
+### Requirement: ETF is a public registry asset class
+
+The supported-symbol API SHALL expose `ETF` for enabled ETF records.
+
+#### Scenario: Seeded ETFs are listed
+- **WHEN** a client sends `GET /v1/symbols`
+- **THEN** `QQQ` and `SPY` are returned with asset class `ETF`

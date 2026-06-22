@@ -281,3 +281,15 @@ SHALL isolate provider failures to symbols refreshed through the failing provide
 - **THEN** successful Binance-backed symbols appear in `quotes`
 - **AND** affected Twelve Data-backed symbols appear in `errors` with `PROVIDER_UNAVAILABLE`
 - **AND** the response status remains `200`
+
+### Requirement: WTI and ETF latest quotes are available through the existing endpoint
+
+The gateway SHALL allow enabled WTI, SPY, and QQQ mappings through `GET /v1/quotes`.
+
+#### Scenario: New Twelve Data symbols require refresh
+- **WHEN** `WTI`, `SPY`, or `QQQ` lacks a fresh cached quote
+- **THEN** it is refreshed through its persisted `TWELVE_DATA` mapping
+
+#### Scenario: Mixed provider request includes a new symbol
+- **WHEN** a request mixes Binance crypto with WTI or ETFs
+- **THEN** each provider group is routed and failed independently

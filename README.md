@@ -126,15 +126,16 @@ Fetch the two supported Binance-backed quotes:
 Invoke-RestMethod "http://127.0.0.1:8000/v1/quotes?symbols=BTC%2FUSD%2CETH%2FUSD"
 ```
 
-Fetch the supported Twelve Data-backed Forex, metal, and US stock quotes:
+Fetch the supported Twelve Data-backed Forex, commodity, US stock, and ETF quotes:
 
 ```powershell
-Invoke-RestMethod "http://127.0.0.1:8000/v1/quotes?symbols=EUR%2FUSD%2CGBP%2FUSD%2CUSD%2FJPY%2CAUD%2FUSD%2CXAU%2FUSD%2CAAPL%2CTSLA%2CNVDA%2CMSFT"
+Invoke-RestMethod "http://127.0.0.1:8000/v1/quotes?symbols=EUR%2FUSD%2CXAU%2FUSD%2CAAPL%2CWTI%2CSPY%2CQQQ"
 ```
 
 Quote responses contain ordered `quotes` and per-symbol `errors`. Successful items expose only
 the canonical `symbol`, decimal-string `price`, and gateway `receivedAt`. The application can
-start and serve crypto quotes without `TWELVEDATA_API_KEY`; live Forex refreshes require the key.
+start and serve crypto quotes without `TWELVEDATA_API_KEY`; live Twelve Data refreshes require the
+key.
 
 Fetch an aligned half-open UTC candle range:
 
@@ -142,10 +143,32 @@ Fetch an aligned half-open UTC candle range:
 Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSD&timeframe=1m&from=2026-06-19T00%3A00%3A00Z&to=2026-06-19T00%3A02%3A00Z"
 ```
 
+Fetch candles through the current request time by omitting `to`:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=WTI&timeframe=1h&from=2026-06-18T13%3A00%3A00Z"
+```
+
+The response still includes `to`, resolved to the exact UTC request time. Request boundaries do
+not need to align to timeframe boundaries, and provider candle timestamps such as Twelve Data
+hourly `:30` labels are preserved.
+
 Fetch a Twelve Data-backed Forex candle range:
 
 ```powershell
 Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=EUR%2FUSD&timeframe=1m&from=2026-06-22T00%3A00%3A00Z&to=2026-06-22T00%3A05%3A00Z"
+```
+
+Fetch regular-session SPY candles:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=SPY&timeframe=1h&from=2026-06-22T14%3A00%3A00Z&to=2026-06-22T20%3A00%3A00Z"
+```
+
+Fetch WTI candles around its daily maintenance break:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=WTI&timeframe=1h&from=2026-06-22T20%3A00%3A00Z&to=2026-06-22T23%3A00%3A00Z"
 ```
 
 Verify Forex weekend filtering with a Friday-to-Monday hourly range:
@@ -202,6 +225,12 @@ Forex-only example:
 ws://127.0.0.1:8000/v1/stream?symbols=EUR%2FUSD,GBP%2FUSD&timeframe=1m
 ```
 
+WTI and ETF example:
+
+```text
+ws://127.0.0.1:8000/v1/stream?symbols=WTI,SPY,QQQ&timeframe=1m
+```
+
 Expected status events keep the same shape:
 
 ```json
@@ -214,11 +243,11 @@ Expected status events keep the same shape:
 }
 ```
 
-During the closed weekly Forex candle session, the candle channel can emit `MARKET_CLOSED` instead
-of `STALE`. Quote events may still arrive if Twelve Data sends prices. Forex stream candles are
-derived from Twelve Data price ticks and use decimal zero volume; `/v1/candles` remains the
-authoritative backfill path. Holidays, early closes, late opens, and exceptional closures are not
-modeled yet.
+During a configured Forex, ETF, or WTI closed candle session, the candle channel can emit
+`MARKET_CLOSED` instead of `STALE`. Quote events may still arrive if Twelve Data sends prices.
+Twelve Data stream candles are derived from price ticks and use decimal zero volume;
+`/v1/candles` remains the authoritative backfill path. Holidays, early closes, late opens, and
+exceptional closures are not modeled yet.
 
 ## Development Checks
 

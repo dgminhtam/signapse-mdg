@@ -193,7 +193,8 @@ Semantics:
 - Crypto cache misses are grouped by their persisted `BINANCE_SPOT` mapping and fetched with the
   official Binance Spot SDK `ticker_price` operation.
 - Twelve Data cache misses for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`, `AAPL`,
-  `TSLA`, `NVDA`, and `MSFT` are grouped by their persisted `TWELVE_DATA` mapping and fetched
+  `TSLA`, `NVDA`, `MSFT`, `WTI`, `SPY`, and `QQQ` are grouped by their persisted `TWELVE_DATA`
+  mapping and fetched
   through the Twelve Data SDK.
 - A provider-group failure affects only symbols routed to that provider; mixed requests can return
   successful crypto quotes and Forex errors, or the reverse.
@@ -237,14 +238,17 @@ Semantics:
 - Asset class, provider identity, and provider symbol remain internal to the gateway.
 - Closed candles should be cacheable.
 - Current forming candle may be returned with `complete = false`.
-- Candle windows use aligned UTC half-open ranges: `from` is inclusive and `to` is exclusive.
+- Candle windows use exact UTC half-open ranges: `from` is inclusive and resolved `to` is
+  exclusive. Public boundaries do not need to align to timeframe boundaries.
+- `to` is optional; when omitted, the gateway captures request-time UTC once and always returns
+  that resolved value in the response.
 - Gateway should reject unsupported timeframe values.
 - MVP timeframes are `1m`, `5m`, `15m`, `1h`, and `1d`.
 - Gateway enforces both `MAX_CANDLE_RANGE_DAYS` and `MAX_CANDLES_PER_REQUEST`.
 - Closed candles are read from PostgreSQL first; only missing contiguous ranges are fetched.
 - Missing crypto ranges are routed through the persisted `BINANCE_SPOT` mapping; missing Twelve
   Data ranges for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`, `AAPL`, `TSLA`, `NVDA`,
-  and `MSFT` are routed through `TWELVE_DATA`.
+  `MSFT`, `WTI`, `SPY`, and `QQQ` are routed through `TWELVE_DATA`.
 - Missing or null Twelve Data Forex volume is serialized as decimal zero because the contract
   requires volume; this means upstream volume is unavailable, not measured zero trading activity.
 - Forex intraday candles are filtered by the Signapse weekly quote session: Sunday 17:00 inclusive
@@ -258,6 +262,10 @@ Semantics:
   windows are out of scope for this policy.
 - Natural provider gaps such as omitted open-session Forex candles remain absent and are never
   synthesized.
+- Provider candle open times remain authoritative. Twelve Data offset labels such as hourly
+  `13:30Z` are not shifted onto an epoch-aligned grid.
+- A recognized Twelve Data no-data response produces a successful empty candle list rather than
+  `PROVIDER_UNAVAILABLE`.
 
 ## WebSocket Stream Contract
 
@@ -336,12 +344,16 @@ Allowed stream states:
 | `MARKET_CLOSED` | Requested candle channel is outside the configured market session. |
 | `ERROR` | Gateway cannot serve the stream. |
 
-Twelve Data Forex WebSocket events are price ticks, not upstream OHLC candles. The gateway derives
-Forex stream candles locally by bucketizing price ticks into `1m`, `5m`, `15m`, `1h`, and `1d`
+Twelve Data WebSocket events are price ticks, not upstream OHLC candles. The gateway derives
+stream candles locally by bucketizing price ticks into `1m`, `5m`, `15m`, `1h`, and `1d`
 timeframes with tick price as OHLC and decimal zero volume. It does not synthesize skipped buckets;
 REST historical candles remain authoritative for backfill. Forex stream candles use the same weekly
 session filter as `/v1/candles`; holidays, early closes, late opens, exceptional closures, and
 provider maintenance windows remain out of scope.
+
+SPY and QQQ candle slots use the regular US ETF session, Monday-Friday 09:30-16:00 New York time.
+WTI uses Sunday 18:00-Friday 17:00 New York time with the Monday-Thursday 17:00-18:00 maintenance
+window excluded. Quote events remain independent from candle-session closure.
 
 ## Error Contract
 

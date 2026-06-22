@@ -1,8 +1,15 @@
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from math import ceil
 
 from app.cache.candle_cache import CandleCache
+from app.core.time import utc_now
+from app.domain.candle_schedules import (
+    CandleSchedule,
+    ProviderFetchSection,
+    get_candle_schedule,
+)
 from app.domain.candles import (
     Candle,
     CandleProvider,
@@ -11,12 +18,10 @@ from app.domain.candles import (
     CandleResult,
 )
 from app.domain.errors import CandleRequestError
-from app.domain.market_sessions import MarketSessionPolicy, get_market_session_policy
+from app.domain.market_sessions import get_market_session_policy
 from app.domain.timeframes import (
     Timeframe,
-    expected_candle_count,
     get_timeframe,
-    is_aligned,
 )
 
 UNSUPPORTED_SYMBOL_MESSAGE = "Symbol is not supported by this gateway."
@@ -32,6 +37,7 @@ def parse_candle_request(
     *,
     max_range_days: int,
     max_candles: int,
+    clock: Callable[[], datetime] = utc_now,
 ) -> CandleRequest:
     symbol = (raw_symbol or "").strip()
     if not symbol:
@@ -49,7 +55,7 @@ def parse_candle_request(
             {"timeframe": timeframe_value},
         )
     start = _parse_utc(raw_from)
-    end = _parse_utc(raw_to)
+    end = clock().astimezone(UTC) if raw_to is None else _parse_utc(raw_to)
     _validate_range(
         start,
         end,
@@ -87,9 +93,7 @@ def _validate_range(
     if (
         elapsed <= timedelta(0)
         or elapsed > timedelta(days=max_range_days)
-        or not is_aligned(start, timeframe)
-        or not is_aligned(end, timeframe)
-        or expected_candle_count(start, end, timeframe) > max_candles
+        or ceil(elapsed / timeframe.duration) > max_candles
     ):
         raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
 
@@ -101,11 +105,13 @@ class CandleService:
         provider: CandleProvider,
         cache: CandleCache | None = None,
         clock: Callable[[], datetime] | None = None,
+        max_candles: int = 1000,
     ) -> None:
         self._repository = repository
         self._provider = provider
         self._cache = cache
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._max_candles = max_candles
 
     async def get_candles(self, request: CandleRequest) -> CandleResult:
         symbol = await self._repository.get_enabled_symbol(request.symbol)
@@ -123,6 +129,15 @@ class CandleService:
                 {"timeframe": request.timeframe},
             )
         policy = get_market_session_policy(symbol)
+        schedule = get_candle_schedule(symbol, timeframe)
+        expected_opens = schedule.expected_opens(
+            request.start,
+            request.end,
+            policy,
+            request.timeframe,
+        )
+        if len(expected_opens) > self._max_candles:
+            raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
         persisted = await self._repository.list_complete(
             symbol,
             request.timeframe,
@@ -136,22 +151,19 @@ class CandleService:
         ]
         gaps = _find_gaps(
             persisted,
-            request.start,
-            request.end,
-            timeframe.duration,
-            policy=policy,
-            timeframe=request.timeframe,
+            expected_opens,
+            schedule,
         )
         fetched: list[Candle] = []
-        for gap_start, gap_end in gaps:
+        for gap in gaps:
             fetched.extend(
                 await self._provider.fetch_candles(
                     symbol=symbol,
                     timeframe=request.timeframe,
                     provider_interval=timeframe.provider_interval,
-                    start=gap_start,
-                    end=gap_end,
-                    limit=expected_candle_count(gap_start, gap_end, timeframe),
+                    start=gap.start,
+                    end=gap.end,
+                    limit=gap.expected_count + 1,
                 )
             )
         now = self._clock()
@@ -182,32 +194,12 @@ class CandleService:
 
 def _find_gaps(
     persisted: list[Candle],
-    start: datetime,
-    end: datetime,
-    duration: timedelta,
-    *,
-    policy: MarketSessionPolicy | None = None,
-    timeframe: str = "",
-) -> list[tuple[datetime, datetime]]:
+    expected_opens: tuple[datetime, ...],
+    schedule: CandleSchedule,
+) -> tuple[ProviderFetchSection, ...]:
     available = {
         candle.open_time
         for candle in persisted
-        if candle.complete and start <= candle.open_time < end
+        if candle.complete and candle.open_time in expected_opens
     }
-    gaps: list[tuple[datetime, datetime]] = []
-    cursor = start
-    gap_start: datetime | None = None
-    while cursor < end:
-        eligible = policy is None or policy.is_eligible(cursor, timeframe)
-        if not eligible and gap_start is not None:
-            gaps.append((gap_start, cursor))
-            gap_start = None
-        elif eligible and cursor not in available and gap_start is None:
-            gap_start = cursor
-        elif eligible and cursor in available and gap_start is not None:
-            gaps.append((gap_start, cursor))
-            gap_start = None
-        cursor += duration
-    if gap_start is not None:
-        gaps.append((gap_start, end))
-    return gaps
+    return schedule.missing_sections(expected_opens, available)

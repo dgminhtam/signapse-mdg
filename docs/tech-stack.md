@@ -14,7 +14,7 @@ This document records the recommended technology stack for the crypto MVP descri
 | DTO validation | Pydantic 2.13.4 | Type-hint driven validation, serialization, JSON Schema support. |
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation and generated models/errors. |
-| Twelve Data provider SDK | twelvedata 1.4.0 | Official SDK foundation for low-cost Forex REST validation, latest price, and time series. |
+| Twelve Data provider SDK | twelvedata 1.4.0 | Official SDK foundation for multi-asset REST, time series, and price streaming. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration tests; not used for production Binance transport. |
 | Database | PostgreSQL 18.4 | Reliable relational store for candle cache and future asset metadata. |
 | DB driver | asyncpg 0.31.0 | PostgreSQL driver designed for Python asyncio. |
@@ -207,7 +207,7 @@ Provider-symbol decision:
 - Keep SDK callbacks non-blocking by enqueueing normalized events into bounded async queues.
 - Run one application worker per process for the MVP because live stream state is process-local.
 
-### Twelve Data Forex Foundation
+### Twelve Data Market Data Foundation
 
 Use the official `twelvedata==1.4.0` SDK as the Forex provider foundation for:
 
@@ -216,7 +216,7 @@ Use the official `twelvedata==1.4.0` SDK as the Forex provider foundation for:
 - OHLC time-series REST normalization.
 - WebSocket price streaming for the current Forex catalog.
 
-Current seeded Forex catalog:
+Current seeded Twelve Data catalog:
 
 ```text
 EUR/USD -> TWELVE_DATA:EUR/USD
@@ -228,6 +228,9 @@ AAPL -> TWELVE_DATA:AAPL
 TSLA -> TWELVE_DATA:TSLA
 NVDA -> TWELVE_DATA:NVDA
 MSFT -> TWELVE_DATA:MSFT
+WTI -> TWELVE_DATA:WTI
+SPY -> TWELVE_DATA:SPY
+QQQ -> TWELVE_DATA:QQQ
 ```
 
 Important constraints:
@@ -541,7 +544,7 @@ mypy==2.1.0
 - Latest stable dependency versions are locked in this document and should be reflected in `pyproject.toml` and `uv.lock`.
 - Pydantic v2 for DTOs and settings.
 - Official Binance Spot SDK for provider integration.
-- Official Twelve Data SDK for the low-cost Forex REST foundation.
+- Official Twelve Data SDK for the multi-asset REST and WebSocket foundation.
 - HTTPX only for ASGI route and integration tests.
 - Canonical `BTC/USD` and `ETH/USD` mapped to Binance `BTCUSD` and `ETHUSD`.
 - Successful latest quotes expose only `symbol`, `price`, and `receivedAt`.

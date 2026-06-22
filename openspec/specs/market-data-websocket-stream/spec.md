@@ -218,3 +218,36 @@ delay, downstream queue capacity, upstream idle grace period, and freshness moni
 - **WHEN** a queue capacity, reconnect delay, idle grace period, or monitor interval violates its
   numeric constraints
 - **THEN** application configuration validation fails explicitly
+
+### Requirement: WTI and ETF symbols use the shared Twelve Data stream
+
+The gateway SHALL serve enabled WTI, SPY, and QQQ through the shared Twelve Data WebSocket.
+
+#### Scenario: New symbol subscription is opened
+- **WHEN** a client subscribes to `WTI`, `SPY`, or `QQQ`
+- **THEN** interests use the persisted `TWELVE_DATA` mapping
+
+#### Scenario: Mixed Twelve Data assets are subscribed
+- **WHEN** Forex, WTI, and ETF interests are concurrent
+- **THEN** one process-local Twelve Data connection is reused
+
+### Requirement: WTI and ETF price events produce normalized streams
+
+The adapter SHALL normalize valid WTI, SPY, and QQQ prices and derive candle events.
+
+#### Scenario: Valid price event is received
+- **WHEN** Twelve Data emits a valid event for a subscribed new asset
+- **THEN** existing provider-agnostic quote and candle shapes are emitted
+
+### Requirement: WTI and ETF stream candles follow market sessions
+
+The gateway SHALL apply ETF and WTI session policies before emitting, caching, or persisting
+derived candles.
+
+#### Scenario: New asset candle interest is closed
+- **WHEN** a WTI or ETF candle interest is outside its configured session
+- **THEN** its candle channel reports `MARKET_CLOSED`
+
+#### Scenario: New asset candle session reopens
+- **WHEN** the configured session reopens
+- **THEN** the candle channel transitions through `CONNECTING` to `SUBSCRIBED`

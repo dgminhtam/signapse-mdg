@@ -23,7 +23,7 @@ from app.domain.streams import (
 )
 from app.domain.symbols import SupportedSymbol
 from app.domain.timeframes import EPOCH, get_timeframe
-from app.providers.twelvedata_forex import SUPPORTED_FOREX_PROVIDER_SYMBOLS
+from app.providers.twelvedata_market_data import SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class PriceTick:
     received_at: datetime
 
 
-class ForexCandleBuilder:
+class TwelveDataCandleBuilder:
     def __init__(self) -> None:
         self._current: dict[tuple[str, str], Candle] = {}
 
@@ -134,7 +134,7 @@ class ForexCandleBuilder:
         return emitted
 
 
-class TwelveDataForexStreamProvider:
+class TwelveDataMarketDataStreamProvider:
     def __init__(
         self,
         client_factory: Callable[[Callable[[object], None]], TwelveDataStreamClient],
@@ -152,13 +152,13 @@ class TwelveDataForexStreamProvider:
         self._provider_symbol_refs: dict[str, int] = {}
         self._quote_interests: set[QuoteInterest] = set()
         self._candle_interests: dict[str, set[str]] = {}
-        self._builder = ForexCandleBuilder()
+        self._builder = TwelveDataCandleBuilder()
         self._lock = asyncio.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
 
     async def subscribe_quote(self, symbol: SupportedSymbol) -> None:
-        if symbol.provider_symbol not in SUPPORTED_FOREX_PROVIDER_SYMBOLS:
+        if symbol.provider_symbol not in SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS:
             raise ProviderUnavailableError
         async with self._lock:
             await self._ensure_connected()
@@ -175,7 +175,7 @@ class TwelveDataForexStreamProvider:
         provider_interval: str,
     ) -> None:
         del provider_interval
-        if symbol.provider_symbol not in SUPPORTED_FOREX_PROVIDER_SYMBOLS:
+        if symbol.provider_symbol not in SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS:
             raise ProviderUnavailableError
         if get_timeframe(timeframe) is None:
             raise ProviderUnavailableError
@@ -238,7 +238,7 @@ class TwelveDataForexStreamProvider:
         self._connected = True
         self._heartbeat_task = asyncio.create_task(
             self._heartbeat_loop(),
-            name="twelvedata-forex-stream-heartbeat",
+            name="twelvedata-market-data-stream-heartbeat",
         )
 
     async def _subscribe_provider_symbol(self, symbol: SupportedSymbol) -> None:
@@ -384,14 +384,14 @@ class TwelveDataForexStreamProvider:
         self._put_event(signal)
 
 
-def build_twelvedata_forex_stream_provider(
+def build_twelvedata_market_data_stream_provider(
     api_key: str | None,
     *,
     queue_capacity: int,
     heartbeat_seconds: float,
-) -> TwelveDataForexStreamProvider:
+) -> TwelveDataMarketDataStreamProvider:
     if api_key is None or not api_key.strip():
-        return TwelveDataForexStreamProvider(
+        return TwelveDataMarketDataStreamProvider(
             lambda _: _MissingTwelveDataClient(),
             queue_capacity=queue_capacity,
             heartbeat_seconds=heartbeat_seconds,
@@ -401,7 +401,7 @@ def build_twelvedata_forex_stream_provider(
         del on_event
         return cast(TwelveDataStreamClient, TDClient(apikey=api_key))
 
-    return TwelveDataForexStreamProvider(
+    return TwelveDataMarketDataStreamProvider(
         factory,
         queue_capacity=queue_capacity,
         heartbeat_seconds=heartbeat_seconds,

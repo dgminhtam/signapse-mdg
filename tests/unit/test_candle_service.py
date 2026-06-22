@@ -4,13 +4,18 @@ from decimal import Decimal
 import pytest
 
 from app.cache.candle_cache import CandleCache
+from app.domain.candle_schedules import ProviderFetchSection, get_candle_schedule
 from app.domain.candles import Candle, CandleRequest
 from app.domain.errors import CandleRequestError, DatabaseUnavailableError, ProviderUnavailableError
+from app.domain.market_sessions import get_market_session_policy
 from app.domain.symbols import SupportedSymbol
+from app.domain.timeframes import get_timeframe
 from app.services.candles import CandleService, _find_gaps, parse_candle_request
 
 BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
 START = datetime(2026, 6, 19, 0, 0, tzinfo=UTC)
 
 
@@ -97,12 +102,42 @@ def test_parse_candle_request_accepts_aligned_half_open_range() -> None:
     assert request == CandleRequest("BTC/USD", "1m", START, START + timedelta(minutes=2))
 
 
+def test_parse_candle_request_accepts_unaligned_range() -> None:
+    request = parse_candle_request(
+        "BTC/USD",
+        "1m",
+        "2026-06-19T00:00:30Z",
+        "2026-06-19T00:02:15Z",
+        max_range_days=30,
+        max_candles=1000,
+    )
+
+    assert request.start == START + timedelta(seconds=30)
+    assert request.end == START + timedelta(minutes=2, seconds=15)
+
+
+def test_parse_candle_request_defaults_omitted_to_to_captured_now() -> None:
+    now = START + timedelta(minutes=2, seconds=17)
+
+    request = parse_candle_request(
+        "BTC/USD",
+        "1m",
+        "2026-06-19T00:00:30Z",
+        None,
+        max_range_days=30,
+        max_candles=1000,
+        clock=lambda: now,
+    )
+
+    assert request.end == now
+
+
 @pytest.mark.parametrize(
     ("timeframe", "start", "end", "code"),
     [
         ("2m", "2026-06-19T00:00:00Z", "2026-06-19T00:02:00Z", "UNSUPPORTED_TIMEFRAME"),
         ("1m", None, "2026-06-19T00:02:00Z", "INVALID_TIME_RANGE"),
-        ("1m", "2026-06-19T00:00:30Z", "2026-06-19T00:02:00Z", "INVALID_TIME_RANGE"),
+        ("1m", "2026-06-19T00:00:00Z", "", "INVALID_TIME_RANGE"),
         ("1m", "2026-06-19T00:02:00Z", "2026-06-19T00:02:00Z", "INVALID_TIME_RANGE"),
         ("1m", "2026-06-19T00:00:00+07:00", "2026-06-19T00:02:00Z", "INVALID_TIME_RANGE"),
     ],
@@ -135,6 +170,18 @@ def test_parse_candle_request_enforces_range_and_count_limits() -> None:
             max_range_days=30,
             max_candles=1000,
         )
+
+
+def test_parse_candle_request_counts_partial_slots_with_ceiling() -> None:
+    with pytest.raises(CandleRequestError):
+        parse_candle_request(
+            "BTC/USD",
+            "1m",
+            "2026-06-19T00:00:30Z",
+            "2026-06-19T00:02:00Z",
+            max_range_days=30,
+            max_candles=1,
+        )
     with pytest.raises(CandleRequestError):
         parse_candle_request(
             "BTC/USD",
@@ -148,16 +195,49 @@ def test_parse_candle_request_enforces_range_and_count_limits() -> None:
 
 def test_find_gaps_uses_half_open_slots_and_contiguous_ranges() -> None:
     persisted = [make_candle(START + timedelta(minutes=1))]
+    timeframe = get_timeframe("1m")
+    assert timeframe is not None
+    schedule = get_candle_schedule(BTC, timeframe)
+    expected = schedule.expected_opens(
+        START,
+        START + timedelta(minutes=3),
+        get_market_session_policy(BTC),
+        "1m",
+    )
 
     assert _find_gaps(
         persisted,
-        START,
-        START + timedelta(minutes=3),
-        timedelta(minutes=1),
-    ) == [
-        (START, START + timedelta(minutes=1)),
-        (START + timedelta(minutes=2), START + timedelta(minutes=3)),
-    ]
+        expected,
+        schedule,
+    ) == (
+        ProviderFetchSection(
+            START,
+            START + timedelta(minutes=1),
+            1,
+        ),
+        ProviderFetchSection(
+            START + timedelta(minutes=2),
+            START + timedelta(minutes=3),
+            1,
+        ),
+    )
+
+
+async def test_service_rejects_exact_schedule_count_before_provider_call() -> None:
+    provider = FakeProvider()
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        provider,
+        max_candles=1,
+    )
+
+    with pytest.raises(CandleRequestError) as exc_info:
+        await service.get_candles(
+            CandleRequest("BTC/USD", "1m", START, START + timedelta(minutes=2))
+        )
+
+    assert exc_info.value.code == "INVALID_TIME_RANGE"
+    assert provider.calls == []
 
 
 async def test_service_skips_provider_on_full_database_hit() -> None:
@@ -190,6 +270,39 @@ async def test_service_skips_twelvedata_when_forex_range_is_fully_persisted() ->
     assert provider.calls == []
 
 
+async def test_service_recognizes_persisted_offset_hourly_candle() -> None:
+    open_time = datetime(2026, 6, 22, 13, 30, tzinfo=UTC)
+    persisted = Candle(
+        symbol=SPY.symbol,
+        asset_class=SPY.asset_class,
+        provider=SPY.provider,
+        provider_symbol=SPY.provider_symbol,
+        timeframe="1h",
+        open_time=open_time,
+        close_time=open_time + timedelta(hours=1) - timedelta(milliseconds=1),
+        open=Decimal("600"),
+        high=Decimal("602"),
+        low=Decimal("599"),
+        close=Decimal("601"),
+        volume=Decimal("1000"),
+        complete=True,
+    )
+    provider = FakeProvider()
+    service = CandleService(FakeRepository([persisted], symbol=SPY), provider)
+
+    result = await service.get_candles(
+        CandleRequest(
+            "SPY",
+            "1h",
+            datetime(2026, 6, 22, 13, 0, tzinfo=UTC),
+            datetime(2026, 6, 22, 14, 0, tzinfo=UTC),
+        )
+    )
+
+    assert result.candles == [persisted]
+    assert provider.calls == []
+
+
 async def test_service_fetches_missing_forex_range_through_selected_provider() -> None:
     fetched = make_candle(START, symbol=EUR, complete=False)
     repository = FakeRepository(symbol=EUR)
@@ -204,7 +317,7 @@ async def test_service_fetches_missing_forex_range_through_selected_provider() -
         CandleRequest("EUR/USD", "1m", START, START + timedelta(minutes=2))
     )
 
-    assert provider.calls == [(START, START + timedelta(minutes=2), 2)]
+    assert provider.calls == [(START, START + timedelta(minutes=2), 3)]
     assert result.candles == [repository.upserted[0]]
     assert result.candles[0].provider == "TWELVE_DATA"
     assert result.candles[0].provider_symbol == "EUR/USD"
@@ -227,8 +340,8 @@ async def test_service_splits_forex_provider_ranges_around_weekend_close() -> No
 
     assert result.candles == []
     assert provider.calls == [
-        (friday_open, friday_open + timedelta(hours=1), 1),
-        (sunday_open, sunday_open + timedelta(hours=1), 1),
+        (friday_open, friday_open + timedelta(hours=1), 2),
+        (sunday_open, sunday_open + timedelta(hours=1), 2),
     ]
 
 
@@ -243,6 +356,49 @@ async def test_service_skips_provider_for_closed_only_forex_range() -> None:
 
     assert result.candles == []
     assert provider.calls == []
+
+
+async def test_service_requests_only_regular_session_etf_slots() -> None:
+    start = datetime(2026, 6, 22, 13, 0, tzinfo=UTC)
+    provider = FakeProvider()
+    service = CandleService(FakeRepository(symbol=SPY), provider)
+
+    result = await service.get_candles(
+        CandleRequest("SPY", "1h", start, start + timedelta(hours=8))
+    )
+
+    assert result.candles == []
+    assert provider.calls == [
+        (
+            datetime(2026, 6, 22, 13, 30, tzinfo=UTC),
+            datetime(2026, 6, 22, 20, 30, tzinfo=UTC),
+            8,
+        )
+    ]
+
+
+async def test_service_splits_wti_ranges_around_daily_maintenance() -> None:
+    start = datetime(2026, 6, 22, 20, 0, tzinfo=UTC)
+    provider = FakeProvider()
+    service = CandleService(FakeRepository(symbol=WTI), provider)
+
+    result = await service.get_candles(
+        CandleRequest("WTI", "1h", start, start + timedelta(hours=3))
+    )
+
+    assert result.candles == []
+    assert provider.calls == [
+        (
+            datetime(2026, 6, 22, 20, 30, tzinfo=UTC),
+            datetime(2026, 6, 22, 21, 30, tzinfo=UTC),
+            2,
+        ),
+        (
+            datetime(2026, 6, 22, 22, 30, tzinfo=UTC),
+            datetime(2026, 6, 22, 23, 30, tzinfo=UTC),
+            2,
+        ),
+    ]
 
 
 async def test_service_excludes_persisted_and_cached_closed_session_forex_candles() -> None:
@@ -284,7 +440,7 @@ async def test_service_preserves_non_forex_weekend_gap_behavior() -> None:
         )
     )
 
-    assert provider.calls == [(weekend_open, weekend_open + timedelta(minutes=2), 2)]
+    assert provider.calls == [(weekend_open, weekend_open + timedelta(minutes=2), 3)]
 
 
 async def test_service_fetches_only_gaps_and_does_not_synthesize_missing_slots() -> None:
@@ -303,8 +459,8 @@ async def test_service_fetches_only_gaps_and_does_not_synthesize_missing_slots()
     )
 
     assert provider.calls == [
-        (START, START + timedelta(minutes=1), 1),
-        (START + timedelta(minutes=2), START + timedelta(minutes=3), 1),
+        (START, START + timedelta(minutes=1), 2),
+        (START + timedelta(minutes=2), START + timedelta(minutes=3), 2),
     ]
     assert [candle.open_time for candle in result.candles] == [
         START,

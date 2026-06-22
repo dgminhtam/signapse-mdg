@@ -10,14 +10,19 @@ from twelvedata.exceptions import TwelveDataError
 
 from app.domain.errors import ProviderUnavailableError
 from app.domain.symbols import SupportedSymbol
-from app.providers import twelvedata_forex as twelvedata_module
-from app.providers.twelvedata_forex import (
-    SUPPORTED_FOREX_PROVIDER_SYMBOLS,
-    TwelveDataForexProvider,
-    build_twelvedata_forex_provider,
+from app.providers import twelvedata_market_data as twelvedata_module
+from app.providers.twelvedata_market_data import (
+    SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS,
+    TwelveDataHttpClient,
+    TwelveDataMarketDataProvider,
+    TwelveDataNoDataError,
+    build_twelvedata_market_data_provider,
 )
 
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
+QQQ = SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True)
 START = datetime(2026, 6, 22, 0, 0, tzinfo=UTC)
 
 
@@ -89,10 +94,12 @@ async def test_provider_discovers_supported_forex_symbols() -> None:
         ]
     )
 
-    result = await TwelveDataForexProvider(lambda: client).discover_supported_provider_symbols()
+    result = await TwelveDataMarketDataProvider(
+        lambda: client
+    ).discover_supported_provider_symbols()
 
     assert result == frozenset({"EUR/USD", "GBP/USD", "XAU/USD"})
-    assert result <= SUPPORTED_FOREX_PROVIDER_SYMBOLS
+    assert result <= SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS
     assert client.forex_pairs_calls == 1
 
 
@@ -105,7 +112,7 @@ async def test_provider_normalizes_latest_prices() -> None:
         }
     )
 
-    result = await TwelveDataForexProvider(lambda: client).fetch_latest_prices(
+    result = await TwelveDataMarketDataProvider(lambda: client).fetch_latest_prices(
         ["EUR/USD", "GBP/USD", "AAPL"]
     )
 
@@ -117,11 +124,32 @@ async def test_provider_normalizes_latest_prices() -> None:
     assert result.unavailable_symbols == frozenset()
 
 
+async def test_provider_fetches_validated_wti_and_etf_prices() -> None:
+    client = FakeClient(
+        prices={
+            "WTI": {"price": "78.12340"},
+            "SPY": {"price": "601.2500"},
+            "QQQ": {"price": "530.8750"},
+        }
+    )
+
+    result = await TwelveDataMarketDataProvider(lambda: client).fetch_latest_prices(
+        ["WTI", "SPY", "QQQ"]
+    )
+
+    assert client.price_calls == ["QQQ", "SPY", "WTI"]
+    assert result.prices == {
+        "WTI": Decimal("78.12340"),
+        "SPY": Decimal("601.2500"),
+        "QQQ": Decimal("530.8750"),
+    }
+
+
 @pytest.mark.parametrize("payload", [{"price": "0"}, {"price": "NaN"}, {"status": "error"}, {}])
 async def test_provider_marks_invalid_price_payloads_unavailable(payload: object) -> None:
     client = FakeClient(prices={"EUR/USD": payload})
 
-    result = await TwelveDataForexProvider(lambda: client).fetch_latest_prices(["EUR/USD"])
+    result = await TwelveDataMarketDataProvider(lambda: client).fetch_latest_prices(["EUR/USD"])
 
     assert result.prices == {}
     assert result.unavailable_symbols == frozenset({"EUR/USD"})
@@ -130,7 +158,7 @@ async def test_provider_marks_invalid_price_payloads_unavailable(payload: object
 async def test_provider_marks_unsupported_symbols_unavailable() -> None:
     client = FakeClient(prices={"EUR/USD": {"price": "1.10"}})
 
-    result = await TwelveDataForexProvider(lambda: client).fetch_latest_prices(
+    result = await TwelveDataMarketDataProvider(lambda: client).fetch_latest_prices(
         ["EUR/USD", "NZD/USD"]
     )
 
@@ -140,7 +168,7 @@ async def test_provider_marks_unsupported_symbols_unavailable() -> None:
 
 async def test_provider_normalizes_time_series_candles() -> None:
     client = FakeClient(time_series_payload=(candle_row(),))
-    provider = TwelveDataForexProvider(lambda: client)
+    provider = TwelveDataMarketDataProvider(lambda: client)
 
     candles = await provider.fetch_candles(
         EUR,
@@ -170,6 +198,47 @@ async def test_provider_normalizes_time_series_candles() -> None:
 
 
 @pytest.mark.parametrize(
+    ("symbol", "volume"),
+    [(WTI, None), (SPY, "12345.6700"), (QQQ, "9876")],
+)
+async def test_provider_normalizes_wti_and_etf_candles(
+    symbol: SupportedSymbol,
+    volume: str | None,
+) -> None:
+    open_time = datetime(2026, 6, 22, 14, 0, tzinfo=UTC)
+    row = candle_row(open_time)
+    row["volume"] = volume
+    provider = TwelveDataMarketDataProvider(lambda: FakeClient(time_series_payload=(row,)))
+
+    candles = await provider.fetch_candles(
+        symbol,
+        "1h",
+        "1h",
+        open_time,
+        open_time + timedelta(hours=1),
+        1,
+    )
+
+    assert candles[0].symbol == symbol.symbol
+    assert candles[0].volume == (Decimal("0") if volume is None else Decimal(volume))
+
+
+async def test_provider_rejects_non_allowlisted_candle_symbol() -> None:
+    unsupported = SupportedSymbol("BRENT", "COMMODITY", "TWELVE_DATA", "BRENT", True)
+    provider = TwelveDataMarketDataProvider(lambda: FakeClient())
+
+    with pytest.raises(ProviderUnavailableError):
+        await provider.fetch_candles(
+            unsupported,
+            "1h",
+            "1h",
+            START,
+            START + timedelta(hours=1),
+            1,
+        )
+
+
+@pytest.mark.parametrize(
     ("provider_interval", "expected_interval", "duration"),
     [
         ("1m", "1min", timedelta(minutes=1)),
@@ -185,7 +254,7 @@ async def test_provider_maps_all_supported_candle_intervals(
     duration: timedelta,
 ) -> None:
     client = FakeClient(time_series_payload=(candle_row(),))
-    provider = TwelveDataForexProvider(lambda: client)
+    provider = TwelveDataMarketDataProvider(lambda: client)
 
     await provider.fetch_candles(
         EUR,
@@ -211,7 +280,7 @@ async def test_provider_normalizes_absent_volume_to_zero(volume: object) -> None
         row.pop("volume")
     else:
         row["volume"] = volume
-    provider = TwelveDataForexProvider(lambda: FakeClient(time_series_payload=(row,)))
+    provider = TwelveDataMarketDataProvider(lambda: FakeClient(time_series_payload=(row,)))
 
     candles = await provider.fetch_candles(
         EUR,
@@ -229,7 +298,7 @@ async def test_provider_normalizes_absent_volume_to_zero(volume: object) -> None
 async def test_provider_rejects_malformed_supplied_volume(volume: str) -> None:
     row = candle_row()
     row["volume"] = volume
-    provider = TwelveDataForexProvider(lambda: FakeClient(time_series_payload=(row,)))
+    provider = TwelveDataMarketDataProvider(lambda: FakeClient(time_series_payload=(row,)))
 
     with pytest.raises(ProviderUnavailableError):
         await provider.fetch_candles(
@@ -248,7 +317,7 @@ async def test_provider_excludes_rows_outside_half_open_range() -> None:
         candle_row(START),
         candle_row(START + timedelta(minutes=1)),
     )
-    provider = TwelveDataForexProvider(lambda: FakeClient(time_series_payload=payload))
+    provider = TwelveDataMarketDataProvider(lambda: FakeClient(time_series_payload=payload))
 
     candles = await provider.fetch_candles(
         EUR,
@@ -263,7 +332,7 @@ async def test_provider_excludes_rows_outside_half_open_range() -> None:
 
 
 async def test_provider_preserves_empty_forex_market_gap() -> None:
-    provider = TwelveDataForexProvider(lambda: FakeClient(time_series_payload=()))
+    provider = TwelveDataMarketDataProvider(lambda: FakeClient(time_series_payload=()))
 
     candles = await provider.fetch_candles(
         EUR,
@@ -277,11 +346,45 @@ async def test_provider_preserves_empty_forex_market_gap() -> None:
     assert candles == []
 
 
+async def test_provider_maps_recognized_no_data_signal_to_empty_candles() -> None:
+    provider = TwelveDataMarketDataProvider(lambda: FakeClient(error=TwelveDataNoDataError()))
+
+    candles = await provider.fetch_candles(
+        WTI,
+        "1h",
+        "1h",
+        datetime(2026, 6, 22, 13, 30, tzinfo=UTC),
+        datetime(2026, 6, 22, 14, 30, tzinfo=UTC),
+        2,
+    )
+
+    assert candles == []
+
+
+async def test_provider_preserves_offset_hourly_timestamp() -> None:
+    open_time = datetime(2026, 6, 18, 13, 30, tzinfo=UTC)
+    provider = TwelveDataMarketDataProvider(
+        lambda: FakeClient(time_series_payload=(candle_row(open_time),))
+    )
+
+    candles = await provider.fetch_candles(
+        WTI,
+        "1h",
+        "1h",
+        open_time,
+        open_time + timedelta(hours=1),
+        2,
+    )
+
+    assert candles[0].open_time == open_time
+    assert candles[0].close_time == open_time + timedelta(hours=1) - timedelta(milliseconds=1)
+
+
 async def test_provider_discards_closed_session_rows_and_keeps_boundaries() -> None:
     friday_before_close = datetime(2026, 6, 19, 20, 0, tzinfo=UTC)
     friday_close = datetime(2026, 6, 19, 21, 0, tzinfo=UTC)
     sunday_reopen = datetime(2026, 6, 21, 21, 0, tzinfo=UTC)
-    provider = TwelveDataForexProvider(
+    provider = TwelveDataMarketDataProvider(
         lambda: FakeClient(
             time_series_payload=(
                 candle_row(friday_before_close),
@@ -311,7 +414,7 @@ async def test_provider_filters_weekend_daily_labels() -> None:
     saturday = datetime(2026, 6, 20, tzinfo=UTC)
     sunday = datetime(2026, 6, 21, tzinfo=UTC)
     monday = datetime(2026, 6, 22, tzinfo=UTC)
-    provider = TwelveDataForexProvider(
+    provider = TwelveDataMarketDataProvider(
         lambda: FakeClient(
             time_series_payload=tuple(
                 candle_row(value) for value in (friday, saturday, sunday, monday)
@@ -349,7 +452,7 @@ async def test_provider_filters_weekend_daily_labels() -> None:
     ],
 )
 async def test_provider_rejects_invalid_time_series_payloads(payload: object) -> None:
-    provider = TwelveDataForexProvider(lambda: FakeClient(time_series_payload=payload))
+    provider = TwelveDataMarketDataProvider(lambda: FakeClient(time_series_payload=payload))
 
     with pytest.raises(ProviderUnavailableError):
         await provider.fetch_candles(EUR, "1m", "1m", START, START + timedelta(minutes=1), 1)
@@ -367,7 +470,7 @@ async def test_cancelled_twelvedata_candle_call_propagates() -> None:
             return FakeEndpoint((candle_row(),))
 
     task = asyncio.create_task(
-        TwelveDataForexProvider(lambda: BlockingClient()).fetch_candles(
+        TwelveDataMarketDataProvider(lambda: BlockingClient()).fetch_candles(
             EUR,
             "1m",
             "1m",
@@ -386,7 +489,9 @@ async def test_cancelled_twelvedata_candle_call_propagates() -> None:
 
 
 async def test_provider_maps_twelvedata_failures_to_provider_unavailable() -> None:
-    provider = TwelveDataForexProvider(lambda: FakeClient(error=TwelveDataError("secret detail")))
+    provider = TwelveDataMarketDataProvider(
+        lambda: FakeClient(error=TwelveDataError("secret detail"))
+    )
 
     with pytest.raises(ProviderUnavailableError):
         await provider.fetch_latest_prices(["EUR/USD"])
@@ -404,7 +509,7 @@ async def test_slow_twelvedata_call_does_not_block_event_loop() -> None:
             return FakeEndpoint({"price": "1.10"})
 
     task = asyncio.create_task(
-        TwelveDataForexProvider(lambda: SlowClient()).fetch_latest_prices(["EUR/USD"])
+        TwelveDataMarketDataProvider(lambda: SlowClient()).fetch_latest_prices(["EUR/USD"])
     )
     while not started.is_set():
         await asyncio.sleep(0)
@@ -432,7 +537,7 @@ async def test_concurrent_twelvedata_calls_are_serialized() -> None:
             return FakeEndpoint({"price": "1.10"})
 
     client = SerializedClient()
-    provider = TwelveDataForexProvider(lambda: client)
+    provider = TwelveDataMarketDataProvider(lambda: client)
     first = asyncio.create_task(provider.fetch_latest_prices(["EUR/USD"]))
     while not first_started.is_set():
         await asyncio.sleep(0)
@@ -470,7 +575,7 @@ async def test_provider_factory_lazily_configures_sdk(monkeypatch: pytest.Monkey
             return client.get_forex_pairs_list(**defaults)
 
     monkeypatch.setattr(twelvedata_module, "TDClient", FakeTDClient)
-    provider = build_twelvedata_forex_provider("test-key", "https://example.test/", 2.5)
+    provider = build_twelvedata_market_data_provider("test-key", "https://example.test/", 2.5)
 
     result = await provider.fetch_latest_prices(["EUR/USD"])
 
@@ -482,7 +587,63 @@ async def test_provider_factory_lazily_configures_sdk(monkeypatch: pytest.Monkey
 
 def test_provider_factory_requires_api_key() -> None:
     with pytest.raises(ProviderUnavailableError):
-        build_twelvedata_forex_provider(None, "https://example.test", 1)
+        build_twelvedata_market_data_provider(None, "https://example.test", 1)
+
+
+class FakeHttpResponse:
+    def __init__(self, payload: object, *, ok: bool) -> None:
+        self._payload = payload
+        self.ok = ok
+        self.headers: dict[str, str] = {}
+
+    def json(self) -> object:
+        return self._payload
+
+
+class FakeHttpSession:
+    def __init__(self, response: FakeHttpResponse) -> None:
+        self.response = response
+
+    def get(self, *args: object, **kwargs: object) -> FakeHttpResponse:
+        del args, kwargs
+        return self.response
+
+
+def test_http_client_classifies_only_time_series_no_data() -> None:
+    payload = {
+        "status": "error",
+        "code": 400,
+        "message": "No data is available on the specified dates. Try setting different dates.",
+    }
+    client = TwelveDataHttpClient("https://example.test", 1)
+    object.__setattr__(
+        client,
+        "session",
+        FakeHttpSession(FakeHttpResponse(payload, ok=False)),
+    )
+
+    with pytest.raises(TwelveDataNoDataError):
+        client.get("/time_series")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"status": "error", "code": 401, "message": "Invalid API key"},
+        {"status": "error", "code": 429, "message": "Rate limit"},
+        {"status": "error", "code": 400, "message": "Invalid interval"},
+    ],
+)
+def test_http_client_keeps_other_errors_unavailable(payload: object) -> None:
+    client = TwelveDataHttpClient("https://example.test", 1)
+    object.__setattr__(
+        client,
+        "session",
+        FakeHttpSession(FakeHttpResponse(payload, ok=False)),
+    )
+
+    with pytest.raises(TwelveDataError):
+        client.get("/time_series")
 
 
 def test_twelvedata_sdk_imports_stay_inside_provider_package() -> None:

@@ -24,6 +24,9 @@ A Twelve Data foundation now exists for the current Forex/metal catalog symbols:
 | `TSLA` | `US_STOCK` | `TWELVE_DATA` | `TSLA` |
 | `NVDA` | `US_STOCK` | `TWELVE_DATA` | `NVDA` |
 | `MSFT` | `US_STOCK` | `TWELVE_DATA` | `MSFT` |
+| `WTI` | `COMMODITY` | `TWELVE_DATA` | `WTI` |
+| `SPY` | `ETF` | `TWELVE_DATA` | `SPY` |
+| `QQQ` | `ETF` | `TWELVE_DATA` | `QQQ` |
 
 These rows are seeded in the registry and enabled through the provider routers.
 
@@ -90,7 +93,7 @@ These rows are seeded in the registry and enabled through the provider routers.
 
                               +-----------------------+
                               | Twelve Data Adapter   |
-                              | Forex REST foundation |
+                              | Twelve Data foundation |
                               +-----------+-----------+
                                           |
                                           v
@@ -149,12 +152,12 @@ Recommended initial timeframes:
   access, and owns upstream timeout and retry policy.
 - Does not expose Binance-specific payloads outside the adapter boundary.
 
-### Twelve Data Forex Adapter
+### Twelve Data Market Data Adapter
 
-- Encapsulates the official `twelvedata==1.4.0` SDK for Forex REST and WebSocket foundations.
+- Encapsulates the official `twelvedata==1.4.0` SDK for REST and WebSocket market data.
 - Supports provider-symbol discovery/validation, latest-price normalization, and OHLC
   time-series normalization for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`,
-  `AAPL`, `TSLA`, `NVDA`, and `MSFT`.
+  `AAPL`, `TSLA`, `NVDA`, `MSFT`, `WTI`, `SPY`, and `QQQ`.
 - Uses one process-local Twelve Data WebSocket connection for active Forex streams and shares
   dynamic provider-symbol subscriptions across clients.
 - Bridges the SDK's thread-based `on_event` callback into the asyncio runtime with
@@ -167,7 +170,7 @@ Recommended initial timeframes:
 - Is wired to public `/v1/quotes`, `/v1/candles`, and `/v1/stream` through provider routers.
 - Maps the gateway's half-open candle range to Twelve Data UTC time-series boundaries.
 - Normalizes missing Forex volume to zero as an unavailable-volume placeholder.
-- Normalizes Forex WebSocket price ticks into quote events and derives stream candles locally.
+- Normalizes Twelve Data WebSocket price ticks into quote events and derives stream candles locally.
 
 ### Quote Cache
 
@@ -222,14 +225,16 @@ Binance result in the same request.
 ### Candle HTTP Flow
 
 ```text
-Client -> GET /v1/candles?symbol=EUR/USD&timeframe=1m&from=...&to=...
+Client -> GET /v1/candles?symbol=EUR/USD&timeframe=1m&from=...[&to=...]
   -> API validates required query params
+  -> If to is omitted, API captures request-time UTC once
   -> Symbol Registry validates symbol and timeframe
-  -> Service validates aligned UTC [from,to), max range, and max candle count
+  -> Service validates exact UTC [from,to), max range, and conservative candle count
   -> Service selects market-session policy from persisted asset class
+  -> Service selects provider/market-aware candle schedule
   -> Repository loads persisted closed candles
   -> Service discards persisted rows outside the selected session policy
-  -> Service calculates missing eligible slots and coalesces provider ranges
+  -> Service calculates missing scheduled opens and coalesces provider ranges
   -> Candle Provider Router selects the persisted provider mapping
   -> Service fetches missing ranges from Binance or Twelve Data if needed
   -> Provider adapters normalize and discard known session-ineligible rows
@@ -240,7 +245,12 @@ Client -> GET /v1/candles?symbol=EUR/USD&timeframe=1m&from=...&to=...
 
 The current candle may have `complete = false`; closed candles should have `complete = true`.
 The public response contains only `symbol`, `timeframe`, `from`, `to`, and `candles`; provider
-identity and mapping remain internal.
+identity and mapping remain internal. Response `to` is always present and contains either the
+explicit request value or the exact request-time UTC instant resolved by the gateway.
+Provider open timestamps remain authoritative. Binance uses the epoch-aligned schedule; verified
+WTI/SPY/QQQ hourly Twelve Data rows use a minute-30 schedule, while their shorter intervals remain
+epoch-aligned and daily values use date labels. Recognized Twelve Data no-data ranges normalize to
+an empty provider result instead of an operational failure.
 Forex intraday candles follow the Signapse weekly quote session from Sunday 17:00 inclusive through
 Friday 17:00 exclusive in `America/New_York`; `zoneinfo` and `tzdata` keep the boundary DST-aware
 instead of relying on a fixed UTC offset. Forex `1d` candles use UTC weekday labels: Monday through
@@ -375,8 +385,9 @@ CREATE TABLE supported_symbols (
 The initial Alembic migration seeds `BTC/USD -> BINANCE_SPOT:BTCUSD` and
 `ETH/USD -> BINANCE_SPOT:ETHUSD`. A later Forex seed migration adds
 `EUR/USD`, `GBP/USD`, `USD/JPY`, and `AUD/USD` as enabled `FOREX` records, `XAU/USD` as an enabled
-`COMMODITY` record, and `AAPL`, `TSLA`, `NVDA`, and `MSFT` as enabled `US_STOCK` records, all
-mapped to `TWELVE_DATA`. `/v1/symbols` queries enabled rows from this table and returns
+`COMMODITY` record, and `AAPL`, `TSLA`, `NVDA`, and `MSFT` as enabled `US_STOCK` records. The
+next seed adds `WTI` as `COMMODITY` and `SPY`/`QQQ` as `ETF`; all are mapped to `TWELVE_DATA`.
+`/v1/symbols` queries enabled rows from this table and returns
 `503 DATABASE_UNAVAILABLE` when the registry cannot be queried.
 `/health` remains independent of database configuration and connectivity.
 
@@ -498,7 +509,7 @@ Multi-symbol quote responses use a per-symbol error list:
 
 - Use FastAPI on ASGI with async route handlers.
 - Use the official Binance Spot SDK for provider REST.
-- Use the official Twelve Data SDK for the Forex REST foundation.
+- Use the official Twelve Data SDK for the multi-asset REST and WebSocket foundation.
 - Offload synchronous SDK REST operations with `asyncio.to_thread` and serialize shared SDK
   client access.
 - Use SQLAlchemy 2 async sessions for PostgreSQL access.

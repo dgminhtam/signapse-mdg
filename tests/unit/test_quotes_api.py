@@ -42,6 +42,9 @@ class FakeSymbolRepository:
         return [
             SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True),
             SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
+            SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
+            SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True),
+            SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True),
         ]
 
 
@@ -197,3 +200,36 @@ async def test_quotes_routes_forex_through_twelvedata_provider_without_live_call
     assert payload["errors"] == []
     assert binance.calls == [["BTCUSD"]]
     assert twelvedata.calls == [["EUR/USD"]]
+
+
+async def test_quotes_routes_wti_and_etfs_through_twelvedata_provider(
+    client: AsyncClient,
+) -> None:
+    binance = FakeProvider({"BTCUSD": Decimal("62373.79")})
+    twelvedata = FakeProvider(
+        {
+            "WTI": Decimal("78.125"),
+            "SPY": Decimal("601.25"),
+            "QQQ": Decimal("530.875"),
+        }
+    )
+    app.dependency_overrides[get_quote_repository] = FakeSymbolRepository
+    app.dependency_overrides[get_quote_provider] = lambda: QuoteProviderRouter(
+        {"BINANCE_SPOT": binance, "TWELVE_DATA": twelvedata}
+    )
+    app.dependency_overrides[get_quote_cache] = QuoteCache
+
+    response = await client.get(
+        "/v1/quotes",
+        params={"symbols": "WTI,SPY,BTC/USD,QQQ"},
+    )
+
+    assert response.status_code == 200
+    assert [quote["symbol"] for quote in response.json()["quotes"]] == [
+        "WTI",
+        "SPY",
+        "BTC/USD",
+        "QQQ",
+    ]
+    assert binance.calls == [["BTCUSD"]]
+    assert twelvedata.calls == [["WTI", "SPY", "QQQ"]]
