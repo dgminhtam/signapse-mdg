@@ -15,6 +15,7 @@ from app.domain.quotes import ProviderSymbolQuoteProvider, QuoteError, QuoteProv
 from app.domain.symbols import SymbolRepository
 from app.providers.binance_spot import build_binance_spot_quote_provider
 from app.providers.twelvedata_market_data import build_twelvedata_market_data_provider
+from app.providers.yfinance_market_data import build_yfinance_quote_provider
 from app.services.quote_provider_router import QuoteProviderRouter
 from app.services.quotes import QuoteService, parse_symbols
 
@@ -62,14 +63,24 @@ def get_twelvedata_quote_provider(
     return build_twelvedata_market_data_provider(api_key, base_url, timeout_seconds)
 
 
+@lru_cache
+def get_yfinance_quote_provider(
+    timeout_seconds: float,
+) -> ProviderSymbolQuoteProvider:
+    return build_yfinance_quote_provider(timeout_seconds)
+
+
 def get_quote_provider(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> QuoteProvider:
-    providers = {
+    providers: dict[str, ProviderSymbolQuoteProvider] = {
         "BINANCE_SPOT": get_binance_quote_provider(
             settings.binance_rest_base_url,
             settings.provider_http_timeout_seconds,
-        )
+        ),
+        "YFINANCE": get_yfinance_quote_provider(
+            settings.provider_http_timeout_seconds,
+        ),
     }
     if settings.twelvedata_api_key is not None and settings.twelvedata_api_key.strip():
         providers["TWELVE_DATA"] = get_twelvedata_quote_provider(

@@ -29,6 +29,9 @@ from app.providers.binance_spot_stream import build_binance_spot_stream_provider
 from app.providers.twelvedata_market_data_stream import (
     build_twelvedata_market_data_stream_provider,
 )
+from app.providers.yfinance_market_data_stream import (
+    build_yfinance_market_data_stream_provider,
+)
 from app.services.stream_manager import StreamManager
 from app.services.stream_provider_router import MultiProviderStreamProvider
 
@@ -48,10 +51,15 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         queue_capacity=settings.stream_provider_queue_capacity,
         heartbeat_seconds=settings.twelvedata_ws_heartbeat_seconds,
     )
+    yfinance_provider = build_yfinance_market_data_stream_provider(
+        queue_capacity=settings.stream_provider_queue_capacity,
+        reconnect_delay_seconds=settings.provider_ws_reconnect_delay_seconds,
+    )
     provider = MultiProviderStreamProvider(
         {
             "BINANCE_SPOT": binance_provider,
             "TWELVE_DATA": twelvedata_provider,
+            "YFINANCE": yfinance_provider,
         },
         queue_capacity=settings.stream_provider_queue_capacity,
     )
@@ -70,6 +78,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     application.state.stream_provider = provider
     application.state.binance_stream_provider = binance_provider
     application.state.twelvedata_market_data_stream_provider = twelvedata_provider
+    application.state.yfinance_market_data_stream_provider = yfinance_provider
     yield
     await manager.stop()
     if database is not None:

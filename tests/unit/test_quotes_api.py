@@ -45,6 +45,8 @@ class FakeSymbolRepository:
             SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
             SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True),
             SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True),
+            SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True),
+            SupportedSymbol("SPX", "STOCK_INDEX", "YFINANCE", "^GSPC", True),
         ]
 
 
@@ -233,3 +235,56 @@ async def test_quotes_routes_wti_and_etfs_through_twelvedata_provider(
     ]
     assert binance.calls == [["BTCUSD"]]
     assert twelvedata.calls == [["WTI", "SPY", "QQQ"]]
+
+
+async def test_quotes_route_yfinance_symbols_with_mixed_provider_partial_success(
+    client: AsyncClient,
+) -> None:
+    binance = FakeProvider({"BTCUSD": Decimal("62373.79")})
+    twelvedata = FakeProvider({"EUR/USD": Decimal("1.14567")})
+    yfinance = FakeProvider({"SI=F": Decimal("63.20")})
+    app.dependency_overrides[get_quote_repository] = FakeSymbolRepository
+    app.dependency_overrides[get_quote_provider] = lambda: QuoteProviderRouter(
+        {
+            "BINANCE_SPOT": binance,
+            "TWELVE_DATA": twelvedata,
+            "YFINANCE": yfinance,
+        }
+    )
+    app.dependency_overrides[get_quote_cache] = QuoteCache
+
+    response = await client.get(
+        "/v1/quotes",
+        params={"symbols": "SPX,EUR/USD,XAG/USD,BTC/USD"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [quote["symbol"] for quote in payload["quotes"]] == [
+        "EUR/USD",
+        "XAG/USD",
+        "BTC/USD",
+    ]
+    assert [(error["symbol"], error["code"]) for error in payload["errors"]] == [
+        ("SPX", "PROVIDER_UNAVAILABLE")
+    ]
+    assert yfinance.calls == [["^GSPC", "SI=F"]]
+    assert all(set(quote) == {"symbol", "price", "receivedAt"} for quote in payload["quotes"])
+
+
+async def test_quotes_reuse_cached_yfinance_quote(client: AsyncClient) -> None:
+    yfinance = FakeProvider({"SI=F": Decimal("63.20")})
+    cache = QuoteCache()
+    app.dependency_overrides[get_quote_repository] = FakeSymbolRepository
+    app.dependency_overrides[get_quote_provider] = lambda: QuoteProviderRouter(
+        {"YFINANCE": yfinance}
+    )
+    app.dependency_overrides[get_quote_cache] = lambda: cache
+
+    first = await client.get("/v1/quotes", params={"symbols": "XAG/USD"})
+    second = await client.get("/v1/quotes", params={"symbols": "XAG/USD"})
+
+    assert first.status_code == second.status_code == 200
+    assert first.json()["quotes"][0]["symbol"] == "XAG/USD"
+    assert second.json()["quotes"][0]["price"] == "63.20"
+    assert yfinance.calls == [["SI=F"]]

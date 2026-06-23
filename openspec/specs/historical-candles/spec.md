@@ -248,12 +248,18 @@ credentials, SQL, SDK exceptions, raw provider payloads, credentials, or stack t
 
 ### Requirement: Real-time candle events maintain current in-memory state
 The gateway SHALL maintain at most one current forming candle per canonical `(symbol, timeframe)`
-from valid normalized WebSocket candle events and SHALL make that state available to the
-historical candle service.
+from valid normalized WebSocket candle events that satisfy the symbol's market-session policy and
+SHALL make that state available to the historical candle service.
 
 #### Scenario: Forming candle update is received
 - **WHEN** a valid stream candle has `complete=false`
+- **AND** its open time is market-session eligible for that symbol and timeframe
 - **THEN** it replaces the current in-memory candle for the same symbol and timeframe
+
+#### Scenario: Session-ineligible forming candle update is received
+- **WHEN** a stream candle has `complete=false`
+- **AND** its open time is not market-session eligible for that symbol and timeframe
+- **THEN** it is not stored as the current in-memory candle
 
 #### Scenario: HTTP range includes a cached forming candle
 - **WHEN** `GET /v1/candles` covers the open time of the matching current in-memory candle
@@ -268,14 +274,21 @@ historical candle service.
 ### Requirement: Completed stream candles are persisted without blocking fanout
 The gateway SHALL remove a completed candle from current in-memory state, emit it to matching
 clients, and enqueue an idempotent PostgreSQL upsert using the existing candle identity and
-repository boundary. Persistence MUST NOT run inside the provider SDK callback or block live
-fanout.
+repository boundary when the completed candle satisfies the symbol's market-session policy.
+Persistence MUST NOT run inside the provider SDK callback or block live fanout.
 
 #### Scenario: Stream candle closes
 - **WHEN** a valid normalized stream candle has `complete=true`
+- **AND** its open time is market-session eligible for that symbol and timeframe
 - **THEN** it is removed from current forming state if it matches that series and open time
 - **AND** it is enqueued for idempotent persistence
 - **AND** matching downstream clients receive the completed candle without waiting for PostgreSQL
+
+#### Scenario: Session-ineligible stream candle closes
+- **WHEN** a normalized stream candle has `complete=true`
+- **AND** its open time is not market-session eligible for that symbol and timeframe
+- **THEN** it is not enqueued for persistence
+- **AND** it is not exposed as a historical current or completed candle
 
 #### Scenario: Completed candle already exists
 - **WHEN** PostgreSQL already contains the same provider, provider symbol, timeframe, and open time

@@ -17,6 +17,7 @@ from app.db.session import get_session_factory
 from app.domain.candles import CandleProvider, CandleRepository, CandleResult
 from app.providers.binance_spot import build_binance_spot_candle_provider
 from app.providers.twelvedata_market_data import build_twelvedata_market_data_provider
+from app.providers.yfinance_market_data import build_yfinance_candle_provider
 from app.services.candle_provider_router import CandleProviderRouter
 from app.services.candles import CandleService, parse_candle_request
 
@@ -63,6 +64,11 @@ def get_twelvedata_candle_provider(
     return build_twelvedata_market_data_provider(api_key, base_url, timeout_seconds)
 
 
+@lru_cache
+def get_yfinance_candle_provider(timeout_seconds: float) -> CandleProvider:
+    return build_yfinance_candle_provider(timeout_seconds)
+
+
 def get_candle_provider(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> CandleProvider:
@@ -70,7 +76,10 @@ def get_candle_provider(
         "BINANCE_SPOT": get_binance_candle_provider(
             settings.binance_rest_base_url,
             settings.provider_http_timeout_seconds,
-        )
+        ),
+        "YFINANCE": get_yfinance_candle_provider(
+            settings.provider_http_timeout_seconds,
+        ),
     }
     if settings.twelvedata_api_key is not None and settings.twelvedata_api_key.strip():
         providers["TWELVE_DATA"] = get_twelvedata_candle_provider(

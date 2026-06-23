@@ -28,6 +28,7 @@ ETH = SupportedSymbol("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
 WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
+SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
 START = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
 
 
@@ -304,6 +305,26 @@ async def test_manager_status_transitions_and_provider_signals() -> None:
         assert isinstance(error, StatusEvent)
         assert error.state == "ERROR"
         assert registration.close_code == 1011
+    finally:
+        await manager.stop()
+
+
+async def test_manager_keeps_silent_yfinance_subscription_connecting() -> None:
+    provider = FakeProvider()
+    manager = make_manager(provider)
+    try:
+        registration = await manager.register(
+            StreamRequest(("XAG/USD",), "1m"),
+            [SILVER],
+        )
+
+        connecting = await next_event(registration.queue)
+        assert isinstance(connecting, StatusEvent)
+        assert connecting.state == "CONNECTING"
+        await asyncio.sleep(0)
+        assert registration.queue.empty()
+        assert provider.quote_subscriptions == ["XAG/USD"]
+        assert provider.candle_subscriptions == [("XAG/USD", "1m", "1m")]
     finally:
         await manager.stop()
 

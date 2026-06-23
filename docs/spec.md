@@ -29,12 +29,40 @@ Tài liệu này cố ý chỉ mô tả service contract độc lập và không
 
 ## MVP Scope
 
-MVP chỉ hỗ trợ 2 crypto asset hiện có trong Signapse asset universe:
+Registry hiện chứa các asset được hỗ trợ hoặc đã được seed để chuẩn bị provider routing:
 
 | Canonical symbol | Asset class | Provider | Provider symbol | Status |
 | --- | --- | --- | --- | --- |
 | `BTC/USD` | `CRYPTO` | `BINANCE_SPOT` | `BTCUSD` | Supported |
 | `ETH/USD` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSD` | Supported |
+| `EUR/USD` | `FOREX` | `TWELVE_DATA` | `EUR/USD` | Supported |
+| `GBP/USD` | `FOREX` | `TWELVE_DATA` | `GBP/USD` | Supported |
+| `USD/JPY` | `FOREX` | `TWELVE_DATA` | `USD/JPY` | Supported |
+| `AUD/USD` | `FOREX` | `TWELVE_DATA` | `AUD/USD` | Supported |
+| `XAU/USD` | `COMMODITY` | `TWELVE_DATA` | `XAU/USD` | Supported |
+| `AAPL` | `US_STOCK` | `TWELVE_DATA` | `AAPL` | Supported |
+| `TSLA` | `US_STOCK` | `TWELVE_DATA` | `TSLA` | Supported |
+| `NVDA` | `US_STOCK` | `TWELVE_DATA` | `NVDA` | Supported |
+| `MSFT` | `US_STOCK` | `TWELVE_DATA` | `MSFT` | Supported |
+| `WTI` | `COMMODITY` | `TWELVE_DATA` | `WTI` | Supported |
+| `SPY` | `ETF` | `TWELVE_DATA` | `SPY` | Supported |
+| `QQQ` | `ETF` | `TWELVE_DATA` | `QQQ` | Supported |
+| `XAG/USD` | `COMMODITY` | `YFINANCE` | `SI=F` | Quote, candle, and stream supported |
+| `BRENT` | `COMMODITY` | `YFINANCE` | `BZ=F` | Quote, candle, and stream supported |
+| `NATGAS` | `COMMODITY` | `YFINANCE` | `NG=F` | Quote, candle, and stream supported |
+| `COFFEE` | `COMMODITY` | `YFINANCE` | `KC=F` | Quote, candle, and stream supported |
+| `SUGAR` | `COMMODITY` | `YFINANCE` | `SB=F` | Quote, candle, and stream supported |
+| `WHEAT` | `COMMODITY` | `YFINANCE` | `ZW=F` | Quote, candle, and stream supported |
+| `CORN` | `COMMODITY` | `YFINANCE` | `ZC=F` | Quote, candle, and stream supported |
+| `SPX` | `STOCK_INDEX` | `YFINANCE` | `^GSPC` | Quote, candle, and stream supported |
+| `NDX` | `STOCK_INDEX` | `YFINANCE` | `^NDX` | Quote, candle, and stream supported |
+| `DJI` | `STOCK_INDEX` | `YFINANCE` | `^DJI` | Quote, candle, and stream supported |
+
+`YFINANCE` rows use `Ticker.get_info().regularMarketPrice` for latest quotes, yfinance `download`
+for historical candles, and one lazy shared `AsyncWebSocket` for stream price ticks. Yahoo may
+accept a stream symbol without emitting ticks; such interests remain `CONNECTING` until usable data
+arrives. Commodity mappings are futures or rolling-futures proxies; for example, `XAG/USD` maps to
+`SI=F` rather than spot silver.
 
 MVP không hỗ trợ:
 
@@ -196,6 +224,8 @@ Semantics:
   `TSLA`, `NVDA`, `MSFT`, `WTI`, `SPY`, and `QQQ` are grouped by their persisted `TWELVE_DATA`
   mapping and fetched
   through the Twelve Data SDK.
+- YFINANCE quote cache misses use `Ticker.get_info().regularMarketPrice` in a serialized worker
+  thread. `receivedAt` is gateway receive time, not provider trade time.
 - A provider-group failure affects only symbols routed to that provider; mixed requests can return
   successful crypto quotes and Forex errors, or the reverse.
 - Quotes older than the configured threshold are omitted and returned as per-symbol `DATA_STALE`
@@ -249,6 +279,10 @@ Semantics:
 - Missing crypto ranges are routed through the persisted `BINANCE_SPOT` mapping; missing Twelve
   Data ranges for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`, `AAPL`, `TSLA`, `NVDA`,
   `MSFT`, `WTI`, `SPY`, and `QQQ` are routed through `TWELVE_DATA`.
+- Missing `YFINANCE` candle ranges for `XAG/USD`, `BRENT`, `NATGAS`, `COFFEE`, `SUGAR`,
+  `WHEAT`, `CORN`, `SPX`, `NDX`, and `DJI` are routed through yfinance `download`.
+- Missing or null yfinance volume is serialized as decimal zero because the contract requires
+  volume; this means upstream volume is unavailable, not measured zero trading activity.
 - Missing or null Twelve Data Forex volume is serialized as decimal zero because the contract
   requires volume; this means upstream volume is unavailable, not measured zero trading activity.
 - Forex intraday candles are filtered by the Signapse weekly quote session: Sunday 17:00 inclusive
@@ -274,6 +308,7 @@ Semantics:
 ```text
 WS /v1/stream?symbols=BTC/USD,ETH/USD&timeframe=1m
 WS /v1/stream?symbols=BTC/USD,EUR/USD&timeframe=1m
+WS /v1/stream?symbols=BTC/USD,EUR/USD,XAG/USD&timeframe=1m
 ```
 
 On connect, gateway should validate all requested symbols and timeframe before subscribing upstream.
@@ -283,7 +318,8 @@ Registry or provider failures close with `1011` and a sanitized reason.
 
 Stream interests route through each enabled symbol's persisted provider mapping. Binance-backed
 crypto symbols use Binance WebSocket quote/kline streams. Twelve Data-backed Forex symbols use one
-shared process-local Twelve Data WebSocket price stream for all active Forex interests.
+shared process-local Twelve Data WebSocket price stream for all active interests. YFINANCE symbols
+use one lazy process-local yfinance `AsyncWebSocket` and shared provider-symbol subscriptions.
 
 ### Quote event
 
@@ -350,6 +386,11 @@ timeframes with tick price as OHLC and decimal zero volume. It does not synthesi
 REST historical candles remain authoritative for backfill. Forex stream candles use the same weekly
 session filter as `/v1/candles`; holidays, early closes, late opens, exceptional closures, and
 provider maintenance windows remain out of scope.
+
+YFINANCE WebSocket events are also price ticks. The gateway applies the same UTC bucketing and
+zero-volume derived-candle behavior. Yahoo day volume is not interval volume and is ignored.
+Successful subscriptions that have not emitted a valid first tick remain `CONNECTING`; the gateway
+does not poll, remap provider symbols, fabricate events, or fall back to another provider.
 
 SPY and QQQ candle slots use the regular US ETF session, Monday-Friday 09:30-16:00 New York time.
 WTI uses Sunday 18:00-Friday 17:00 New York time with the Monday-Thursday 17:00-18:00 maintenance
@@ -445,6 +486,8 @@ Notes:
 - `GET /v1/symbols` reads enabled rows from `supported_symbols`; no hard-coded runtime fallback is used.
 - The initial migration seeds `BTC/USD -> BINANCE_SPOT:BTCUSD` and
   `ETH/USD -> BINANCE_SPOT:ETHUSD`.
+- Later migrations seed Twelve Data symbols and the quote, candle, and stream-enabled `YFINANCE`
+  planned assets.
 - `symbol` stores canonical symbol such as `BTC/USD`.
 - `provider_symbol` stores provider symbol such as `BTCUSD`.
 - Decimal values should use database decimal/numeric types, not float.
@@ -460,9 +503,11 @@ BINANCE_SPOT
 Responsibilities:
 
 - Map canonical symbols to their persisted provider symbols.
-- Fetch latest quotes through the selected Binance or Twelve Data REST adapter.
-- Fetch candles through Binance klines or Twelve Data time series based on registry mapping.
-- Subscribe to Binance WebSocket streams for quote/kline events.
+- Fetch latest quotes through the selected Binance, Twelve Data, or yfinance adapter.
+- Fetch candles through Binance klines, Twelve Data time series, or yfinance `download` based on
+  registry mapping.
+- Subscribe to Binance quote/kline streams and shared Twelve Data or yfinance price streams based
+  on persisted provider mapping.
 - Normalize provider-specific payloads into gateway DTOs.
 
 Binance stream names should be lowercase:
@@ -488,6 +533,7 @@ Recommended stack:
 | DTO validation | Pydantic 2.13.4 | Typed models, JSON serialization, validation. |
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation; synchronous REST calls are offloaded from the event loop. |
+| yfinance provider dependency | yfinance 1.4.1 | Open-source Yahoo Finance wrapper used for latest quotes, historical candles, and asynchronous price streaming on planned commodities and indexes. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration testing only. |
 | Database | PostgreSQL 18.4 | Reuse relational persistence for candle cache. |
 | DB driver | asyncpg 0.31.0 | Async PostgreSQL driver. |

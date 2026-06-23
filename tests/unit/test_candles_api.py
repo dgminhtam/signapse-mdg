@@ -51,14 +51,16 @@ EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
 SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
 QQQ = SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True)
+YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
 
 
 class FakeCandleRepository:
-    def __init__(self) -> None:
+    def __init__(self, persisted: list[Candle] | None = None) -> None:
+        self.persisted = persisted or []
         self.upserted: list[Candle] = []
 
     async def get_enabled_symbol(self, symbol: str) -> SupportedSymbol | None:
-        return {item.symbol: item for item in (EUR, WTI, SPY, QQQ)}.get(symbol)
+        return {item.symbol: item for item in (EUR, WTI, SPY, QQQ, YFINANCE_SILVER)}.get(symbol)
 
     async def list_complete(
         self,
@@ -67,8 +69,13 @@ class FakeCandleRepository:
         start: datetime,
         end: datetime,
     ) -> list[Candle]:
-        del symbol, timeframe, start, end
-        return []
+        return [
+            candle
+            for candle in self.persisted
+            if candle.symbol == symbol.symbol
+            and candle.timeframe == timeframe
+            and start <= candle.open_time < end
+        ]
 
     async def upsert_complete(self, candles: list[Candle]) -> None:
         self.upserted.extend(candles)
@@ -326,6 +333,124 @@ async def test_candles_routes_forex_through_fake_twelvedata_provider(
     assert repository.upserted[0].provider == "TWELVE_DATA"
 
 
+async def test_candles_routes_yfinance_through_fake_provider(
+    client: AsyncClient,
+) -> None:
+    repository = FakeCandleRepository()
+    yfinance = FakeCandleProvider()
+    app.dependency_overrides[get_candle_repository] = lambda: repository
+    app.dependency_overrides[get_candle_provider] = lambda: CandleProviderRouter(
+        {"YFINANCE": yfinance}
+    )
+    app.dependency_overrides[get_candle_cache] = CandleCache
+
+    response = await client.get(
+        "/v1/candles",
+        params={
+            "symbol": "XAG/USD",
+            "timeframe": "1m",
+            "from": "2026-06-22T00:00:00Z",
+            "to": "2026-06-22T00:01:00Z",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == {"symbol", "timeframe", "from", "to", "candles"}
+    assert payload["symbol"] == "XAG/USD"
+    assert set(payload["candles"][0]) == {
+        "openTime",
+        "closeTime",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "complete",
+    }
+    assert yfinance.calls == [YFINANCE_SILVER]
+    assert repository.upserted[0].provider == "YFINANCE"
+
+
+async def test_candles_reuse_persisted_yfinance_without_provider_call(
+    client: AsyncClient,
+) -> None:
+    persisted = Candle(
+        "XAG/USD",
+        "COMMODITY",
+        "YFINANCE",
+        "SI=F",
+        "1m",
+        datetime(2026, 6, 22, 0, 0, tzinfo=UTC),
+        datetime(2026, 6, 22, 0, 1, tzinfo=UTC) - timedelta(milliseconds=1),
+        Decimal("63.00"),
+        Decimal("64.00"),
+        Decimal("62.00"),
+        Decimal("63.50"),
+        Decimal("0"),
+        True,
+    )
+    repository = FakeCandleRepository([persisted])
+    yfinance = FakeCandleProvider()
+    app.dependency_overrides[get_candle_repository] = lambda: repository
+    app.dependency_overrides[get_candle_provider] = lambda: CandleProviderRouter(
+        {"YFINANCE": yfinance}
+    )
+    app.dependency_overrides[get_candle_cache] = CandleCache
+
+    response = await client.get(
+        "/v1/candles",
+        params={
+            "symbol": "XAG/USD",
+            "timeframe": "1m",
+            "from": "2026-06-22T00:00:00Z",
+            "to": "2026-06-22T00:01:00Z",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["candles"][0]["close"] == "63.50"
+    assert yfinance.calls == []
+    assert repository.upserted == []
+
+
+async def test_yfinance_provider_failure_is_sanitized(
+    client: AsyncClient,
+) -> None:
+    class FailingProvider(FakeCandleProvider):
+        async def fetch_candles(
+            self,
+            symbol: SupportedSymbol,
+            timeframe: str,
+            provider_interval: str,
+            start: datetime,
+            end: datetime,
+            limit: int,
+        ) -> list[Candle]:
+            del symbol, timeframe, provider_interval, start, end, limit
+            raise ProviderUnavailableError("raw yfinance payload")
+
+    app.dependency_overrides[get_candle_repository] = FakeCandleRepository
+    app.dependency_overrides[get_candle_provider] = lambda: CandleProviderRouter(
+        {"YFINANCE": FailingProvider()}
+    )
+    app.dependency_overrides[get_candle_cache] = CandleCache
+
+    response = await client.get(
+        "/v1/candles",
+        params={
+            "symbol": "XAG/USD",
+            "timeframe": "1m",
+            "from": "2026-06-22T00:00:00Z",
+            "to": "2026-06-22T00:01:00Z",
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "PROVIDER_UNAVAILABLE"
+    assert "raw yfinance payload" not in response.text
+
+
 @pytest.mark.parametrize(
     ("symbol", "start"),
     [
@@ -424,6 +549,7 @@ async def test_candle_dependency_without_twelvedata_key_keeps_binance_available(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     binance = FakeCandleProvider()
+    yfinance = FakeCandleProvider()
     twelvedata_builds = 0
 
     def fake_twelvedata_builder(
@@ -446,6 +572,11 @@ async def test_candle_dependency_without_twelvedata_key_keeps_binance_available(
         "get_twelvedata_candle_provider",
         fake_twelvedata_builder,
     )
+    monkeypatch.setattr(
+        routes_candles_module,
+        "get_yfinance_candle_provider",
+        lambda timeout_seconds: yfinance,
+    )
     provider = get_candle_provider(Settings(twelvedata_api_key=None))
 
     candles = await provider.fetch_candles(
@@ -459,3 +590,33 @@ async def test_candle_dependency_without_twelvedata_key_keeps_binance_available(
 
     assert candles[0].symbol == "BTC/USD"
     assert twelvedata_builds == 0
+
+
+async def test_candle_dependency_registers_yfinance_without_twelvedata_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    yfinance = FakeCandleProvider()
+    monkeypatch.setattr(
+        routes_candles_module,
+        "get_binance_candle_provider",
+        lambda base_url, timeout_seconds: FakeCandleProvider(),
+    )
+    monkeypatch.setattr(
+        routes_candles_module,
+        "get_yfinance_candle_provider",
+        lambda timeout_seconds: yfinance,
+    )
+
+    provider = get_candle_provider(Settings(twelvedata_api_key=None))
+
+    candles = await provider.fetch_candles(
+        YFINANCE_SILVER,
+        "1m",
+        "1m",
+        START,
+        START + timedelta(minutes=1),
+        1,
+    )
+
+    assert candles[0].symbol == "XAG/USD"
+    assert yfinance.calls == [YFINANCE_SILVER]

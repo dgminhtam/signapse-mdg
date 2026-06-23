@@ -11,6 +11,7 @@ from app.services.candle_provider_router import CandleProviderRouter
 BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 UNKNOWN = SupportedSymbol("XAU/USD", "COMMODITY", "UNKNOWN", "XAU/USD", True)
+YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
 START = datetime(2026, 6, 22, 0, 0, tzinfo=UTC)
 
 
@@ -51,7 +52,7 @@ class FakeProvider:
 
 @pytest.mark.parametrize(
     ("symbol", "provider_name"),
-    [(BTC, "BINANCE_SPOT"), (EUR, "TWELVE_DATA")],
+    [(BTC, "BINANCE_SPOT"), (EUR, "TWELVE_DATA"), (YFINANCE_SILVER, "YFINANCE")],
 )
 async def test_router_dispatches_by_persisted_provider(
     symbol: SupportedSymbol,
@@ -59,7 +60,10 @@ async def test_router_dispatches_by_persisted_provider(
 ) -> None:
     binance = FakeProvider()
     twelvedata = FakeProvider()
-    router = CandleProviderRouter({"BINANCE_SPOT": binance, "TWELVE_DATA": twelvedata})
+    yfinance = FakeProvider()
+    router = CandleProviderRouter(
+        {"BINANCE_SPOT": binance, "TWELVE_DATA": twelvedata, "YFINANCE": yfinance}
+    )
 
     result = await router.fetch_candles(
         symbol,
@@ -70,8 +74,12 @@ async def test_router_dispatches_by_persisted_provider(
         1,
     )
 
-    selected = binance if provider_name == "BINANCE_SPOT" else twelvedata
-    other = twelvedata if provider_name == "BINANCE_SPOT" else binance
+    providers = {
+        "BINANCE_SPOT": binance,
+        "TWELVE_DATA": twelvedata,
+        "YFINANCE": yfinance,
+    }
+    selected = providers[provider_name]
     assert result == [make_candle(symbol)]
     assert selected.calls == [
         (
@@ -83,7 +91,7 @@ async def test_router_dispatches_by_persisted_provider(
             1,
         )
     ]
-    assert other.calls == []
+    assert all(provider is selected or provider.calls == [] for provider in providers.values())
 
 
 async def test_router_rejects_unregistered_provider_without_fallback() -> None:
@@ -93,6 +101,23 @@ async def test_router_rejects_unregistered_provider_without_fallback() -> None:
     with pytest.raises(ProviderUnavailableError):
         await router.fetch_candles(
             UNKNOWN,
+            "1m",
+            "1m",
+            START,
+            START + timedelta(minutes=1),
+            1,
+        )
+
+    assert binance.calls == []
+
+
+async def test_yfinance_symbols_raise_unavailable_without_fallback_when_unwired() -> None:
+    binance = FakeProvider()
+    router = CandleProviderRouter({"BINANCE_SPOT": binance})
+
+    with pytest.raises(ProviderUnavailableError):
+        await router.fetch_candles(
+            YFINANCE_SILVER,
             "1m",
             "1m",
             START,

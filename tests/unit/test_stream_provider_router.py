@@ -17,6 +17,7 @@ from app.services.stream_provider_router import MultiProviderStreamProvider
 BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 UNKNOWN = SupportedSymbol("X/USD", "FOREX", "MISSING", "X/USD", True)
+YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
 
 
 class FakeProvider:
@@ -48,8 +49,13 @@ class FakeProvider:
 async def test_router_routes_mixed_interests_by_provider_and_forwards_events() -> None:
     binance = FakeProvider()
     twelvedata = FakeProvider()
+    yfinance = FakeProvider()
     router = MultiProviderStreamProvider(
-        {"BINANCE_SPOT": binance, "TWELVE_DATA": twelvedata},
+        {
+            "BINANCE_SPOT": binance,
+            "TWELVE_DATA": twelvedata,
+            "YFINANCE": yfinance,
+        },
         queue_capacity=10,
     )
     try:
@@ -57,11 +63,15 @@ async def test_router_routes_mixed_interests_by_provider_and_forwards_events() -
         await router.subscribe_candle(BTC, "1m", "1m")
         await router.subscribe_quote(EUR)
         await router.subscribe_candle(EUR, "1m", "1m")
+        await router.subscribe_quote(YFINANCE_SILVER)
+        await router.subscribe_candle(YFINANCE_SILVER, "1m", "1m")
 
         assert binance.quote_subscriptions == ["BTC/USD"]
         assert binance.candle_subscriptions == [("BTC/USD", "1m", "1m")]
         assert twelvedata.quote_subscriptions == ["EUR/USD"]
         assert twelvedata.candle_subscriptions == [("EUR/USD", "1m", "1m")]
+        assert yfinance.quote_subscriptions == ["XAG/USD"]
+        assert yfinance.candle_subscriptions == [("XAG/USD", "1m", "1m")]
 
         signal = ProviderSignal(
             "RECONNECTING",
@@ -102,4 +112,33 @@ async def test_router_rejects_unsupported_provider_mapping() -> None:
     with pytest.raises(ProviderUnavailableError):
         await router.subscribe_quote(UNKNOWN)
 
+    await router.close()
+
+
+async def test_yfinance_symbols_raise_unavailable_until_provider_is_wired() -> None:
+    binance = FakeProvider()
+    router = MultiProviderStreamProvider({"BINANCE_SPOT": binance}, queue_capacity=10)
+
+    with pytest.raises(ProviderUnavailableError):
+        await router.subscribe_quote(YFINANCE_SILVER)
+
+    assert binance.quote_subscriptions == []
+    await router.close()
+
+
+async def test_yfinance_symbols_route_only_to_yfinance_provider() -> None:
+    binance = FakeProvider()
+    yfinance = FakeProvider()
+    router = MultiProviderStreamProvider(
+        {"BINANCE_SPOT": binance, "YFINANCE": yfinance},
+        queue_capacity=10,
+    )
+
+    await router.subscribe_quote(YFINANCE_SILVER)
+    await router.subscribe_candle(YFINANCE_SILVER, "5m", "5m")
+
+    assert yfinance.quote_subscriptions == ["XAG/USD"]
+    assert yfinance.candle_subscriptions == [("XAG/USD", "5m", "5m")]
+    assert binance.quote_subscriptions == []
+    assert binance.candle_subscriptions == []
     await router.close()

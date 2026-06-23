@@ -15,6 +15,7 @@ This document records the recommended technology stack for the crypto MVP descri
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation and generated models/errors. |
 | Twelve Data provider SDK | twelvedata 1.4.0 | Official SDK foundation for multi-asset REST, time series, and price streaming. |
+| yfinance provider dependency | yfinance 1.4.1 | Open-source Yahoo Finance wrapper for latest planned-asset quotes, historical candles, and asynchronous price streaming. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration tests; not used for production Binance transport. |
 | Database | PostgreSQL 18.4 | Reliable relational store for candle cache and future asset metadata. |
 | DB driver | asyncpg 0.31.0 | PostgreSQL driver designed for Python asyncio. |
@@ -48,6 +49,7 @@ These versions are locked as the project baseline from 2026-06-19. Use latest st
 | pydantic-settings | `2.14.1` |
 | binance-sdk-spot | `9.2.0` |
 | twelvedata | `1.4.0` |
+| yfinance | `1.4.1` |
 | HTTPX (dev) | `0.28.1` |
 | asyncpg | `0.31.0` |
 | SQLAlchemy | `2.0.51` |
@@ -253,6 +255,51 @@ Important constraints:
   tick buckets with decimal zero volume; REST historical candles remain authoritative for backfill.
 - Apply the weekly Forex session filter to derived stream candles. Holidays and exceptional
   closures remain out of scope.
+
+### yfinance Market Data Provider
+
+Seeded yfinance catalog:
+
+```text
+XAG/USD -> YFINANCE:SI=F
+BRENT -> YFINANCE:BZ=F
+NATGAS -> YFINANCE:NG=F
+COFFEE -> YFINANCE:KC=F
+SUGAR -> YFINANCE:SB=F
+WHEAT -> YFINANCE:ZW=F
+CORN -> YFINANCE:ZC=F
+SPX -> YFINANCE:^GSPC
+NDX -> YFINANCE:^NDX
+DJI -> YFINANCE:^DJI
+```
+
+Important constraints:
+
+- yfinance is an open-source wrapper around Yahoo Finance data, not an official Yahoo SDK.
+- Yahoo Finance and yfinance usage terms must be approved for the deployment model before
+  production use; the upstream project describes the library as intended for research and
+  educational purposes.
+- Keep yfinance imports and payloads inside `app/providers/`.
+- Use `Ticker.get_info().regularMarketPrice` for the approved latest-quote symbols.
+- Use yfinance `download` for historical candles with explicit `start`, `end`, `interval`,
+  `timeout`, shared session, `threads=False`, and `progress=False`.
+- Normalize yfinance candle rows with `Decimal` OHLCV values and UTC timestamps; missing or null
+  volume becomes exact decimal zero because the public candle contract requires volume.
+- Preserve natural Yahoo/yfinance gaps without synthesizing omitted candles.
+- Create the shared yfinance-compatible session lazily, serialize access in a worker thread, and
+  clamp HTTP requests to `PROVIDER_HTTP_TIMEOUT_SECONDS`.
+- Use one lazy process-local yfinance `AsyncWebSocket` for active YFINANCE stream interests and
+  share provider-symbol subscriptions across quote and candle channels.
+- Derive YFINANCE stream candles from accepted price ticks on the UTC timeframe grid with decimal
+  zero volume. Ignore Yahoo day volume and do not synthesize skipped buckets.
+- Keep accepted-but-silent YFINANCE interests in `CONNECTING`; do not poll, remap symbols, or fall
+  back to another provider.
+- Supervise visible listener termination with the configured provider reconnect delay, a fresh
+  client, and active-symbol resubscription.
+- Do not create a yfinance network request, WebSocket connection, or background task during
+  startup.
+- Commodity yfinance mappings are futures or rolling-futures proxies; `XAG/USD` maps to `SI=F`
+  rather than a spot silver symbol.
 
 ## 6. Persistence
 
@@ -521,6 +568,7 @@ pydantic==2.13.4
 pydantic-settings==2.14.1
 binance-sdk-spot==9.2.0
 twelvedata==1.4.0
+yfinance==1.4.1
 sqlalchemy[asyncio]==2.0.51
 asyncpg==0.31.0
 alembic==1.18.4
@@ -545,6 +593,8 @@ mypy==2.1.0
 - Pydantic v2 for DTOs and settings.
 - Official Binance Spot SDK for provider integration.
 - Official Twelve Data SDK for the multi-asset REST and WebSocket foundation.
+- yfinance is locked as the latest-quote, historical-candle, asynchronous stream, and registry
+  mapping source for planned assets.
 - HTTPX only for ASGI route and integration tests.
 - Canonical `BTC/USD` and `ETH/USD` mapped to Binance `BTCUSD` and `ETHUSD`.
 - Successful latest quotes expose only `symbol`, `price`, and `receivedAt`.
@@ -564,7 +614,6 @@ mypy==2.1.0
 - Public auth and quota middleware.
 - Multi-provider routing engine.
 - Provider fallback strategy.
-- Twelve Data WebSocket integration.
 
 ## 14. Primary References
 
@@ -574,6 +623,7 @@ mypy==2.1.0
 - Uvicorn documentation: https://www.uvicorn.org/
 - Binance Python connector SDK: https://github.com/binance/binance-connector-python
 - Twelve Data Python SDK: https://github.com/twelvedata/twelvedata-python
+- yfinance documentation: https://ranaroussi.github.io/yfinance/
 - HTTPX documentation: https://www.python-httpx.org/
 - Binance Spot market data REST: https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints
 - Binance Spot WebSocket streams: https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams

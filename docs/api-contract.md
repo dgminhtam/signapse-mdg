@@ -30,6 +30,16 @@ contains these public symbols:
 | `USD/JPY` | `FOREX` |
 | `AUD/USD` | `FOREX` |
 | `XAU/USD` | `COMMODITY` |
+| `XAG/USD` | `COMMODITY` |
+| `BRENT` | `COMMODITY` |
+| `NATGAS` | `COMMODITY` |
+| `COFFEE` | `COMMODITY` |
+| `SUGAR` | `COMMODITY` |
+| `WHEAT` | `COMMODITY` |
+| `CORN` | `COMMODITY` |
+| `SPX` | `STOCK_INDEX` |
+| `NDX` | `STOCK_INDEX` |
+| `DJI` | `STOCK_INDEX` |
 | `AAPL` | `US_STOCK` |
 | `TSLA` | `US_STOCK` |
 | `NVDA` | `US_STOCK` |
@@ -37,6 +47,13 @@ contains these public symbols:
 | `WTI` | `COMMODITY` |
 | `SPY` | `ETF` |
 | `QQQ` | `ETF` |
+
+The `YFINANCE` rows support `GET /v1/quotes`, `GET /v1/candles`, and `/v1/stream`. Streaming uses
+one lazy shared yfinance `AsyncWebSocket`. Yahoo can accept a provider symbol without emitting a
+tick; the corresponding stream interests remain `CONNECTING` until usable data arrives. Commodity
+provider symbols are futures or rolling-futures proxies. For example, `XAG/USD` maps to `SI=F`, not
+spot silver. Coffee, sugar, wheat, and corn prices retain the contract-specific units reported by
+Yahoo Finance because the public market-data shapes have no unit field.
 
 Supported timeframe values are `1m`, `5m`, `15m`, `1h`, and `1d`.
 
@@ -77,7 +94,7 @@ Symbol object:
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `symbol` | string | yes | Canonical symbol clients must use in all other endpoints. |
-| `assetClass` | string enum | yes | Current values: `CRYPTO`, `FOREX`, `COMMODITY`, `US_STOCK`, `ETF`. |
+| `assetClass` | string enum | yes | Current values: `CRYPTO`, `FOREX`, `COMMODITY`, `STOCK_INDEX`, `US_STOCK`, `ETF`. |
 | `provider` | string | yes | Current provider mapping. This is diagnostic registry data and should not drive client business logic. |
 | `providerSymbol` | string | yes | Current provider symbol mapping. This is diagnostic registry data and may change without changing `symbol`. |
 | `enabled` | boolean | yes | Whether the symbol is enabled for gateway use. This endpoint returns enabled rows. |
@@ -101,6 +118,10 @@ Symbol object:
 ```http
 GET /v1/quotes?symbols=BTC%2FUSD,ETH%2FUSD
 ```
+
+For `YFINANCE` symbols, the gateway uses yfinance `regularMarketPrice`. A closed market can
+therefore return its last regular-session value. `receivedAt` remains the time the gateway received
+the snapshot and is not the provider trade timestamp.
 
 ### Query Parameters
 
@@ -208,7 +229,7 @@ Candle object:
 | `high` | decimal string | yes | Highest price for the bucket. |
 | `low` | decimal string | yes | Lowest price for the bucket. |
 | `close` | decimal string | yes | Closing or latest price for the bucket. |
-| `volume` | decimal string | yes | Provider volume when available. For Twelve Data symbols, `0` can mean upstream volume is unavailable. |
+| `volume` | decimal string | yes | Provider volume when available. For Twelve Data or yfinance symbols, `0` can mean upstream volume is unavailable. |
 | `complete` | boolean | yes | `true` for closed candles, `false` for the current forming candle. |
 
 ```json
@@ -236,6 +257,11 @@ The response always contains `to`. When the request omits it, this field contain
 instant captured by the gateway for that request. Provider candle timestamps remain authoritative;
 for example, a valid Twelve Data hourly candle labeled `13:30Z` is returned as `13:30Z` rather than
 shifted to `13:00Z`. A valid provider range with no rows returns HTTP `200` and `candles: []`.
+
+For `YFINANCE` symbols, candle cache misses use yfinance historical `download` with the same
+half-open `[from,to)` range. Missing or null yfinance volume is serialized as decimal zero because
+the public candle contract requires a non-null volume. Yahoo/yfinance natural gaps are preserved:
+the gateway does not synthesize omitted candles.
 
 Forex intraday candles follow the Signapse weekly quote session: Sunday 17:00 inclusive through
 Friday 17:00 exclusive in `America/New_York`. Forex `1d` candles include UTC weekday labels Monday
@@ -340,7 +366,7 @@ Each requested symbol subscribes to both `quote` and `candle` channels.
 | `high` | decimal string | yes | Highest price for the bucket. |
 | `low` | decimal string | yes | Lowest price for the bucket. |
 | `close` | decimal string | yes | Latest or closing price for the bucket. |
-| `volume` | decimal string | yes | Stream volume when available; Twelve Data-derived stream candles use `0`. |
+| `volume` | decimal string | yes | Stream volume when available; Twelve Data- and YFINANCE-derived stream candles use `0`. |
 | `complete` | boolean | yes | `true` when the candle is closed, otherwise `false`. |
 | `receivedAt` | UTC datetime string | yes | Time the gateway emitted or normalized the candle event. |
 
@@ -383,6 +409,11 @@ Stream states:
 | `RECONNECTING` | Provider connection is reconnecting; events may pause. |
 | `MARKET_CLOSED` | Requested candle channel is outside the configured market session. |
 | `ERROR` | Gateway cannot serve the affected stream interests. |
+
+YFINANCE streams are price-tick based. The gateway derives requested candle timeframes on the UTC
+grid with decimal zero volume, ignores Yahoo cumulative day volume, and does not synthesize skipped
+buckets. A successful YFINANCE subscription with no first tick remains `CONNECTING`; it does not
+trigger polling, symbol remapping, fallback, or fabricated events.
 
 ```json
 {

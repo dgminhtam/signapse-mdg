@@ -18,6 +18,7 @@ from app.services.stream_manager import ClientRegistration
 BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
 ETH = SupportedSymbol("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
+SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
 NOW = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
 
 
@@ -201,3 +202,23 @@ def test_stream_route_accepts_valid_mixed_provider_symbols(
 
     assert manager.registered[0][0] == StreamRequest(("BTC/USD", "EUR/USD"), "1m")
     assert manager.registered[0][1] == [BTC, EUR]
+
+
+def test_stream_route_accepts_yfinance_and_three_provider_symbols(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = FakeManager()
+    patch_registry(monkeypatch, [BTC, EUR, SILVER])
+    patch_manager(monkeypatch, manager)
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/v1/stream?symbols=BTC/USD,EUR/USD,XAG/USD&timeframe=5m"
+        ) as ws:
+            assert ws.receive_json()["state"] == "CONNECTING"
+
+    assert manager.registered[0][0] == StreamRequest(
+        ("BTC/USD", "EUR/USD", "XAG/USD"),
+        "5m",
+    )
+    assert manager.registered[0][1] == [BTC, EUR, SILVER]

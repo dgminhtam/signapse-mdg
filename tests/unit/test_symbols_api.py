@@ -52,6 +52,13 @@ async def test_symbols_serializes_camel_case_fields_in_service_order(
                 provider_symbol="ETHUSD",
                 enabled=True,
             ),
+            SupportedSymbol(
+                symbol="SPX",
+                asset_class="STOCK_INDEX",
+                provider="YFINANCE",
+                provider_symbol="^GSPC",
+                enabled=True,
+            ),
         ]
     )
 
@@ -72,6 +79,13 @@ async def test_symbols_serializes_camel_case_fields_in_service_order(
                 "assetClass": "CRYPTO",
                 "provider": "BINANCE_SPOT",
                 "providerSymbol": "ETHUSD",
+                "enabled": True,
+            },
+            {
+                "symbol": "SPX",
+                "assetClass": "STOCK_INDEX",
+                "provider": "YFINANCE",
+                "providerSymbol": "^GSPC",
                 "enabled": True,
             },
         ]

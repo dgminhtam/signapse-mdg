@@ -1,14 +1,12 @@
 import asyncio
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Protocol, cast
 
 from twelvedata import TDClient  # type: ignore[import-untyped]
 
-from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.market_sessions import get_market_session_policy
 from app.domain.quotes import Quote
@@ -17,12 +15,16 @@ from app.domain.streams import (
     ProviderSignal,
     ProviderStreamEvent,
     QuoteInterest,
-    StreamCandle,
     StreamInterest,
     StreamQuote,
 )
 from app.domain.symbols import SupportedSymbol
-from app.domain.timeframes import EPOCH, get_timeframe
+from app.domain.timeframes import get_timeframe
+from app.providers.price_tick_stream import (
+    PriceTick,
+    PriceTickCandleBuilder,
+    bucket_open,
+)
 from app.providers.twelvedata_market_data import SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS
 
 logger = logging.getLogger(__name__)
@@ -44,94 +46,7 @@ class TwelveDataStreamClient(Protocol):
     def websocket(self, **defaults: object) -> TwelveDataWebSocket: ...
 
 
-@dataclass(frozen=True, slots=True)
-class PriceTick:
-    symbol: SupportedSymbol
-    price: Decimal
-    provider_time: datetime | None
-    received_at: datetime
-
-
-class TwelveDataCandleBuilder:
-    def __init__(self) -> None:
-        self._current: dict[tuple[str, str], Candle] = {}
-
-    def apply_tick(
-        self,
-        tick: PriceTick,
-        timeframe: str,
-    ) -> list[StreamCandle]:
-        model = get_timeframe(timeframe)
-        if model is None:
-            return []
-        source_time = (tick.provider_time or tick.received_at).astimezone(UTC)
-        bucket_open = _bucket_open(source_time, model.duration)
-        policy = get_market_session_policy(tick.symbol)
-        if not policy.is_eligible(bucket_open, timeframe):
-            self._current.pop((tick.symbol.symbol, timeframe), None)
-            return []
-
-        close_time = bucket_open + model.duration - timedelta(milliseconds=1)
-        key = (tick.symbol.symbol, timeframe)
-        current = self._current.get(key)
-        emitted: list[StreamCandle] = []
-        if current is not None and bucket_open > current.open_time:
-            completed = Candle(
-                current.symbol,
-                current.asset_class,
-                current.provider,
-                current.provider_symbol,
-                current.timeframe,
-                current.open_time,
-                current.close_time,
-                current.open,
-                current.high,
-                current.low,
-                current.close,
-                current.volume,
-                True,
-            )
-            emitted.append(StreamCandle(completed, tick.received_at))
-            current = None
-
-        if current is None:
-            current = Candle(
-                tick.symbol.symbol,
-                tick.symbol.asset_class,
-                tick.symbol.provider,
-                tick.symbol.provider_symbol,
-                timeframe,
-                bucket_open,
-                close_time,
-                tick.price,
-                tick.price,
-                tick.price,
-                tick.price,
-                Decimal("0"),
-                False,
-            )
-        elif bucket_open == current.open_time:
-            current = Candle(
-                current.symbol,
-                current.asset_class,
-                current.provider,
-                current.provider_symbol,
-                current.timeframe,
-                current.open_time,
-                current.close_time,
-                current.open,
-                max(current.high, tick.price),
-                min(current.low, tick.price),
-                tick.price,
-                current.volume,
-                False,
-            )
-        else:
-            return emitted
-
-        self._current[key] = current
-        emitted.append(StreamCandle(current, tick.received_at))
-        return emitted
+TwelveDataCandleBuilder = PriceTickCandleBuilder
 
 
 class TwelveDataMarketDataStreamProvider:
@@ -187,7 +102,7 @@ class TwelveDataMarketDataStreamProvider:
             await self._subscribe_provider_symbol(symbol)
             timeframes.add(timeframe)
             if not get_market_session_policy(symbol).is_eligible(
-                _bucket_open(datetime.now(UTC), get_timeframe(timeframe).duration),  # type: ignore[union-attr]
+                bucket_open(datetime.now(UTC), get_timeframe(timeframe).duration),  # type: ignore[union-attr]
                 timeframe,
             ):
                 self._put_signal(
@@ -412,12 +327,6 @@ class _MissingTwelveDataClient:
     def websocket(self, **defaults: object) -> TwelveDataWebSocket:
         del defaults
         raise ProviderUnavailableError
-
-
-def _bucket_open(value: datetime, duration: timedelta) -> datetime:
-    utc_value = value.astimezone(UTC)
-    elapsed = utc_value - EPOCH
-    return EPOCH + (elapsed // duration) * duration
 
 
 def _parse_decimal(value: object, *, positive: bool) -> Decimal | None:

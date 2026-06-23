@@ -10,6 +10,7 @@ ETH = SupportedSymbol("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 GBP = SupportedSymbol("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True)
 UNKNOWN = SupportedSymbol("XAU/USD", "COMMODITY", "UNKNOWN", "XAU/USD", True)
+YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
 
 
 class FakeProvider:
@@ -78,6 +79,30 @@ async def test_router_marks_missing_provider_configuration_unavailable() -> None
     assert binance.calls == [["BTCUSD"]]
     assert result.prices == {"BTCUSD": Decimal("10")}
     assert result.unavailable_symbols == frozenset({"EUR/USD", "XAU/USD"})
+
+
+async def test_router_dispatches_yfinance_symbols() -> None:
+    binance = FakeProvider({"BTCUSD": Decimal("10")})
+    yfinance = FakeProvider({"SI=F": Decimal("63.2")})
+    router = QuoteProviderRouter({"BINANCE_SPOT": binance, "YFINANCE": yfinance})
+
+    result = await router.fetch_latest_prices([BTC, YFINANCE_SILVER])
+
+    assert binance.calls == [["BTCUSD"]]
+    assert yfinance.calls == [["SI=F"]]
+    assert result.prices == {"BTCUSD": Decimal("10"), "SI=F": Decimal("63.2")}
+    assert result.unavailable_symbols == frozenset()
+
+
+async def test_router_isolates_yfinance_failure() -> None:
+    binance = FakeProvider({"BTCUSD": Decimal("10")})
+    yfinance = FakeProvider(error=True)
+    router = QuoteProviderRouter({"BINANCE_SPOT": binance, "YFINANCE": yfinance})
+
+    result = await router.fetch_latest_prices([BTC, YFINANCE_SILVER])
+
+    assert result.prices == {"BTCUSD": Decimal("10")}
+    assert result.unavailable_symbols == frozenset({"SI=F"})
 
 
 async def test_router_preserves_provider_unavailable_symbols() -> None:

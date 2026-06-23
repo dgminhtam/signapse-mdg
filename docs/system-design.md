@@ -30,6 +30,26 @@ A Twelve Data foundation now exists for the current Forex/metal catalog symbols:
 
 These rows are seeded in the registry and enabled through the provider routers.
 
+A yfinance dependency, registry seed, latest-quote adapter, historical candle adapter, and
+asynchronous stream adapter exist for planned catalog assets:
+
+| Canonical symbol | Asset class | Provider | Provider symbol |
+| --- | --- | --- | --- |
+| `XAG/USD` | `COMMODITY` | `YFINANCE` | `SI=F` |
+| `BRENT` | `COMMODITY` | `YFINANCE` | `BZ=F` |
+| `NATGAS` | `COMMODITY` | `YFINANCE` | `NG=F` |
+| `COFFEE` | `COMMODITY` | `YFINANCE` | `KC=F` |
+| `SUGAR` | `COMMODITY` | `YFINANCE` | `SB=F` |
+| `WHEAT` | `COMMODITY` | `YFINANCE` | `ZW=F` |
+| `CORN` | `COMMODITY` | `YFINANCE` | `ZC=F` |
+| `SPX` | `STOCK_INDEX` | `YFINANCE` | `^GSPC` |
+| `NDX` | `STOCK_INDEX` | `YFINANCE` | `^NDX` |
+| `DJI` | `STOCK_INDEX` | `YFINANCE` | `^DJI` |
+
+These `YFINANCE` rows are available through `/v1/quotes`, `/v1/candles`, and `/v1/stream`.
+Commodity symbols are futures or rolling-futures proxies, including `XAG/USD -> SI=F`. Yahoo stream
+event coverage is not guaranteed for every accepted symbol.
+
 ## 2. Goals
 
 - Serve normalized latest quotes through HTTP.
@@ -172,6 +192,30 @@ Recommended initial timeframes:
 - Normalizes missing Forex volume to zero as an unavailable-volume placeholder.
 - Normalizes Twelve Data WebSocket price ticks into quote events and derives stream candles locally.
 
+### yfinance Market Data Providers
+
+- Locks the open-source `yfinance==1.4.1` package for latest quote, historical candle, and
+  asynchronous price-stream retrieval.
+- Seeds planned `YFINANCE` registry mappings for silver, Brent crude, natural gas, agricultural
+  commodities, and stock indexes.
+- Uses `Ticker.get_info().regularMarketPrice` behind a provider-owned adapter.
+- Uses yfinance `download` for historical candles with explicit `start`, `end`, `interval`,
+  `timeout`, and shared-session controls.
+- Normalizes yfinance history rows into gateway candles, treating missing or null volume as
+  decimal zero and preserving natural provider gaps without synthetic candles.
+- Runs serialized synchronous yfinance work in `asyncio.to_thread` and applies
+  `PROVIDER_HTTP_TIMEOUT_SECONDS` through the shared yfinance-compatible session.
+- Uses one lazy process-local `AsyncWebSocket` for active YFINANCE stream interests, shares
+  provider-symbol subscriptions across quote and candle channels, and supervises visible listener
+  termination with fresh-client reconstruction and resubscription.
+- Normalizes valid WebSocket price ticks into quote events and derives UTC-aligned candles with
+  decimal zero volume; Yahoo day volume is ignored because it is not interval volume.
+- Keeps successfully subscribed but silent symbols in `CONNECTING` without polling, remapping,
+  fallback, or fabricated events.
+- Keeps yfinance imports and SDK details inside `app/providers/`.
+- Does not create a yfinance session, WebSocket client, network connection, or background task
+  during application startup.
+
 ### Quote Cache
 
 - Stores latest quote per canonical symbol in memory.
@@ -191,7 +235,8 @@ Recommended initial timeframes:
 - Accepts client WebSocket subscriptions.
 - Validates all symbols and timeframe before accepting a stream.
 - Routes upstream interests by persisted provider mapping through a multi-provider stream router.
-- Opens upstream Binance or Twelve Data streams only when at least one client is subscribed.
+- Opens upstream Binance, Twelve Data, or YFINANCE streams only when at least one client is
+  subscribed.
 - Closes upstream streams when no matching clients remain, optionally after a short idle grace period.
 - Subscribes to normalized provider events from the adapter.
 - Fans out quote and candle events to matching clients.
@@ -236,7 +281,7 @@ Client -> GET /v1/candles?symbol=EUR/USD&timeframe=1m&from=...[&to=...]
   -> Service discards persisted rows outside the selected session policy
   -> Service calculates missing scheduled opens and coalesces provider ranges
   -> Candle Provider Router selects the persisted provider mapping
-  -> Service fetches missing ranges from Binance or Twelve Data if needed
+  -> Service fetches missing ranges from Binance, Twelve Data, or yfinance if needed
   -> Provider adapters normalize and discard known session-ineligible rows
   -> Service persists newly fetched closed candles
   -> Service merges closed candles with current forming candle if policy-eligible
@@ -249,8 +294,8 @@ identity and mapping remain internal. Response `to` is always present and contai
 explicit request value or the exact request-time UTC instant resolved by the gateway.
 Provider open timestamps remain authoritative. Binance uses the epoch-aligned schedule; verified
 WTI/SPY/QQQ hourly Twelve Data rows use a minute-30 schedule, while their shorter intervals remain
-epoch-aligned and daily values use date labels. Recognized Twelve Data no-data ranges normalize to
-an empty provider result instead of an operational failure.
+epoch-aligned and daily values use date labels. Recognized Twelve Data no-data ranges and empty
+yfinance history results normalize to an empty provider result instead of an operational failure.
 Forex intraday candles follow the Signapse weekly quote session from Sunday 17:00 inclusive through
 Friday 17:00 exclusive in `America/New_York`; `zoneinfo` and `tzdata` keep the boundary DST-aware
 instead of relying on a fixed UTC offset. Forex `1d` candles use UTC weekday labels: Monday through
@@ -266,20 +311,23 @@ Client -> WS /v1/stream?symbols=BTC/USD,EUR/USD&timeframe=1m
   -> API validates all symbols and timeframe
   -> Stream Manager registers client subscription
   -> Stream Manager sends CONNECTING
-  -> Stream Router opens matching upstream Binance and Twelve Data streams if needed
+  -> Stream Router opens matching upstream Binance, Twelve Data, and YFINANCE streams if needed
   -> Stream Manager sends status SUBSCRIBED when upstream data is available
   -> Binance Adapter receives provider ticker/kline events
   -> Twelve Data Adapter receives Forex price ticks from one shared SDK WebSocket
+  -> YFINANCE Adapter receives price ticks from one shared yfinance AsyncWebSocket
   -> Adapters normalize quote events
-  -> Twelve Data Adapter derives Forex candle events from price tick buckets
+  -> Twelve Data and YFINANCE adapters derive candle events from price tick buckets
   -> Quote/Candle caches are updated
   -> Completed candles are queued for idempotent PostgreSQL persistence
   -> Stream Manager fans out events to matching clients
 ```
 
-Forex stream candles are derived from price ticks for the requested timeframe. Volume is decimal
-zero because Twelve Data price events do not provide gateway-compatible volume. The gateway does
-not synthesize skipped buckets; REST historical candles remain authoritative for backfill.
+Twelve Data and YFINANCE stream candles are derived from price ticks for the requested timeframe.
+Volume is decimal zero because those price events do not provide gateway-compatible interval
+volume. The gateway does not synthesize skipped buckets; REST historical candles remain
+authoritative for backfill. Silent YFINANCE interests remain `CONNECTING` until their first valid
+tick.
 
 If upstream reconnects, the stream should emit `RECONNECTING`. If open-session data exceeds the
 freshness threshold, it should emit `STALE`. If a Forex candle channel is outside the weekly quote
@@ -387,6 +435,9 @@ The initial Alembic migration seeds `BTC/USD -> BINANCE_SPOT:BTCUSD` and
 `EUR/USD`, `GBP/USD`, `USD/JPY`, and `AUD/USD` as enabled `FOREX` records, `XAU/USD` as an enabled
 `COMMODITY` record, and `AAPL`, `TSLA`, `NVDA`, and `MSFT` as enabled `US_STOCK` records. The
 next seed adds `WTI` as `COMMODITY` and `SPY`/`QQQ` as `ETF`; all are mapped to `TWELVE_DATA`.
+The next registry seed adds planned `YFINANCE` mappings for `XAG/USD`, `BRENT`, `NATGAS`,
+`COFFEE`, `SUGAR`, `WHEAT`, `CORN`, `SPX`, `NDX`, and `DJI`; these rows are wired to latest quotes,
+historical candles, and the shared YFINANCE WebSocket provider.
 `/v1/symbols` queries enabled rows from this table and returns
 `503 DATABASE_UNAVAILABLE` when the registry cannot be queried.
 `/health` remains independent of database configuration and connectivity.
@@ -510,6 +561,8 @@ Multi-symbol quote responses use a per-symbol error list:
 - Use FastAPI on ASGI with async route handlers.
 - Use the official Binance Spot SDK for provider REST.
 - Use the official Twelve Data SDK for the multi-asset REST and WebSocket foundation.
+- Keep yfinance REST and WebSocket adapters in provider-owned code, serialize REST access to shared
+  session and singleton state, and supervise the asynchronous stream lifecycle independently.
 - Offload synchronous SDK REST operations with `asyncio.to_thread` and serialize shared SDK
   client access.
 - Use SQLAlchemy 2 async sessions for PostgreSQL access.

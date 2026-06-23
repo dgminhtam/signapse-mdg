@@ -38,6 +38,7 @@ def test_lifespan_starts_idle_and_closes_stream_provider(
 ) -> None:
     binance_provider = LifespanProvider()
     twelvedata_provider = LifespanProvider()
+    yfinance_provider = LifespanProvider()
     monkeypatch.setattr(
         main_module,
         "build_binance_spot_stream_provider",
@@ -48,14 +49,22 @@ def test_lifespan_starts_idle_and_closes_stream_provider(
         "build_twelvedata_market_data_stream_provider",
         lambda *args, **kwargs: twelvedata_provider,
     )
+    monkeypatch.setattr(
+        main_module,
+        "build_yfinance_market_data_stream_provider",
+        lambda *args, **kwargs: yfinance_provider,
+    )
     application = main_module.create_app()
 
     with TestClient(application) as client:
         assert client.get("/health").status_code == 200
         assert binance_provider.subscribe_calls == 0
         assert twelvedata_provider.subscribe_calls == 0
+        assert yfinance_provider.subscribe_calls == 0
         assert application.state.binance_stream_provider is binance_provider
         assert application.state.twelvedata_market_data_stream_provider is twelvedata_provider
+        assert application.state.yfinance_market_data_stream_provider is yfinance_provider
 
     assert binance_provider.closed is True
     assert twelvedata_provider.closed is True
+    assert yfinance_provider.closed is True
