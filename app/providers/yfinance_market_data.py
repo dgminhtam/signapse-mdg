@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, Protocol, cast
 
 import yfinance  # type: ignore[import-untyped]
@@ -11,6 +11,8 @@ from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import ProviderQuoteBatch
 from app.domain.symbols import SupportedSymbol
+from app.domain.timeframes import get_timeframe
+from app.providers.normalization import parse_decimal
 
 SUPPORTED_YFINANCE_PROVIDER_SYMBOLS = frozenset(
     {
@@ -34,15 +36,6 @@ _YFINANCE_INTERVALS = {
     "1h": "1h",
     "1d": "1d",
 }
-
-_INTERVAL_DURATIONS = {
-    "1m": timedelta(minutes=1),
-    "5m": timedelta(minutes=5),
-    "15m": timedelta(minutes=15),
-    "1h": timedelta(hours=1),
-    "1d": timedelta(days=1),
-}
-
 
 class YFinanceTicker(Protocol):
     def get_info(self) -> dict[str, object]: ...
@@ -115,9 +108,10 @@ class YFinanceQuoteProvider:
         if symbol.provider_symbol not in SUPPORTED_YFINANCE_PROVIDER_SYMBOLS:
             raise ProviderUnavailableError
         interval = _YFINANCE_INTERVALS.get(provider_interval)
-        duration = _INTERVAL_DURATIONS.get(provider_interval)
-        if interval is None or duration is None:
+        timeframe_model = get_timeframe(provider_interval)
+        if interval is None or timeframe_model is None:
             raise ProviderUnavailableError
+        duration = timeframe_model.duration
         try:
             async with self._client_lock:
                 payload = await asyncio.to_thread(
@@ -150,7 +144,7 @@ class YFinanceQuoteProvider:
         for provider_symbol in provider_symbols:
             try:
                 payload = self._ticker_factory(provider_symbol, session).get_info()
-                price = _parse_price(payload.get("regularMarketPrice"))
+                price = _parse_decimal_value(payload.get("regularMarketPrice"), positive=True)
             except Exception:
                 unavailable.add(provider_symbol)
                 continue
@@ -190,12 +184,16 @@ class YFinanceQuoteProvider:
         return self._session
 
 
-def build_yfinance_quote_provider(timeout_seconds: float) -> YFinanceQuoteProvider:
+def build_yfinance_provider(timeout_seconds: float) -> YFinanceQuoteProvider:
     return YFinanceQuoteProvider(timeout_seconds)
+
+
+def build_yfinance_quote_provider(timeout_seconds: float) -> YFinanceQuoteProvider:
+    return build_yfinance_provider(timeout_seconds)
 
 
 def build_yfinance_candle_provider(timeout_seconds: float) -> YFinanceQuoteProvider:
-    return YFinanceQuoteProvider(timeout_seconds)
+    return build_yfinance_provider(timeout_seconds)
 
 
 def _build_ticker(provider_symbol: str, session: object) -> YFinanceTicker:
@@ -216,18 +214,6 @@ def _install_timeout(session: YFinanceSession, timeout_seconds: float) -> None:
         return original_request(method, url, **kwargs)
 
     session.request = request
-
-
-def _parse_price(value: object) -> Decimal | None:
-    if isinstance(value, bool) or not isinstance(value, (Decimal, int, float, str)):
-        return None
-    try:
-        price = Decimal(str(value))
-    except InvalidOperation:
-        return None
-    if not price.is_finite() or price <= 0:
-        return None
-    return price
 
 
 def _normalize_history(
@@ -326,22 +312,9 @@ def _parse_volume(value: object) -> Decimal | None:
 
 
 def _parse_decimal_value(value: object, *, positive: bool) -> Decimal | None:
-    if (
-        _is_missing(value)
-        or isinstance(value, bool)
-        or not isinstance(
-            value,
-            (Decimal, int, float, str),
-        )
-    ):
+    if _is_missing(value):
         return None
-    try:
-        parsed = Decimal(str(value))
-    except InvalidOperation:
-        return None
-    if not parsed.is_finite() or parsed < 0 or (positive and parsed <= 0):
-        return None
-    return parsed
+    return parse_decimal(value, positive=positive, allow_numbers=True, allow_decimal=True)
 
 
 def _is_missing(value: object) -> bool:

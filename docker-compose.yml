@@ -1,0 +1,34 @@
+services:
+  gateway:
+    image: dgminhtam/signapse-mdg:dev
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:REPLACE_WITH_EXISTING_POSTGRES_PASSWORD@database:5432/dev-signapse-mdg
+      DATABASE_POOL_SIZE: "5"
+      DATABASE_POOL_MAX_OVERFLOW: "5"
+      DATABASE_POOL_TIMEOUT_SECONDS: "5"
+      BINANCE_REST_BASE_URL: https://api.binance.com
+      BINANCE_WS_BASE_URL: wss://stream.binance.com:9443
+      TWELVEDATA_API_KEY: ""
+      TWELVEDATA_REST_BASE_URL: https://api.twelvedata.com
+      PROVIDER_HTTP_TIMEOUT_SECONDS: "5"
+      PROVIDER_WS_RECONNECT_DELAY_SECONDS: "5"
+      QUOTE_CACHE_TTL_SECONDS: "10"
+      QUOTE_STALE_AFTER_SECONDS: "30"
+      MAX_QUOTE_SYMBOLS: "10"
+      MAX_CANDLE_RANGE_DAYS: "30"
+      MAX_CANDLES_PER_REQUEST: "1000"
+      STREAM_CLIENT_QUEUE_CAPACITY: "256"
+      STREAM_PROVIDER_QUEUE_CAPACITY: "1024"
+      STREAM_PERSISTENCE_QUEUE_CAPACITY: "256"
+      STREAM_IDLE_GRACE_SECONDS: "5"
+      STREAM_FRESHNESS_CHECK_SECONDS: "1"
+      TWELVEDATA_WS_HEARTBEAT_SECONDS: "15"
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - signapse
+
+networks:
+  signapse:
+    external: true
+    name: signapse_default

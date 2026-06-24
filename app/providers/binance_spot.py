@@ -1,6 +1,6 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Protocol, cast, runtime_checkable
 
 from binance_common.configuration import ConfigurationRestAPI
@@ -12,6 +12,8 @@ from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import ProviderQuoteBatch
 from app.domain.symbols import SupportedSymbol
+from app.domain.timeframes import get_timeframe
+from app.providers.normalization import parse_decimal
 
 
 @runtime_checkable
@@ -88,7 +90,7 @@ class BinanceSpotQuoteProvider:
                 prices.pop(symbol, None)
                 unavailable.add(symbol)
                 continue
-            price = _parse_price(item.price)
+            price = parse_decimal(item.price, positive=True)
             if price is None:
                 unavailable.add(symbol)
             else:
@@ -155,38 +157,27 @@ def build_binance_spot_quote_provider(
     base_url: str,
     timeout_seconds: float,
 ) -> BinanceSpotQuoteProvider:
-    configuration = ConfigurationRestAPI(
-        base_path=base_url.rstrip("/"),
-        timeout=max(1, round(timeout_seconds * 1000)),
-        retries=0,
-    )
-    sdk = Spot(config_rest_api=configuration)
-    return BinanceSpotQuoteProvider(cast(BinanceSpotRestClient, sdk.rest_api))
+    return BinanceSpotQuoteProvider(_build_binance_spot_rest_client(base_url, timeout_seconds))
 
 
 def build_binance_spot_candle_provider(
     base_url: str,
     timeout_seconds: float,
 ) -> BinanceSpotCandleProvider:
+    return BinanceSpotCandleProvider(_build_binance_spot_rest_client(base_url, timeout_seconds))
+
+
+def _build_binance_spot_rest_client(
+    base_url: str,
+    timeout_seconds: float,
+) -> BinanceSpotRestClient:
     configuration = ConfigurationRestAPI(
         base_path=base_url.rstrip("/"),
         timeout=max(1, round(timeout_seconds * 1000)),
         retries=0,
     )
     sdk = Spot(config_rest_api=configuration)
-    return BinanceSpotCandleProvider(cast(BinanceSpotRestClient, sdk.rest_api))
-
-
-def _parse_price(value: object) -> Decimal | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        price = Decimal(value)
-    except InvalidOperation:
-        return None
-    if not price.is_finite() or price <= 0:
-        return None
-    return price
+    return cast(BinanceSpotRestClient, sdk.rest_api)
 
 
 _KLINE_INTERVALS = {
@@ -197,20 +188,12 @@ _KLINE_INTERVALS = {
     "1d": KlinesIntervalEnum.INTERVAL_1d,
 }
 
-_INTERVAL_DURATIONS = {
-    "1m": timedelta(minutes=1),
-    "5m": timedelta(minutes=5),
-    "15m": timedelta(minutes=15),
-    "1h": timedelta(hours=1),
-    "1d": timedelta(days=1),
-}
-
 
 def _interval_duration(provider_interval: str) -> timedelta:
-    try:
-        return _INTERVAL_DURATIONS[provider_interval]
-    except KeyError as exc:
-        raise ProviderUnavailableError from exc
+    timeframe = get_timeframe(provider_interval)
+    if timeframe is None:
+        raise ProviderUnavailableError
+    return timeframe.duration
 
 
 def _to_milliseconds(value: datetime) -> int:
@@ -247,7 +230,7 @@ def _normalize_klines(
         ):
             raise ProviderUnavailableError
         values = [
-            _parse_decimal(value, positive=index < 4) for index, value in enumerate(item[1:6])
+            parse_decimal(value, positive=index < 4) for index, value in enumerate(item[1:6])
         ]
         if any(value is None for value in values):
             raise ProviderUnavailableError
@@ -279,15 +262,3 @@ def _parse_milliseconds(value: object) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         return None
     return value
-
-
-def _parse_decimal(value: object, *, positive: bool) -> Decimal | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        parsed = Decimal(value)
-    except InvalidOperation:
-        return None
-    if not parsed.is_finite() or parsed < 0 or (positive and parsed <= 0):
-        return None
-    return parsed

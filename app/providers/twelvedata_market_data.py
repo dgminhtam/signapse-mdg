@@ -2,7 +2,7 @@ import asyncio
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, Protocol, cast
 
 from requests import Session
@@ -14,6 +14,8 @@ from app.domain.errors import ProviderUnavailableError
 from app.domain.market_sessions import get_market_session_policy
 from app.domain.quotes import ProviderQuoteBatch
 from app.domain.symbols import SupportedSymbol
+from app.domain.timeframes import get_timeframe
+from app.providers.normalization import parse_decimal
 
 SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS = frozenset(
     {
@@ -39,15 +41,6 @@ _TWELVEDATA_INTERVALS = {
     "1h": "1h",
     "1d": "1day",
 }
-
-_INTERVAL_DURATIONS = {
-    "1m": timedelta(minutes=1),
-    "5m": timedelta(minutes=5),
-    "15m": timedelta(minutes=15),
-    "1h": timedelta(hours=1),
-    "1d": timedelta(days=1),
-}
-
 
 class JsonEndpoint(Protocol):
     def as_json(self) -> object: ...
@@ -153,9 +146,10 @@ class TwelveDataMarketDataProvider:
         if symbol.provider_symbol not in SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS:
             raise ProviderUnavailableError
         interval = _TWELVEDATA_INTERVALS.get(provider_interval)
-        duration = _INTERVAL_DURATIONS.get(provider_interval)
-        if interval is None or duration is None:
+        timeframe_model = get_timeframe(provider_interval)
+        if interval is None or timeframe_model is None:
             raise ProviderUnavailableError
+        duration = timeframe_model.duration
         try:
             async with self._client_lock:
                 payload = await asyncio.to_thread(
@@ -264,7 +258,7 @@ def _extract_forex_symbols(payload: object) -> frozenset[str]:
 def _normalize_price_payload(payload: object) -> Decimal | None:
     if not isinstance(payload, dict) or payload.get("status") == "error":
         return None
-    return _parse_decimal(payload.get("price"), positive=True)
+    return parse_decimal(payload.get("price"), positive=True)
 
 
 def _normalize_time_series(
@@ -289,12 +283,12 @@ def _normalize_time_series(
             continue
         if open_time in seen:
             raise ProviderUnavailableError
-        open_price = _parse_decimal(row.get("open"), positive=True)
-        high = _parse_decimal(row.get("high"), positive=True)
-        low = _parse_decimal(row.get("low"), positive=True)
-        close = _parse_decimal(row.get("close"), positive=True)
+        open_price = parse_decimal(row.get("open"), positive=True)
+        high = parse_decimal(row.get("high"), positive=True)
+        low = parse_decimal(row.get("low"), positive=True)
+        close = parse_decimal(row.get("close"), positive=True)
         raw_volume = row.get("volume")
-        volume = Decimal("0") if raw_volume is None else _parse_decimal(raw_volume, positive=False)
+        volume = Decimal("0") if raw_volume is None else parse_decimal(raw_volume, positive=False)
         if None in (open_price, high, low, close, volume):
             raise ProviderUnavailableError
         open_value = cast(Decimal, open_price)
@@ -342,20 +336,6 @@ def _extract_time_series_rows(
             raise ProviderUnavailableError
         normalized.append(row)
     return tuple(normalized)
-
-
-def _parse_decimal(value: object, *, positive: bool) -> Decimal | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        parsed = Decimal(value)
-    except InvalidOperation:
-        return None
-    if not parsed.is_finite() or parsed < 0 or (positive and parsed <= 0):
-        return None
-    return parsed
-
-
 def _parse_datetime(value: object) -> datetime | None:
     if not isinstance(value, str):
         return None

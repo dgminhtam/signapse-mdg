@@ -7,11 +7,8 @@ import pytest
 
 from app.domain.streams import CandleInterest, StreamCandle, StreamQuote
 from app.domain.symbols import SupportedSymbol
-from app.providers.twelvedata_market_data_stream import (
-    PriceTick,
-    TwelveDataCandleBuilder,
-    TwelveDataMarketDataStreamProvider,
-)
+from app.providers.price_tick_stream import PriceTick, PriceTickCandleBuilder
+from app.providers.twelvedata_market_data_stream import TwelveDataMarketDataStreamProvider
 
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
@@ -202,7 +199,7 @@ async def test_provider_heartbeat_runs_on_configured_cadence() -> None:
 
 
 def test_twelvedata_candle_builder_bucket_boundaries_and_no_synthetic_gaps() -> None:
-    builder = TwelveDataCandleBuilder()
+    builder = PriceTickCandleBuilder()
     first = PriceTick(EUR, Decimal("1.00"), datetime(2026, 6, 22, 0, 0, 10, tzinfo=UTC), START)
     second = PriceTick(EUR, Decimal("1.20"), datetime(2026, 6, 22, 0, 0, 50, tzinfo=UTC), START)
     later = PriceTick(EUR, Decimal("1.10"), datetime(2026, 6, 22, 0, 5, 1, tzinfo=UTC), START)
@@ -239,14 +236,14 @@ def test_forex_candle_builder_supports_public_timeframe_boundaries(
     tick_time: datetime,
     expected_open: datetime,
 ) -> None:
-    builder = TwelveDataCandleBuilder()
+    builder = PriceTickCandleBuilder()
     events = builder.apply_tick(PriceTick(EUR, Decimal("1.00"), tick_time, START), timeframe)
 
     assert events[0].candle.open_time == expected_open
 
 
 def test_forex_candle_builder_filters_closed_weekend_bucket() -> None:
-    builder = TwelveDataCandleBuilder()
+    builder = PriceTickCandleBuilder()
     events = builder.apply_tick(
         PriceTick(
             EUR,
@@ -280,7 +277,7 @@ def test_candle_builder_applies_wti_and_etf_sessions(
     closed_time: datetime,
     open_time: datetime,
 ) -> None:
-    builder = TwelveDataCandleBuilder()
+    builder = PriceTickCandleBuilder()
 
     assert (
         builder.apply_tick(

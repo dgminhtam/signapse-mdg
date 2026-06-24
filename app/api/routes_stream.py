@@ -61,11 +61,7 @@ async def stream_market_data(websocket: WebSocket) -> None:
     except DatabaseUnavailableError:
         await websocket.close(code=1011, reason="DATABASE_UNAVAILABLE")
         return
-    registry_by_symbol = {
-        item.symbol: item
-        for item in registry
-        if hasattr(item, "symbol") and hasattr(item, "enabled") and item.enabled
-    }
+    registry_by_symbol = {item.symbol: item for item in registry}
     if any(symbol not in registry_by_symbol for symbol in request.symbols):
         await websocket.close(code=1008, reason="UNSUPPORTED_SYMBOL")
         return

@@ -2,7 +2,6 @@ import asyncio
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation
 from typing import Protocol, cast
 
 from twelvedata import TDClient  # type: ignore[import-untyped]
@@ -20,6 +19,7 @@ from app.domain.streams import (
 )
 from app.domain.symbols import SupportedSymbol
 from app.domain.timeframes import get_timeframe
+from app.providers.normalization import parse_decimal
 from app.providers.price_tick_stream import (
     PriceTick,
     PriceTickCandleBuilder,
@@ -46,9 +46,6 @@ class TwelveDataStreamClient(Protocol):
     def websocket(self, **defaults: object) -> TwelveDataWebSocket: ...
 
 
-TwelveDataCandleBuilder = PriceTickCandleBuilder
-
-
 class TwelveDataMarketDataStreamProvider:
     def __init__(
         self,
@@ -67,7 +64,7 @@ class TwelveDataMarketDataStreamProvider:
         self._provider_symbol_refs: dict[str, int] = {}
         self._quote_interests: set[QuoteInterest] = set()
         self._candle_interests: dict[str, set[str]] = {}
-        self._builder = TwelveDataCandleBuilder()
+        self._builder = PriceTickCandleBuilder()
         self._lock = asyncio.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
@@ -261,18 +258,13 @@ class TwelveDataMarketDataStreamProvider:
         symbol = self._symbols_by_provider_symbol.get(provider_symbol)
         if symbol is None:
             return None
-        price = _parse_decimal(payload.get("price"), positive=True)
+        price = parse_decimal(payload.get("price"), positive=True, allow_numbers=True)
         if price is None:
             return None
         provider_time = _parse_provider_time(payload.get("timestamp") or payload.get("datetime"))
         return PriceTick(symbol, price, provider_time, datetime.now(UTC))
 
     def _symbol_for_interest(self, interest: StreamInterest) -> SupportedSymbol | None:
-        if isinstance(interest, QuoteInterest):
-            for symbol in self._symbols_by_provider_symbol.values():
-                if symbol.symbol == interest.symbol:
-                    return symbol
-            return None
         for symbol in self._symbols_by_provider_symbol.values():
             if symbol.symbol == interest.symbol:
                 return symbol
@@ -327,20 +319,6 @@ class _MissingTwelveDataClient:
     def websocket(self, **defaults: object) -> TwelveDataWebSocket:
         del defaults
         raise ProviderUnavailableError
-
-
-def _parse_decimal(value: object, *, positive: bool) -> Decimal | None:
-    if not isinstance(value, str | int | float):
-        return None
-    try:
-        parsed = Decimal(str(value))
-    except InvalidOperation:
-        return None
-    if not parsed.is_finite() or parsed < 0 or (positive and parsed <= 0):
-        return None
-    return parsed
-
-
 def _parse_provider_time(value: object) -> datetime | None:
     if isinstance(value, int | float) and not isinstance(value, bool):
         timestamp = float(value)

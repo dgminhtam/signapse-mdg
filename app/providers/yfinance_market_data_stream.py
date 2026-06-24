@@ -2,7 +2,6 @@ import asyncio
 import logging
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation
 from typing import Protocol, cast
 
 import yfinance  # type: ignore[import-untyped]
@@ -19,6 +18,7 @@ from app.domain.streams import (
 )
 from app.domain.symbols import SupportedSymbol
 from app.domain.timeframes import get_timeframe
+from app.providers.normalization import parse_decimal
 from app.providers.price_tick_stream import PriceTick, PriceTickCandleBuilder
 from app.providers.yfinance_market_data import SUPPORTED_YFINANCE_PROVIDER_SYMBOLS
 
@@ -275,7 +275,12 @@ class YFinanceMarketDataStreamProvider:
         symbol = self._symbols_by_provider_symbol.get(provider_symbol)
         if symbol is None:
             return None
-        price = _parse_decimal(payload.get("price"), positive=True)
+        price = parse_decimal(
+            payload.get("price"),
+            positive=True,
+            allow_numbers=True,
+            allow_decimal=True,
+        )
         if price is None:
             return None
         provider_time, valid_time = _parse_provider_time(payload.get("time"))
@@ -324,20 +329,6 @@ def build_yfinance_market_data_stream_provider(
         queue_capacity=queue_capacity,
         reconnect_delay_seconds=reconnect_delay_seconds,
     )
-
-
-def _parse_decimal(value: object, *, positive: bool) -> Decimal | None:
-    if isinstance(value, bool) or not isinstance(value, Decimal | int | float | str):
-        return None
-    try:
-        parsed = Decimal(str(value))
-    except InvalidOperation:
-        return None
-    if not parsed.is_finite() or parsed < 0 or (positive and parsed <= 0):
-        return None
-    return parsed
-
-
 def _parse_provider_time(value: object) -> tuple[datetime | None, bool]:
     if value is None:
         return None, True
