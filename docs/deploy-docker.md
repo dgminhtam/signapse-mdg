@@ -92,7 +92,7 @@ Trên máy local, build image bằng `Dockerfile` rồi push lên Docker Hub:
 
 ```bash
 docker login
-docker buildx build --platform linux/amd64 -t your-dockerhub-user/signapse-mdg:dev --push .
+docker buildx build --platform linux/amd64 -t dgminhtam/signapse-mdg:dev --push .
 ```
 
 Giá trị tag này phải khớp với `image` trong `docker-compose.yml`:
@@ -114,6 +114,20 @@ Run migrations:
 ```bash
 docker compose run --rm gateway uv run alembic upgrade head
 ```
+
+Optional candle backfill:
+
+```bash
+docker compose run --rm gateway uv run python -m app.backfill_candles \
+  --from 2026-06-19T00:00:00Z \
+  --to 2026-06-20T00:00:00Z \
+  --timeframes 1m,5m \
+  --symbols BTC/USD,ETH/USD
+```
+
+Backfill is manual and does not run automatically during deploy. It requires `DATABASE_URL` and
+the provider configuration needed for any missing candle ranges. Use filters to keep the first run
+small; reruns are safe because complete candle upserts are idempotent.
 
 Start the gateway:
 
@@ -161,6 +175,16 @@ Apply migrations after a new deploy:
 docker compose pull gateway
 docker compose run --rm gateway uv run alembic upgrade head
 docker compose up -d gateway
+```
+
+Run candle backfill manually when you want to pre-warm historical ranges:
+
+```bash
+docker compose run --rm gateway uv run python -m app.backfill_candles \
+  --from 2025-01-01T00:00:00Z \
+  --to 2026-06-27T00:00:00Z \
+  --timeframes 1m,5m \
+  --symbols BTC/USD,ETH/USD
 ```
 
 Stop services:

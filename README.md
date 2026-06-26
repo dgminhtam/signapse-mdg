@@ -211,6 +211,31 @@ The response exposes only canonical series context:
 which case the API returns `"volume": "0"` as an unavailable-volume placeholder rather than a
 measured zero-activity value.
 
+### Backfill historical candles
+
+Use the internal backfill command to pre-warm `market_data_candles` before user traffic requests a
+range:
+
+```powershell
+uv run python -m app.backfill_candles --from 2026-06-19T00:00:00Z --to 2026-06-20T00:00:00Z --timeframes 1m,5m --symbols BTC/USD,ETH/USD
+```
+
+The command requires `DATABASE_URL` and the same provider configuration as `/v1/candles`.
+It reads enabled registry symbols, splits ranges by `MAX_CANDLES_PER_REQUEST`, reuses the existing
+repository-first candle service, fetches only missing ranges, and upserts only complete candles.
+
+Optional filters:
+
+```powershell
+--symbols BTC/USD,EUR/USD
+--providers BINANCE_SPOT,TWELVE_DATA,YFINANCE
+--asset-classes CRYPTO,FOREX,ETF
+```
+
+Scheduler integration, persistent job status, distributed locking, and no-data tombstones are
+intentionally deferred. Run one backfill process at a time; reruns are safe because candle upserts
+are idempotent.
+
 ### Test WebSocket streams
 
 Postman can test `WS /v1/stream` directly with a WebSocket request:
