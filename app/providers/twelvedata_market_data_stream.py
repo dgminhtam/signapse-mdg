@@ -25,6 +25,7 @@ from app.providers.price_tick_stream import (
     PriceTickCandleBuilder,
     bucket_open,
 )
+from app.providers.twelvedata_keys import TwelveDataApiKeyPool
 from app.providers.twelvedata_market_data import SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS
 
 logger = logging.getLogger(__name__)
@@ -49,13 +50,15 @@ class TwelveDataStreamClient(Protocol):
 class TwelveDataMarketDataStreamProvider:
     def __init__(
         self,
-        client_factory: Callable[[Callable[[object], None]], TwelveDataStreamClient],
+        client_factory: Callable[..., TwelveDataStreamClient],
         *,
         queue_capacity: int,
         heartbeat_seconds: float,
+        key_pool: TwelveDataApiKeyPool | None = None,
     ) -> None:
         self.events: asyncio.Queue[ProviderStreamEvent] = asyncio.Queue(queue_capacity)
         self._client_factory = client_factory
+        self._key_pool = key_pool
         self._heartbeat_seconds = heartbeat_seconds
         self._client: TwelveDataStreamClient | None = None
         self._websocket: TwelveDataWebSocket | None = None
@@ -140,7 +143,10 @@ class TwelveDataMarketDataStreamProvider:
             return
         self._loop = asyncio.get_running_loop()
         try:
-            self._client = self._client_factory(self._on_event)
+            if self._key_pool is None:
+                self._client = self._client_factory(self._on_event)
+            else:
+                self._client = self._client_factory(self._key_pool.next_key(), self._on_event)
             self._websocket = self._client.websocket(on_event=self._on_event)
             await asyncio.to_thread(self._websocket.connect)
         except asyncio.CancelledError:
@@ -292,19 +298,22 @@ class TwelveDataMarketDataStreamProvider:
 
 
 def build_twelvedata_market_data_stream_provider(
-    api_key: str | None,
+    api_keys: tuple[str, ...] | str | None,
     *,
     queue_capacity: int,
     heartbeat_seconds: float,
 ) -> TwelveDataMarketDataStreamProvider:
-    if api_key is None or not api_key.strip():
+    effective_keys = _normalize_api_keys(api_keys)
+    if not effective_keys:
         return TwelveDataMarketDataStreamProvider(
             lambda _: _MissingTwelveDataClient(),
             queue_capacity=queue_capacity,
             heartbeat_seconds=heartbeat_seconds,
         )
 
-    def factory(on_event: Callable[[object], None]) -> TwelveDataStreamClient:
+    key_pool = TwelveDataApiKeyPool(effective_keys)
+
+    def factory(api_key: str, on_event: Callable[[object], None]) -> TwelveDataStreamClient:
         del on_event
         return cast(TwelveDataStreamClient, TDClient(apikey=api_key))
 
@@ -312,13 +321,24 @@ def build_twelvedata_market_data_stream_provider(
         factory,
         queue_capacity=queue_capacity,
         heartbeat_seconds=heartbeat_seconds,
+        key_pool=key_pool,
     )
+
+
+def _normalize_api_keys(api_keys: tuple[str, ...] | str | None) -> tuple[str, ...]:
+    if api_keys is None:
+        return ()
+    if isinstance(api_keys, str):
+        api_keys = (api_keys,)
+    return tuple(dict.fromkeys(api_key.strip() for api_key in api_keys if api_key.strip()))
 
 
 class _MissingTwelveDataClient:
     def websocket(self, **defaults: object) -> TwelveDataWebSocket:
         del defaults
         raise ProviderUnavailableError
+
+
 def _parse_provider_time(value: object) -> datetime | None:
     if isinstance(value, int | float) and not isinstance(value, bool):
         timestamp = float(value)

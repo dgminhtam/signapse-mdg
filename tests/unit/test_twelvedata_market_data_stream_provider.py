@@ -7,9 +7,15 @@ import pytest
 
 from app.domain.streams import CandleInterest, StreamCandle, StreamQuote
 from app.domain.symbols import SupportedSymbol
+from app.providers import twelvedata_market_data_stream as stream_module
 from app.providers.price_tick_stream import PriceTick, PriceTickCandleBuilder
-from app.providers.twelvedata_market_data_stream import TwelveDataMarketDataStreamProvider
+from app.providers.twelvedata_market_data_stream import (
+    TwelveDataMarketDataStreamProvider,
+    build_twelvedata_market_data_stream_provider,
+)
 
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
+ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
 SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
@@ -81,7 +87,7 @@ async def test_provider_lazily_connects_reuses_connection_and_cleans_up() -> Non
     assert websocket.disconnected is True
 
 
-async def test_provider_reuses_connection_across_forex_wti_and_etfs() -> None:
+async def test_provider_reuses_connection_across_crypto_forex_wti_and_etfs() -> None:
     websocket = FakeWebSocket()
     client = FakeClient(websocket)
     provider = TwelveDataMarketDataStreamProvider(
@@ -90,11 +96,11 @@ async def test_provider_reuses_connection_across_forex_wti_and_etfs() -> None:
         heartbeat_seconds=60,
     )
 
-    for symbol in (EUR, WTI, SPY, QQQ):
+    for symbol in (BTC, ETH, EUR, WTI, SPY, QQQ):
         await provider.subscribe_quote(symbol)
 
     assert client.websocket_calls == 1
-    assert websocket.subscribed == ["EUR/USD", "WTI", "SPY", "QQQ"]
+    assert websocket.subscribed == ["BTC/USD", "ETH/USD", "EUR/USD", "WTI", "SPY", "QQQ"]
     await provider.close()
 
 
@@ -195,6 +201,38 @@ async def test_provider_heartbeat_runs_on_configured_cadence() -> None:
     await asyncio.sleep(0.03)
 
     assert websocket.heartbeats >= 1
+    await provider.close()
+
+
+async def test_stream_builder_selects_key_on_connect_and_reuses_live_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    used_keys: list[str] = []
+
+    class FakeTDClient:
+        def __init__(self, apikey: str) -> None:
+            used_keys.append(apikey)
+            self.websocket_instance = FakeWebSocket()
+
+        def websocket(self, **defaults: object) -> FakeWebSocket:
+            on_event = defaults.get("on_event")
+            assert callable(on_event)
+            return self.websocket_instance
+
+    monkeypatch.setattr(stream_module, "TDClient", FakeTDClient)
+    provider = build_twelvedata_market_data_stream_provider(
+        ("key-a", "key-b"),
+        queue_capacity=10,
+        heartbeat_seconds=60,
+    )
+
+    await provider.subscribe_quote(EUR)
+    await provider.subscribe_quote(WTI)
+    assert used_keys == ["key-a"]
+
+    await provider.close()
+    await provider.subscribe_quote(EUR)
+    assert used_keys == ["key-a", "key-b"]
     await provider.close()
 
 

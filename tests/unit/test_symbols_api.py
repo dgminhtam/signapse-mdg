@@ -41,15 +41,15 @@ async def test_symbols_serializes_camel_case_fields_in_service_order(
             SupportedSymbol(
                 symbol="BTC/USD",
                 asset_class="CRYPTO",
-                provider="BINANCE_SPOT",
-                provider_symbol="BTCUSD",
+                provider="TWELVE_DATA",
+                provider_symbol="BTC/USD",
                 enabled=True,
             ),
             SupportedSymbol(
                 symbol="ETH/USD",
                 asset_class="CRYPTO",
-                provider="BINANCE_SPOT",
-                provider_symbol="ETHUSD",
+                provider="TWELVE_DATA",
+                provider_symbol="ETH/USD",
                 enabled=True,
             ),
             SupportedSymbol(
@@ -70,15 +70,15 @@ async def test_symbols_serializes_camel_case_fields_in_service_order(
             {
                 "symbol": "BTC/USD",
                 "assetClass": "CRYPTO",
-                "provider": "BINANCE_SPOT",
-                "providerSymbol": "BTCUSD",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "BTC/USD",
                 "enabled": True,
             },
             {
                 "symbol": "ETH/USD",
                 "assetClass": "CRYPTO",
-                "provider": "BINANCE_SPOT",
-                "providerSymbol": "ETHUSD",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "ETH/USD",
                 "enabled": True,
             },
             {

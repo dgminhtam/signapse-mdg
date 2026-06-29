@@ -40,7 +40,7 @@ class StubQuoteService:
 class FakeSymbolRepository:
     async def list_enabled(self) -> list[SupportedSymbol]:
         return [
-            SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True),
+            SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True),
             SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
             SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
             SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True),
@@ -82,8 +82,8 @@ async def test_quotes_serializes_success_and_partial_error(client: AsyncClient) 
                 Quote(
                     symbol="BTC/USD",
                     asset_class="CRYPTO",
-                    provider="BINANCE_SPOT",
-                    provider_symbol="BTCUSD",
+                    provider="TWELVE_DATA",
+                    provider_symbol="BTC/USD",
                     price=Decimal("62373.79000000"),
                     volume=None,
                     provider_time=None,
@@ -178,11 +178,11 @@ async def test_quotes_preserves_sanitized_database_failure(client: AsyncClient) 
     assert "secret" not in response.text
 
 
-async def test_quotes_routes_forex_through_twelvedata_provider_without_live_calls(
+async def test_quotes_routes_crypto_and_forex_through_twelvedata_provider_without_live_calls(
     client: AsyncClient,
 ) -> None:
-    binance = FakeProvider({"BTCUSD": Decimal("62373.79")})
-    twelvedata = FakeProvider({"EUR/USD": Decimal("1.14567")})
+    binance = FakeProvider({})
+    twelvedata = FakeProvider({"BTC/USD": Decimal("62373.79"), "EUR/USD": Decimal("1.14567")})
     app.dependency_overrides[get_quote_repository] = FakeSymbolRepository
     app.dependency_overrides[get_quote_provider] = lambda: QuoteProviderRouter(
         {"BINANCE_SPOT": binance, "TWELVE_DATA": twelvedata}
@@ -200,16 +200,17 @@ async def test_quotes_routes_forex_through_twelvedata_provider_without_live_call
     assert [quote["price"] for quote in payload["quotes"]] == ["1.14567", "62373.79"]
     assert all(set(quote) == {"symbol", "price", "receivedAt"} for quote in payload["quotes"])
     assert payload["errors"] == []
-    assert binance.calls == [["BTCUSD"]]
-    assert twelvedata.calls == [["EUR/USD"]]
+    assert binance.calls == []
+    assert twelvedata.calls == [["EUR/USD", "BTC/USD"]]
 
 
 async def test_quotes_routes_wti_and_etfs_through_twelvedata_provider(
     client: AsyncClient,
 ) -> None:
-    binance = FakeProvider({"BTCUSD": Decimal("62373.79")})
+    binance = FakeProvider({})
     twelvedata = FakeProvider(
         {
+            "BTC/USD": Decimal("62373.79"),
             "WTI": Decimal("78.125"),
             "SPY": Decimal("601.25"),
             "QQQ": Decimal("530.875"),
@@ -233,15 +234,15 @@ async def test_quotes_routes_wti_and_etfs_through_twelvedata_provider(
         "BTC/USD",
         "QQQ",
     ]
-    assert binance.calls == [["BTCUSD"]]
-    assert twelvedata.calls == [["WTI", "SPY", "QQQ"]]
+    assert binance.calls == []
+    assert twelvedata.calls == [["WTI", "SPY", "BTC/USD", "QQQ"]]
 
 
 async def test_quotes_route_yfinance_symbols_with_mixed_provider_partial_success(
     client: AsyncClient,
 ) -> None:
-    binance = FakeProvider({"BTCUSD": Decimal("62373.79")})
-    twelvedata = FakeProvider({"EUR/USD": Decimal("1.14567")})
+    binance = FakeProvider({})
+    twelvedata = FakeProvider({"BTC/USD": Decimal("62373.79"), "EUR/USD": Decimal("1.14567")})
     yfinance = FakeProvider({"SI=F": Decimal("63.20")})
     app.dependency_overrides[get_quote_repository] = FakeSymbolRepository
     app.dependency_overrides[get_quote_provider] = lambda: QuoteProviderRouter(

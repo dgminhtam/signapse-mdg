@@ -15,8 +15,8 @@ from app.domain.symbols import SupportedSymbol
 from app.main import app
 from app.services.stream_manager import ClientRegistration
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
-ETH = SupportedSymbol("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
+ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
 NOW = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
@@ -50,8 +50,8 @@ class FakeManager:
                 Quote(
                     "BTC/USD",
                     "CRYPTO",
-                    "BINANCE_SPOT",
-                    "BTCUSD",
+                    "TWELVE_DATA",
+                    "BTC/USD",
                     Decimal("1E-8"),
                     None,
                     None,

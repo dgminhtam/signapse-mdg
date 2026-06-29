@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     database_pool_timeout_seconds: float = Field(default=5, gt=0)
     binance_rest_base_url: str = "https://api.binance.com"
     binance_ws_base_url: str = "wss://stream.binance.com:9443"
-    twelvedata_api_key: str | None = None
+    twelvedata_api_keys: str | None = None
     twelvedata_rest_base_url: str = "https://api.twelvedata.com"
     provider_http_timeout_seconds: float = Field(default=5, gt=0)
     provider_ws_reconnect_delay_seconds: float = Field(default=5, ge=0)
@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     stream_idle_grace_seconds: float = Field(default=5, ge=0)
     stream_freshness_check_seconds: float = Field(default=1, gt=0)
     twelvedata_ws_heartbeat_seconds: float = Field(default=15, gt=0)
+
+    def twelvedata_effective_api_keys(self) -> tuple[str, ...]:
+        return tuple(
+            dict.fromkeys(
+                key.strip()
+                for key in (self.twelvedata_api_keys or "").split(",")
+                if key.strip()
+            )
+        )
 
 
 @lru_cache

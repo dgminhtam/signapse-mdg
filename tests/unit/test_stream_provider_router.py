@@ -14,7 +14,8 @@ from app.domain.streams import (
 from app.domain.symbols import SupportedSymbol
 from app.services.stream_provider_router import MultiProviderStreamProvider
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
+BINANCE_BTC = SupportedSymbol("BTC/BINANCE", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 UNKNOWN = SupportedSymbol("X/USD", "FOREX", "MISSING", "X/USD", True)
 YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
@@ -61,15 +62,19 @@ async def test_router_routes_mixed_interests_by_provider_and_forwards_events() -
     try:
         await router.subscribe_quote(BTC)
         await router.subscribe_candle(BTC, "1m", "1m")
+        await router.subscribe_quote(BINANCE_BTC)
         await router.subscribe_quote(EUR)
         await router.subscribe_candle(EUR, "1m", "1m")
         await router.subscribe_quote(YFINANCE_SILVER)
         await router.subscribe_candle(YFINANCE_SILVER, "1m", "1m")
 
-        assert binance.quote_subscriptions == ["BTC/USD"]
-        assert binance.candle_subscriptions == [("BTC/USD", "1m", "1m")]
-        assert twelvedata.quote_subscriptions == ["EUR/USD"]
-        assert twelvedata.candle_subscriptions == [("EUR/USD", "1m", "1m")]
+        assert binance.quote_subscriptions == ["BTC/BINANCE"]
+        assert binance.candle_subscriptions == []
+        assert twelvedata.quote_subscriptions == ["BTC/USD", "EUR/USD"]
+        assert twelvedata.candle_subscriptions == [
+            ("BTC/USD", "1m", "1m"),
+            ("EUR/USD", "1m", "1m"),
+        ]
         assert yfinance.quote_subscriptions == ["XAG/USD"]
         assert yfinance.candle_subscriptions == [("XAG/USD", "1m", "1m")]
 
@@ -93,14 +98,14 @@ async def test_router_unsubscribes_idempotently_and_closes_children() -> None:
         queue_capacity=10,
     )
 
-    await router.subscribe_quote(BTC)
+    await router.subscribe_quote(BINANCE_BTC)
     await router.subscribe_candle(EUR, "1m", "1m")
-    await router.unsubscribe(QuoteInterest("BTC/USD"))
-    await router.unsubscribe(QuoteInterest("BTC/USD"))
+    await router.unsubscribe(QuoteInterest("BTC/BINANCE"))
+    await router.unsubscribe(QuoteInterest("BTC/BINANCE"))
     await router.unsubscribe(CandleInterest("EUR/USD", "1m"))
     await router.close()
 
-    assert binance.unsubscribed == [QuoteInterest("BTC/USD")]
+    assert binance.unsubscribed == [QuoteInterest("BTC/BINANCE")]
     assert twelvedata.unsubscribed == [CandleInterest("EUR/USD", "1m")]
     assert binance.closed is True
     assert twelvedata.closed is True

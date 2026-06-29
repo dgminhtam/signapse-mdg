@@ -206,9 +206,9 @@ secret placeholders documented in the environment example.
   constraints
 - **THEN** application configuration validation fails explicitly
 
-#### Scenario: Twelve Data API key is absent
+#### Scenario: Twelve Data API keys are absent
 
-- **WHEN** `TWELVEDATA_API_KEY` is not configured
+- **WHEN** `TWELVEDATA_API_KEYS` is not configured
 - **THEN** application startup does not fail solely because of the missing Twelve Data credential
 - **AND** Forex quote refreshes that require Twelve Data are reported through symbol-level
   provider failure behavior

@@ -180,9 +180,10 @@ def build_candle_provider(settings: Settings) -> CandleProvider:
         ),
         "YFINANCE": build_yfinance_candle_provider(settings.provider_http_timeout_seconds),
     }
-    if settings.twelvedata_api_key is not None and settings.twelvedata_api_key.strip():
+    twelvedata_api_keys = settings.twelvedata_effective_api_keys()
+    if twelvedata_api_keys:
         providers["TWELVE_DATA"] = build_twelvedata_market_data_provider(
-            settings.twelvedata_api_key,
+            twelvedata_api_keys,
             settings.twelvedata_rest_base_url,
             settings.provider_http_timeout_seconds,
         )

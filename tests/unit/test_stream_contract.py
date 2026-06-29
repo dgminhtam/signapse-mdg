@@ -66,8 +66,8 @@ def test_stream_quote_payload_is_minimal_and_fixed_point() -> None:
     quote = Quote(
         "BTC/USD",
         "CRYPTO",
-        "BINANCE_SPOT",
-        "BTCUSD",
+        "TWELVE_DATA",
+        "BTC/USD",
         Decimal("1E-8"),
         None,
         None,
@@ -88,8 +88,8 @@ def test_stream_candle_payload_is_minimal_and_fixed_point() -> None:
     candle = Candle(
         "BTC/USD",
         "CRYPTO",
-        "BINANCE_SPOT",
-        "BTCUSD",
+        "TWELVE_DATA",
+        "BTC/USD",
         "1m",
         NOW,
         NOW + timedelta(minutes=1) - timedelta(milliseconds=1),

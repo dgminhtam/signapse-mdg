@@ -24,7 +24,7 @@ from app.services.stream_manager import StreamManager
 pytestmark = pytest.mark.integration
 
 START = datetime(2026, 6, 19, 0, 0, tzinfo=UTC)
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
 
 
 def make_candle(open_time: datetime, close: str = "10.50") -> Candle:
@@ -257,9 +257,9 @@ async def test_cold_repeated_and_partial_requests_use_persisted_provider_mapping
     assert second.status_code == 200
     assert partial.status_code == 200
     assert provider.calls == [
-        ("BTCUSD", START, START + timedelta(minutes=2)),
+        ("BTC/USD", START, START + timedelta(minutes=2)),
         (
-            "BTCUSD",
+            "BTC/USD",
             START + timedelta(minutes=2),
             START + timedelta(minutes=3),
         ),

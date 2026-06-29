@@ -80,6 +80,24 @@ def load_yfinance_migration_module() -> ModuleType:
     return module
 
 
+def load_crypto_migration_module() -> ModuleType:
+    migration_path = (
+        Path(__file__).parents[2]
+        / "alembic"
+        / "versions"
+        / "20260629_0009_move_crypto_to_twelvedata.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "crypto_twelvedata_supported_symbols_migration",
+        migration_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Unable to load crypto Twelve Data supported-symbol migration.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 async def test_migration_creates_schema_and_exact_seed_mappings(
     database_engine: AsyncEngine,
 ) -> None:
@@ -126,12 +144,12 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
         ("AAPL", "US_STOCK", "TWELVE_DATA", "AAPL", True),
         ("AUD/USD", "FOREX", "TWELVE_DATA", "AUD/USD", True),
         ("BRENT", "COMMODITY", "YFINANCE", "BZ=F", True),
-        ("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True),
+        ("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True),
         ("COFFEE", "COMMODITY", "YFINANCE", "KC=F", True),
         ("CORN", "COMMODITY", "YFINANCE", "ZC=F", True),
         ("DJI", "STOCK_INDEX", "YFINANCE", "^DJI", True),
         ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
-        ("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True),
+        ("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True),
         ("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True),
         ("MSFT", "US_STOCK", "TWELVE_DATA", "MSFT", True),
         ("NATGAS", "COMMODITY", "YFINANCE", "NG=F", True),
@@ -238,12 +256,12 @@ async def test_forex_seed_is_idempotent_and_preserves_crypto_mappings(
         ("AAPL", "US_STOCK", "TWELVE_DATA", "AAPL", True),
         ("AUD/USD", "FOREX", "TWELVE_DATA", "AUD/USD", True),
         ("BRENT", "COMMODITY", "YFINANCE", "BZ=F", True),
-        ("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True),
+        ("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True),
         ("COFFEE", "COMMODITY", "YFINANCE", "KC=F", True),
         ("CORN", "COMMODITY", "YFINANCE", "ZC=F", True),
         ("DJI", "STOCK_INDEX", "YFINANCE", "^DJI", True),
         ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
-        ("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True),
+        ("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True),
         ("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True),
         ("MSFT", "US_STOCK", "TWELVE_DATA", "MSFT", True),
         ("NATGAS", "COMMODITY", "YFINANCE", "NG=F", True),
@@ -383,7 +401,7 @@ async def test_yfinance_seed_is_idempotent_and_preserves_existing_mappings(
         ("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True),
     ]
     assert existing == [
-        ("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True),
+        ("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True),
         ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
         ("SPY", "ETF", "TWELVE_DATA", "SPY", True),
         ("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
@@ -419,6 +437,73 @@ async def test_yfinance_downgrade_preserves_changed_mapping(
         ).all()
 
     assert rows == [("SPX", "CUSTOM_SPX")]
+
+
+async def test_crypto_twelvedata_migration_is_idempotent_and_downgrades(
+    database_engine: AsyncEngine,
+) -> None:
+    migration = load_crypto_migration_module()
+    async with database_engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                UPDATE supported_symbols
+                SET provider = 'BINANCE_SPOT', provider_symbol = 'OLD_BTC', enabled = false
+                WHERE symbol = 'BTC/USD'
+                """
+            )
+        )
+        await connection.run_sync(
+            lambda sync_connection: migration.upsert_crypto_symbols(
+                sync_connection,
+                migration.TWELVEDATA_CRYPTO_SYMBOLS,
+            )
+        )
+        await connection.run_sync(
+            lambda sync_connection: migration.upsert_crypto_symbols(
+                sync_connection,
+                migration.TWELVEDATA_CRYPTO_SYMBOLS,
+            )
+        )
+        rows = (
+            await connection.execute(
+                text(
+                    """
+                    SELECT symbol, asset_class, provider, provider_symbol, enabled
+                    FROM supported_symbols
+                    WHERE symbol IN ('BTC/USD', 'ETH/USD')
+                    ORDER BY symbol
+                    """
+                )
+            )
+        ).all()
+        await connection.run_sync(
+            lambda sync_connection: migration.upsert_crypto_symbols(
+                sync_connection,
+                migration.BINANCE_CRYPTO_SYMBOLS,
+            )
+        )
+        rollback_rows = (
+            await connection.execute(
+                text(
+                    """
+                    SELECT symbol, provider, provider_symbol, enabled
+                    FROM supported_symbols
+                    WHERE symbol IN ('BTC/USD', 'ETH/USD')
+                    ORDER BY symbol
+                    """
+                )
+            )
+        ).all()
+
+    assert rows == [
+        ("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True),
+        ("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True),
+    ]
+    assert rollback_rows == [
+        ("BTC/USD", "BINANCE_SPOT", "BTCUSD", True),
+        ("ETH/USD", "BINANCE_SPOT", "ETHUSD", True),
+    ]
 
 
 async def test_registry_constraints_reject_duplicate_provider_mapping(
@@ -486,7 +571,7 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
             text(
                 """
                 UPDATE supported_symbols
-                SET provider_symbol = 'BTCUSD_TEST'
+                SET provider_symbol = 'BTC/USD_TEST'
                 WHERE symbol = 'BTC/USD'
                 """
             )
@@ -524,8 +609,8 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
             {
                 "symbol": "BTC/USD",
                 "assetClass": "CRYPTO",
-                "provider": "BINANCE_SPOT",
-                "providerSymbol": "BTCUSD_TEST",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "BTC/USD_TEST",
                 "enabled": True,
             },
             {
@@ -673,7 +758,7 @@ async def test_quotes_use_persisted_provider_mapping(
             text(
                 """
                 UPDATE supported_symbols
-                SET provider_symbol = 'BTCUSD_TEST'
+                SET provider_symbol = 'BTC/USD_TEST'
                 WHERE symbol = 'BTC/USD'
                 """
             )
@@ -689,7 +774,7 @@ async def test_quotes_use_persisted_provider_mapping(
         ) -> ProviderQuoteBatch:
             self.requested_provider_symbols.extend(provider_symbols)
             return ProviderQuoteBatch(
-                prices={"BTCUSD_TEST": Decimal("123.4500")},
+                prices={"BTC/USD_TEST": Decimal("123.4500")},
                 unavailable_symbols=frozenset(),
             )
 
@@ -709,7 +794,7 @@ async def test_quotes_use_persisted_provider_mapping(
         get_quote_cache.cache_clear()
 
     assert response.status_code == 200
-    assert provider.requested_provider_symbols == ["BTCUSD_TEST"]
+    assert provider.requested_provider_symbols == ["BTC/USD_TEST"]
     quote = response.json()["quotes"][0]
     assert set(quote) == {"symbol", "price", "receivedAt"}
     assert quote["symbol"] == "BTC/USD"

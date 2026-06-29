@@ -57,11 +57,11 @@ def get_binance_candle_provider(
 
 @lru_cache
 def get_twelvedata_candle_provider(
-    api_key: str,
+    api_keys: tuple[str, ...],
     base_url: str,
     timeout_seconds: float,
 ) -> CandleProvider:
-    return build_twelvedata_market_data_provider(api_key, base_url, timeout_seconds)
+    return build_twelvedata_market_data_provider(api_keys, base_url, timeout_seconds)
 
 
 @lru_cache
@@ -81,9 +81,10 @@ def get_candle_provider(
             settings.provider_http_timeout_seconds,
         ),
     }
-    if settings.twelvedata_api_key is not None and settings.twelvedata_api_key.strip():
+    twelvedata_api_keys = settings.twelvedata_effective_api_keys()
+    if twelvedata_api_keys:
         providers["TWELVE_DATA"] = get_twelvedata_candle_provider(
-            settings.twelvedata_api_key,
+            twelvedata_api_keys,
             settings.twelvedata_rest_base_url,
             settings.provider_http_timeout_seconds,
         )

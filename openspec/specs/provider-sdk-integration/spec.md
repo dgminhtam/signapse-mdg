@@ -126,13 +126,15 @@ SHALL keep the SDK behind repository-owned provider adapter boundaries.
 
 ### Requirement: Twelve Data settings are deployment controlled
 
-The gateway SHALL read Twelve Data provider configuration from typed environment settings and
-SHALL NOT commit usable Twelve Data credentials.
+The gateway SHALL read Twelve Data provider configuration from typed environment settings, SHALL
+support one or more configured Twelve Data API keys through `TWELVEDATA_API_KEYS`, and SHALL NOT
+commit usable Twelve Data credentials.
 
 #### Scenario: Settings are loaded
 
 - **WHEN** application settings are constructed
-- **THEN** they include a Twelve Data API key setting
+- **THEN** they include a Twelve Data API keys setting for comma-separated one-or-more keys
+- **AND** they do not include a singular Twelve Data API key setting
 - **AND** they include a Twelve Data REST base URL setting
 - **AND** they include a provider timeout setting usable by the Twelve Data adapter
 
@@ -141,6 +143,7 @@ SHALL NOT commit usable Twelve Data credentials.
 - **WHEN** a contributor inspects repository environment examples
 - **THEN** Twelve Data settings are documented with placeholder values only
 - **AND** no usable Twelve Data API key is present
+- **AND** the example uses `TWELVEDATA_API_KEYS`
 
 ### Requirement: Twelve Data REST work does not block the event loop
 

@@ -6,8 +6,8 @@ Market Data Gateway is an independent service that exposes normalized market dat
 
 | Canonical symbol | Asset class | Provider | Provider symbol |
 | --- | --- | --- | --- |
-| `BTC/USD` | `CRYPTO` | `BINANCE_SPOT` | `BTCUSD` |
-| `ETH/USD` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSD` |
+| `BTC/USD` | `CRYPTO` | `TWELVE_DATA` | `BTC/USD` |
+| `ETH/USD` | `CRYPTO` | `TWELVE_DATA` | `ETH/USD` |
 
 The gateway contract is provider-agnostic for clients. Provider-specific details stay inside the registry and adapter layer.
 
@@ -141,8 +141,8 @@ event coverage is not guaranteed for every accepted symbol.
 Recommended initial registry:
 
 ```python
-BTC/USD -> BINANCE_SPOT:BTCUSD
-ETH/USD -> BINANCE_SPOT:ETHUSD
+BTC/USD -> TWELVE_DATA:BTC/USD
+ETH/USD -> TWELVE_DATA:ETH/USD
 ```
 
 Recommended initial timeframes:
@@ -181,8 +181,11 @@ Recommended initial timeframes:
 - Supports provider-symbol discovery/validation, latest-price normalization, and OHLC
   time-series normalization for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`,
   `AAPL`, `TSLA`, `NVDA`, `MSFT`, `WTI`, `SPY`, and `QQQ`.
+- Supports comma-separated `TWELVEDATA_API_KEYS`, rotates REST calls across healthy process-local
+  keys, and cools down key-related failures before retrying one alternate key.
 - Uses one process-local Twelve Data WebSocket connection for active Forex streams and shares
-  dynamic provider-symbol subscriptions across clients.
+  dynamic provider-symbol subscriptions across clients; the WebSocket key is selected only when
+  connecting or reconnecting.
 - Bridges the SDK's thread-based `on_event` callback into the asyncio runtime with
   thread-safe loop scheduling; blocking SDK connect, disconnect, subscribe, unsubscribe, and
   heartbeat calls run outside the ASGI event loop.
@@ -256,8 +259,7 @@ Client -> GET /v1/quotes?symbols=BTC/USD,EUR/USD
   -> Market Data Service checks Quote Cache
   -> If cache hit and not expired, return normalized quotes
   -> Quote Provider Router groups cache misses by persisted provider mapping
-  -> Binance Adapter batch-fetches missing crypto provider symbols
-  -> Twelve Data Adapter fetches missing Forex provider symbols
+  -> Twelve Data Adapter fetches missing crypto and Forex provider symbols
   -> Adapters normalize provider payloads
   -> Service updates Quote Cache
   -> API returns normalized response
@@ -267,8 +269,7 @@ Quote responses include successful `quotes` and per-symbol `errors`. Missing or 
 return `400 INVALID_SYMBOLS`; exceeding `MAX_QUOTE_SYMBOLS` returns
 `400 TOO_MANY_SYMBOLS`. Each successful quote exposes only canonical `symbol`, decimal-string
 `price`, and gateway-recorded `receivedAt`; provider and freshness metadata remain internal.
-Provider failures are isolated by group, so a Twelve Data failure does not block a successful
-Binance result in the same request.
+Provider failures are isolated by group.
 
 ### Candle HTTP Flow
 
@@ -364,8 +365,8 @@ without blocking provider consumption or other clients.
 ```text
 symbol: canonical symbol, e.g. BTC/USD
 asset_class: CRYPTO
-provider: BINANCE_SPOT
-provider_symbol: provider symbol, e.g. BTCUSD
+provider: TWELVE_DATA
+provider_symbol: provider symbol, e.g. BTC/USD
 enabled: boolean
 ```
 
@@ -433,8 +434,9 @@ CREATE TABLE supported_symbols (
 );
 ```
 
-The initial Alembic migration seeds `BTC/USD -> BINANCE_SPOT:BTCUSD` and
-`ETH/USD -> BINANCE_SPOT:ETHUSD`. A later Forex seed migration adds
+The initial Alembic migration seeded `BTC/USD -> BINANCE_SPOT:BTCUSD` and
+`ETH/USD -> BINANCE_SPOT:ETHUSD`; a later migration moves both rows to `TWELVE_DATA`.
+A later Forex seed migration adds
 `EUR/USD`, `GBP/USD`, `USD/JPY`, and `AUD/USD` as enabled `FOREX` records, `XAU/USD` as an enabled
 `COMMODITY` record, and `AAPL`, `TSLA`, `NVDA`, and `MSFT` as enabled `US_STOCK` records. The
 next seed adds `WTI` as `COMMODITY` and `SPY`/`QQQ` as `ETF`; all are mapped to `TWELVE_DATA`.
@@ -444,6 +446,17 @@ historical candles, and the shared YFINANCE WebSocket provider.
 `/v1/symbols` queries enabled rows from this table and returns
 `503 DATABASE_UNAVAILABLE` when the registry cannot be queried.
 `/health` remains independent of database configuration and connectivity.
+
+Existing databases that do not replay migrations from scratch need the same in-place update:
+
+```sql
+UPDATE supported_symbols
+SET provider = 'TWELVE_DATA',
+    provider_symbol = symbol,
+    enabled = true,
+    updated_at = now()
+WHERE symbol IN ('BTC/USD', 'ETH/USD');
+```
 
 Initial candle table:
 
@@ -491,7 +504,7 @@ ON market_data_candles (provider, provider_symbol, timeframe, open_time);
 | `DATABASE_POOL_TIMEOUT_SECONDS` | `5` | Maximum wait for a pooled connection. |
 | `BINANCE_REST_BASE_URL` | `https://api.binance.com` | Binance REST base URL. |
 | `BINANCE_WS_BASE_URL` | `wss://stream.binance.com:9443` | Binance WebSocket base URL. |
-| `TWELVEDATA_API_KEY` | unset | Required for live Forex quote/candle refreshes; optional for startup, crypto requests, and persisted Forex candle reads. |
+| `TWELVEDATA_API_KEYS` | unset | Comma-separated Twelve Data keys for process-local REST rotation and connect-time stream key selection. |
 | `TWELVEDATA_REST_BASE_URL` | `https://api.twelvedata.com` | Twelve Data REST base URL. |
 | `PROVIDER_WS_RECONNECT_DELAY_SECONDS` | `5` | SDK WebSocket reconnect delay. |
 | `TWELVEDATA_WS_HEARTBEAT_SECONDS` | `15` | Twelve Data WebSocket heartbeat cadence while the shared Forex stream connection is active. |
@@ -694,7 +707,7 @@ Contract tests:
 
 | Decision | Default for MVP | Notes |
 | --- | --- | --- |
-| Provider symbol | `BTCUSD` / `ETHUSD` | Canonical symbols remain `BTC/USD` and `ETH/USD`; Binance Spot supports both required pairs. |
+| Provider symbol | `BTC/USD` / `ETH/USD` | Canonical symbols remain `BTC/USD` and `ETH/USD`; Twelve Data serves both required pairs. |
 | Stale threshold | 30 seconds | Make configurable through `QUOTE_STALE_AFTER_SECONDS`. |
 | Candle retention | No automatic deletion | Add retention only once product requirement is known. |
 | Partial quote response | Per-symbol errors | Return successful quotes and symbol-level errors in the same response. |

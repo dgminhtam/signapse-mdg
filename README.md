@@ -63,7 +63,7 @@ DATABASE_POOL_SIZE=5
 DATABASE_POOL_MAX_OVERFLOW=5
 DATABASE_POOL_TIMEOUT_SECONDS=5
 BINANCE_REST_BASE_URL=https://api.binance.com
-TWELVEDATA_API_KEY=<twelve-data-api-key>
+TWELVEDATA_API_KEYS=<twelve-data-api-key-2>,<twelve-data-api-key-3>
 TWELVEDATA_REST_BASE_URL=https://api.twelvedata.com
 TWELVEDATA_WS_HEARTBEAT_SECONDS=15
 PROVIDER_HTTP_TIMEOUT_SECONDS=5
@@ -119,6 +119,9 @@ Expected response:
 
 The `time` value is generated dynamically in UTC.
 
+Set `TWELVEDATA_API_KEYS` as a comma-separated list. A single value is valid; duplicate and empty
+values are ignored.
+
 Fetch the two supported Binance-backed quotes:
 
 ```powershell
@@ -133,8 +136,8 @@ Invoke-RestMethod "http://127.0.0.1:8000/v1/quotes?symbols=EUR%2FUSD%2CXAU%2FUSD
 
 Quote responses contain ordered `quotes` and per-symbol `errors`. Successful items expose only
 the canonical `symbol`, decimal-string `price`, and gateway `receivedAt`. The application can
-start and serve crypto quotes without `TWELVEDATA_API_KEY`; live Twelve Data refreshes require the
-key.
+start and serve crypto quotes without Twelve Data keys; live Twelve Data refreshes require at least
+one configured key.
 
 Fetch an aligned half-open UTC candle range:
 
@@ -206,7 +209,7 @@ The response exposes only canonical series context:
 
 `assetClass`, `provider`, and `providerSymbol` remain internal. Requests are limited by
 `MAX_CANDLES_PER_REQUEST`. Live Forex fills require
-`TWELVEDATA_API_KEY`; fully persisted Forex ranges do not. Twelve Data Forex may omit volume, in
+one configured Twelve Data key; fully persisted Forex ranges do not. Twelve Data Forex may omit volume, in
 which case the API returns `"volume": "0"` as an unavailable-volume placeholder rather than a
 measured zero-activity value.
 

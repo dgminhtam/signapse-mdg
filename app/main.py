@@ -47,7 +47,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         settings.stream_provider_queue_capacity,
     )
     twelvedata_provider = build_twelvedata_market_data_stream_provider(
-        settings.twelvedata_api_key,
+        settings.twelvedata_effective_api_keys(),
         queue_capacity=settings.stream_provider_queue_capacity,
         heartbeat_seconds=settings.twelvedata_ws_heartbeat_seconds,
     )

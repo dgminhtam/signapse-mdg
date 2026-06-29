@@ -17,8 +17,8 @@ async def test_service_delegates_to_repository() -> None:
         SupportedSymbol(
             symbol="BTC/USD",
             asset_class="CRYPTO",
-            provider="BINANCE_SPOT",
-            provider_symbol="BTCUSD",
+            provider="TWELVE_DATA",
+            provider_symbol="BTC/USD",
             enabled=True,
         )
     ]

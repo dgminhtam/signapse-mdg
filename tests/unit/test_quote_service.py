@@ -69,8 +69,8 @@ class FakeProviderSymbolProvider:
         )
 
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
-ETH = SupportedSymbol("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
+ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 GBP = SupportedSymbol("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True)
 NOW = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
@@ -124,14 +124,14 @@ def test_parse_symbols_rejects_too_many_distinct_symbols() -> None:
 
 
 async def test_service_batches_supported_symbols_and_preserves_request_order() -> None:
-    provider = FakeProvider(prices={"BTCUSD": Decimal("10.10"), "ETHUSD": Decimal("20.20")})
+    provider = FakeProvider(prices={"BTC/USD": Decimal("10.10"), "ETH/USD": Decimal("20.20")})
 
     result = await build_service(provider).get_latest_quotes(["ETH/USD", "SOL/USD", "BTC/USD"])
 
     assert [quote.symbol for quote in result.quotes] == ["ETH/USD", "BTC/USD"]
     assert [error.symbol for error in result.errors] == ["SOL/USD"]
     assert result.errors[0].code == "UNSUPPORTED_SYMBOL"
-    assert provider.calls == [["ETHUSD", "BTCUSD"]]
+    assert provider.calls == [["ETH/USD", "BTC/USD"]]
 
 
 async def test_service_uses_cache_within_ttl() -> None:
@@ -139,8 +139,8 @@ async def test_service_uses_cache_within_ttl() -> None:
     cached = Quote(
         symbol="BTC/USD",
         asset_class="CRYPTO",
-        provider="BINANCE_SPOT",
-        provider_symbol="BTCUSD",
+        provider="TWELVE_DATA",
+        provider_symbol="BTC/USD",
         price=Decimal("9.99"),
         volume=None,
         provider_time=None,
@@ -160,8 +160,8 @@ async def test_service_returns_fresh_cache_when_refresh_fails() -> None:
     cached = Quote(
         "BTC/USD",
         "CRYPTO",
-        "BINANCE_SPOT",
-        "BTCUSD",
+        "TWELVE_DATA",
+        "BTC/USD",
         Decimal("9.99"),
         None,
         None,
@@ -182,8 +182,8 @@ async def test_service_rejects_stale_cache_when_refresh_fails() -> None:
             Quote(
                 "BTC/USD",
                 "CRYPTO",
-                "BINANCE_SPOT",
-                "BTCUSD",
+                "TWELVE_DATA",
+                "BTC/USD",
                 Decimal("9.99"),
                 None,
                 None,
@@ -200,8 +200,8 @@ async def test_service_rejects_stale_cache_when_refresh_fails() -> None:
 
 async def test_service_isolates_partial_provider_payload_failure() -> None:
     provider = FakeProvider(
-        prices={"BTCUSD": Decimal("10")},
-        unavailable={"ETHUSD"},
+        prices={"BTC/USD": Decimal("10")},
+        unavailable={"ETH/USD"},
     )
 
     result = await build_service(provider).get_latest_quotes(["BTC/USD", "ETH/USD"])
@@ -214,7 +214,7 @@ async def test_service_isolates_partial_provider_payload_failure() -> None:
 
 async def test_service_coalesces_concurrent_refreshes() -> None:
     gate = asyncio.Event()
-    provider = FakeProvider(prices={"BTCUSD": Decimal("10")}, gate=gate)
+    provider = FakeProvider(prices={"BTC/USD": Decimal("10")}, gate=gate)
     service = build_service(provider)
 
     first = asyncio.create_task(service.get_latest_quotes(["BTC/USD"]))
@@ -223,14 +223,16 @@ async def test_service_coalesces_concurrent_refreshes() -> None:
     gate.set()
     first_result, second_result = await asyncio.gather(first, second)
 
-    assert provider.calls == [["BTCUSD"]]
+    assert provider.calls == [["BTC/USD"]]
     assert first_result.quotes[0].price == Decimal("10")
     assert second_result.quotes[0].price == Decimal("10")
 
 
 async def test_service_preserves_request_order_for_mixed_provider_quotes() -> None:
-    binance = FakeProviderSymbolProvider({"BTCUSD": Decimal("10")})
-    twelvedata = FakeProviderSymbolProvider({"EUR/USD": Decimal("1.10")})
+    binance = FakeProviderSymbolProvider({})
+    twelvedata = FakeProviderSymbolProvider(
+        {"BTC/USD": Decimal("10"), "EUR/USD": Decimal("1.10")}
+    )
     service = build_mixed_service(
         QuoteProviderRouter({"BINANCE_SPOT": binance, "TWELVE_DATA": twelvedata})
     )
@@ -240,25 +242,25 @@ async def test_service_preserves_request_order_for_mixed_provider_quotes() -> No
     assert [quote.symbol for quote in result.quotes] == ["EUR/USD", "BTC/USD"]
     assert [quote.price for quote in result.quotes] == [Decimal("1.10"), Decimal("10")]
     assert result.errors == []
-    assert binance.calls == [["BTCUSD"]]
-    assert twelvedata.calls == [["EUR/USD"]]
+    assert binance.calls == []
+    assert twelvedata.calls == [["EUR/USD", "BTC/USD"]]
 
 
-async def test_service_returns_crypto_when_twelvedata_provider_is_missing() -> None:
-    binance = FakeProviderSymbolProvider({"BTCUSD": Decimal("10")})
+async def test_service_returns_crypto_unavailable_when_twelvedata_provider_is_missing() -> None:
+    binance = FakeProviderSymbolProvider({})
     service = build_mixed_service(QuoteProviderRouter({"BINANCE_SPOT": binance}))
 
     result = await service.get_latest_quotes(["BTC/USD", "EUR/USD"])
 
-    assert [quote.symbol for quote in result.quotes] == ["BTC/USD"]
-    assert result.quotes[0].price == Decimal("10")
+    assert result.quotes == []
     assert [(error.symbol, error.code) for error in result.errors] == [
-        ("EUR/USD", "PROVIDER_UNAVAILABLE")
+        ("BTC/USD", "PROVIDER_UNAVAILABLE"),
+        ("EUR/USD", "PROVIDER_UNAVAILABLE"),
     ]
 
 
-async def test_service_isolates_twelvedata_failure_from_binance_success() -> None:
-    binance = FakeProviderSymbolProvider({"BTCUSD": Decimal("10")})
+async def test_service_marks_crypto_unavailable_on_twelvedata_failure() -> None:
+    binance = FakeProviderSymbolProvider({})
     twelvedata = FakeProviderSymbolProvider(error=True)
     service = build_mixed_service(
         QuoteProviderRouter({"BINANCE_SPOT": binance, "TWELVE_DATA": twelvedata})
@@ -266,8 +268,8 @@ async def test_service_isolates_twelvedata_failure_from_binance_success() -> Non
 
     result = await service.get_latest_quotes(["BTC/USD", "GBP/USD"])
 
-    assert [quote.symbol for quote in result.quotes] == ["BTC/USD"]
-    assert result.quotes[0].price == Decimal("10")
+    assert result.quotes == []
     assert [(error.symbol, error.code) for error in result.errors] == [
-        ("GBP/USD", "PROVIDER_UNAVAILABLE")
+        ("BTC/USD", "PROVIDER_UNAVAILABLE"),
+        ("GBP/USD", "PROVIDER_UNAVAILABLE"),
     ]

@@ -8,7 +8,7 @@ services:
       DATABASE_POOL_TIMEOUT_SECONDS: "5"
       BINANCE_REST_BASE_URL: https://api.binance.com
       BINANCE_WS_BASE_URL: wss://stream.binance.com:9443
-      TWELVEDATA_API_KEY: ""
+      TWELVEDATA_API_KEYS: key1,key2
       TWELVEDATA_REST_BASE_URL: https://api.twelvedata.com
       PROVIDER_HTTP_TIMEOUT_SECONDS: "5"
       PROVIDER_WS_RECONNECT_DELAY_SECONDS: "5"

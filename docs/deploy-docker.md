@@ -19,7 +19,7 @@ Trước khi deploy dev, sửa các giá trị này trong `docker-compose.yml` n
 
 - `image`
 - `DATABASE_URL`
-- `TWELVEDATA_API_KEY`
+- `TWELVEDATA_API_KEYS`
 - published port ở `ports`
 
 Default `DATABASE_URL` dùng service name `database` trong Docker network `signapse_default`:
@@ -30,8 +30,9 @@ postgresql+asyncpg://postgres:REPLACE_WITH_EXISTING_POSTGRES_PASSWORD@database:5
 
 Nếu Docker DNS không resolve được `database`, đổi host thành container name
 `signapse-database-1`. Cả hai chỉ hoạt động khi `gateway` join network `signapse_default`.
-`TWELVEDATA_API_KEY` chỉ cần cho live Twelve Data quotes/candles/streams; crypto Binance public
-market data không cần API key.
+`TWELVEDATA_API_KEYS` is required for live Twelve Data quotes/candles/streams; crypto Binance
+public market data does not need an API key. Use one key or comma-separated keys; REST calls rotate
+process-local keys and WebSocket streams pick a key when connecting or reconnecting.
 
 Lấy password đúng từ compose/env của stack database hiện tại. Lỗi này nghĩa là password đang sai:
 

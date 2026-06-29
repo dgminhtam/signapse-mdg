@@ -11,6 +11,7 @@ from twelvedata.exceptions import TwelveDataError
 from app.domain.errors import ProviderUnavailableError
 from app.domain.symbols import SupportedSymbol
 from app.providers import twelvedata_market_data as twelvedata_module
+from app.providers.twelvedata_keys import TwelveDataApiKeyPool, TwelveDataKeyUnavailableError
 from app.providers.twelvedata_market_data import (
     SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS,
     TwelveDataHttpClient,
@@ -19,6 +20,8 @@ from app.providers.twelvedata_market_data import (
     build_twelvedata_market_data_provider,
 )
 
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
+ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
 SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
@@ -106,6 +109,8 @@ async def test_provider_discovers_supported_forex_symbols() -> None:
 async def test_provider_normalizes_latest_prices() -> None:
     client = FakeClient(
         prices={
+            "BTC/USD": {"price": "66500.12000"},
+            "ETH/USD": {"price": "3500.34000"},
             "EUR/USD": {"price": "1.08650"},
             "GBP/USD": {"price": "1.27010"},
             "AAPL": {"price": "212.34000"},
@@ -113,10 +118,12 @@ async def test_provider_normalizes_latest_prices() -> None:
     )
 
     result = await TwelveDataMarketDataProvider(lambda: client).fetch_latest_prices(
-        ["EUR/USD", "GBP/USD", "AAPL"]
+        ["BTC/USD", "ETH/USD", "EUR/USD", "GBP/USD", "AAPL"]
     )
 
     assert result.prices == {
+        "BTC/USD": Decimal("66500.12000"),
+        "ETH/USD": Decimal("3500.34000"),
         "EUR/USD": Decimal("1.08650"),
         "GBP/USD": Decimal("1.27010"),
         "AAPL": Decimal("212.34000"),
@@ -199,7 +206,7 @@ async def test_provider_normalizes_time_series_candles() -> None:
 
 @pytest.mark.parametrize(
     ("symbol", "volume"),
-    [(WTI, None), (SPY, "12345.6700"), (QQQ, "9876")],
+    [(BTC, "42.5"), (ETH, "123.45"), (WTI, None), (SPY, "12345.6700"), (QQQ, "9876")],
 )
 async def test_provider_normalizes_wti_and_etf_candles(
     symbol: SupportedSymbol,
@@ -299,9 +306,7 @@ async def test_provider_derives_monthly_close_time_by_calendar_month() -> None:
         1,
     )
 
-    assert candles[0].close_time == datetime(2026, 3, 1, tzinfo=UTC) - timedelta(
-        milliseconds=1
-    )
+    assert candles[0].close_time == datetime(2026, 3, 1, tzinfo=UTC) - timedelta(milliseconds=1)
 
 
 @pytest.mark.parametrize("volume", [None, pytest.param("missing", id="omitted")])
@@ -616,6 +621,102 @@ async def test_provider_factory_lazily_configures_sdk(monkeypatch: pytest.Monkey
     assert captured["http_client"].timeout_seconds == 2.5
 
 
+async def test_provider_factory_rotates_keys_round_robin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    used_keys: list[str] = []
+
+    class FakeTDClient:
+        def __init__(self, apikey: str, base_url: str, http_client: object) -> None:
+            del base_url, http_client
+            self.apikey = apikey
+
+        def price(self, **defaults: object) -> FakeEndpoint:
+            used_keys.append(self.apikey)
+            return FakeEndpoint({"price": "1.10"})
+
+    monkeypatch.setattr(twelvedata_module, "TDClient", FakeTDClient)
+    provider = build_twelvedata_market_data_provider(
+        ("key-a", "key-b"),
+        "https://example.test/",
+        2.5,
+    )
+
+    await provider.fetch_latest_prices(["EUR/USD"])
+    await provider.fetch_latest_prices(["GBP/USD"])
+
+    assert used_keys == ["key-a", "key-b"]
+
+
+async def test_provider_retries_one_alternate_key_and_cools_down_failed_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    used_keys: list[str] = []
+
+    class FakeTDClient:
+        def __init__(self, apikey: str, base_url: str, http_client: object) -> None:
+            del base_url, http_client
+            self.apikey = apikey
+
+        def price(self, **defaults: object) -> FakeEndpoint:
+            used_keys.append(self.apikey)
+            if self.apikey == "key-a":
+                raise TwelveDataKeyUnavailableError
+            return FakeEndpoint({"price": "1.10"})
+
+    monkeypatch.setattr(twelvedata_module, "TDClient", FakeTDClient)
+    provider = build_twelvedata_market_data_provider(
+        ("key-a", "key-b"),
+        "https://example.test/",
+        2.5,
+    )
+
+    first = await provider.fetch_latest_prices(["EUR/USD"])
+    second = await provider.fetch_latest_prices(["GBP/USD"])
+
+    assert first.prices == {"EUR/USD": Decimal("1.10")}
+    assert second.prices == {"GBP/USD": Decimal("1.10")}
+    assert used_keys == ["key-a", "key-b", "key-b"]
+
+
+async def test_provider_retries_at_most_one_alternate_key() -> None:
+    used_keys: list[str] = []
+
+    def client_factory(key: str) -> FakeClient:
+        used_keys.append(key)
+        return FakeClient(error=TwelveDataKeyUnavailableError())
+
+    provider = TwelveDataMarketDataProvider(
+        client_factory,
+        TwelveDataApiKeyPool(("key-a", "key-b", "key-c")),
+    )
+
+    with pytest.raises(ProviderUnavailableError):
+        await provider.fetch_latest_prices(["EUR/USD"])
+
+    assert used_keys == ["key-a", "key-b"]
+
+
+async def test_provider_does_not_cool_down_no_data_key() -> None:
+    key_pool = TwelveDataApiKeyPool(("key-a",), cooldown_seconds=3600)
+    provider = TwelveDataMarketDataProvider(
+        lambda _: FakeClient(error=TwelveDataNoDataError()),
+        key_pool,
+    )
+
+    candles = await provider.fetch_candles(
+        WTI,
+        "1h",
+        "1h",
+        datetime(2026, 6, 22, 13, 30, tzinfo=UTC),
+        datetime(2026, 6, 22, 14, 30, tzinfo=UTC),
+        2,
+    )
+
+    assert candles == []
+    assert key_pool.next_key() == "key-a"
+
+
 def test_provider_factory_requires_api_key() -> None:
     with pytest.raises(ProviderUnavailableError):
         build_twelvedata_market_data_provider(None, "https://example.test", 1)
@@ -662,10 +763,22 @@ def test_http_client_classifies_only_time_series_no_data() -> None:
     [
         {"status": "error", "code": 401, "message": "Invalid API key"},
         {"status": "error", "code": 429, "message": "Rate limit"},
-        {"status": "error", "code": 400, "message": "Invalid interval"},
     ],
 )
-def test_http_client_keeps_other_errors_unavailable(payload: object) -> None:
+def test_http_client_classifies_key_related_errors(payload: object) -> None:
+    client = TwelveDataHttpClient("https://example.test", 1)
+    object.__setattr__(
+        client,
+        "session",
+        FakeHttpSession(FakeHttpResponse(payload, ok=False)),
+    )
+
+    with pytest.raises(TwelveDataKeyUnavailableError):
+        client.get("/time_series")
+
+
+def test_http_client_keeps_other_errors_unavailable() -> None:
+    payload = {"status": "error", "code": 400, "message": "Invalid interval"}
     client = TwelveDataHttpClient("https://example.test", 1)
     object.__setattr__(
         client,

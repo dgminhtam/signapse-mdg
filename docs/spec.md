@@ -33,8 +33,8 @@ Registry hiện chứa các asset được hỗ trợ hoặc đã được seed 
 
 | Canonical symbol | Asset class | Provider | Provider symbol | Status |
 | --- | --- | --- | --- | --- |
-| `BTC/USD` | `CRYPTO` | `BINANCE_SPOT` | `BTCUSD` | Supported |
-| `ETH/USD` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSD` | Supported |
+| `BTC/USD` | `CRYPTO` | `TWELVE_DATA` | `BTC/USD` | Supported |
+| `ETH/USD` | `CRYPTO` | `TWELVE_DATA` | `ETH/USD` | Supported |
 | `EUR/USD` | `FOREX` | `TWELVE_DATA` | `EUR/USD` | Supported |
 | `GBP/USD` | `FOREX` | `TWELVE_DATA` | `GBP/USD` | Supported |
 | `USD/JPY` | `FOREX` | `TWELVE_DATA` | `USD/JPY` | Supported |
@@ -82,7 +82,7 @@ Gateway phải được thiết kế như một service contract độc lập. C
 
 ### Canonical symbol stable, provider symbol replaceable
 
-Client dùng canonical symbol như `BTC/USD`. Provider adapter chịu trách nhiệm map sang provider symbol như `BTCUSD`.
+Client dùng canonical symbol như `BTC/USD`. Provider adapter chịu trách nhiệm map sang provider symbol như `BTC/USD` hoặc `BTCUSD`.
 
 Nếu sau này provider đổi từ Binance sang nguồn khác, contract bên ngoài không nên đổi.
 
@@ -173,15 +173,15 @@ Response:
     {
       "symbol": "BTC/USD",
       "assetClass": "CRYPTO",
-      "provider": "BINANCE_SPOT",
-      "providerSymbol": "BTCUSD",
+      "provider": "TWELVE_DATA",
+      "providerSymbol": "BTC/USD",
       "enabled": true
     },
     {
       "symbol": "ETH/USD",
       "assetClass": "CRYPTO",
-      "provider": "BINANCE_SPOT",
-      "providerSymbol": "ETHUSD",
+      "provider": "TWELVE_DATA",
+      "providerSymbol": "ETH/USD",
       "enabled": true
     }
   ]
@@ -218,11 +218,9 @@ Semantics:
 - Asset class, provider metadata, volume, provider time, and freshness state are not exposed.
 - Multi-symbol requests return per-symbol errors for unsupported, stale, or provider-failed symbols.
 - Request-level errors are reserved for malformed input such as missing or empty `symbols`.
-- Crypto cache misses are grouped by their persisted `BINANCE_SPOT` mapping and fetched with the
-  official Binance Spot SDK `ticker_price` operation.
-- Twelve Data cache misses for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`, `AAPL`,
-  `TSLA`, `NVDA`, `MSFT`, `WTI`, `SPY`, and `QQQ` are grouped by their persisted `TWELVE_DATA`
-  mapping and fetched
+- Twelve Data cache misses for `BTC/USD`, `ETH/USD`, `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`,
+  `XAU/USD`, `AAPL`, `TSLA`, `NVDA`, `MSFT`, `WTI`, `SPY`, and `QQQ` are grouped by their
+  persisted `TWELVE_DATA` mapping and fetched
   through the Twelve Data SDK.
 - YFINANCE quote cache misses use `Ticker.get_info().regularMarketPrice` in a serialized worker
   thread. `receivedAt` is gateway receive time, not provider trade time.
@@ -276,9 +274,8 @@ Semantics:
 - Historical candle timeframes are `1m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1w`, and `1mo`.
 - Gateway enforces `MAX_CANDLES_PER_REQUEST`.
 - Closed candles are read from PostgreSQL first; only missing contiguous ranges are fetched.
-- Missing crypto ranges are routed through the persisted `BINANCE_SPOT` mapping; missing Twelve
-  Data ranges for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`, `AAPL`, `TSLA`, `NVDA`,
-  `MSFT`, `WTI`, `SPY`, and `QQQ` are routed through `TWELVE_DATA`.
+- Missing ranges are routed through each symbol's persisted mapping. `BTC/USD`, `ETH/USD`,
+  Forex, `XAU/USD`, US stocks, `WTI`, `SPY`, and `QQQ` use `TWELVE_DATA`.
 - Missing `YFINANCE` candle ranges for `XAG/USD`, `BRENT`, `NATGAS`, `COFFEE`, `SUGAR`,
   `WHEAT`, `CORN`, `SPX`, `NDX`, and `DJI` are routed through yfinance `download`.
 - Missing or null yfinance volume is serialized as decimal zero because the contract requires
@@ -316,10 +313,10 @@ Invalid subscription shape closes with WebSocket code `1008` and a stable reason
 `INVALID_SYMBOLS`, `TOO_MANY_SYMBOLS`, `UNSUPPORTED_SYMBOL`, or `UNSUPPORTED_TIMEFRAME`.
 Registry or provider failures close with `1011` and a sanitized reason.
 
-Stream interests route through each enabled symbol's persisted provider mapping. Binance-backed
-crypto symbols use Binance WebSocket quote/kline streams. Twelve Data-backed Forex symbols use one
-shared process-local Twelve Data WebSocket price stream for all active interests. YFINANCE symbols
-use one lazy process-local yfinance `AsyncWebSocket` and shared provider-symbol subscriptions.
+Stream interests route through each enabled symbol's persisted provider mapping. Twelve Data-backed
+crypto, Forex, stock, commodity, and ETF symbols use one shared process-local Twelve Data WebSocket
+price stream for all active interests. YFINANCE symbols use one lazy process-local yfinance
+`AsyncWebSocket` and shared provider-symbol subscriptions.
 
 ### Quote event
 
@@ -484,12 +481,22 @@ unique(provider, provider_symbol, timeframe, open_time)
 Notes:
 
 - `GET /v1/symbols` reads enabled rows from `supported_symbols`; no hard-coded runtime fallback is used.
-- The initial migration seeds `BTC/USD -> BINANCE_SPOT:BTCUSD` and
-  `ETH/USD -> BINANCE_SPOT:ETHUSD`.
+- The initial migration seeded `BTC/USD -> BINANCE_SPOT:BTCUSD` and
+  `ETH/USD -> BINANCE_SPOT:ETHUSD`; a later migration moves both rows to `TWELVE_DATA`.
 - Later migrations seed Twelve Data symbols and the quote, candle, and stream-enabled `YFINANCE`
   planned assets.
+- Existing databases can apply the same in-place update manually:
+
+```sql
+UPDATE supported_symbols
+SET provider = 'TWELVE_DATA',
+    provider_symbol = symbol,
+    enabled = true,
+    updated_at = now()
+WHERE symbol IN ('BTC/USD', 'ETH/USD');
+```
 - `symbol` stores canonical symbol such as `BTC/USD`.
-- `provider_symbol` stores provider symbol such as `BTCUSD`.
+- `provider_symbol` stores provider symbol such as `BTC/USD`.
 - Decimal values should use database decimal/numeric types, not float.
 
 ## Provider Adapter
@@ -559,7 +566,7 @@ LOG_LEVEL=INFO
 DATABASE_URL=postgresql+asyncpg://...
 BINANCE_REST_BASE_URL=https://api.binance.com
 BINANCE_WS_BASE_URL=wss://stream.binance.com:9443
-TWELVEDATA_API_KEY=...
+TWELVEDATA_API_KEYS=...
 TWELVEDATA_REST_BASE_URL=https://api.twelvedata.com
 PROVIDER_HTTP_TIMEOUT_SECONDS=5
 PROVIDER_WS_RECONNECT_DELAY_SECONDS=5
@@ -574,9 +581,10 @@ STREAM_IDLE_GRACE_SECONDS=5
 STREAM_FRESHNESS_CHECK_SECONDS=1
 ```
 
-Binance public market-data endpoints do not require API keys. `TWELVEDATA_API_KEY` is optional at
-application startup, for crypto-only requests, and for fully persisted Forex candle reads; live
-Forex quote or candle refreshes require it.
+Binance public market-data endpoints do not require API keys. `TWELVEDATA_API_KEYS` is the only
+Twelve Data key setting; one key or comma-separated keys are both valid. Twelve Data keys are
+optional at application startup, for crypto-only requests, and for fully persisted Forex candle
+reads; live Twelve Data quote or candle refreshes require at least one key.
 
 ## Observability
 
@@ -628,7 +636,7 @@ Authentication and per-client quota are out of scope for the first design. If ga
 ## Resolved MVP Decisions
 
 - Canonical symbols remain `BTC/USD` and `ETH/USD`.
-- Binance provider symbols are fixed to `BTCUSD` and `ETHUSD`.
+- `BTC/USD` and `ETH/USD` provider symbols are `BTC/USD` and `ETH/USD` for Twelve Data.
 - The initial consumer is one internal Java backend service.
 - The gateway remains internal-only for the MVP, but design should allow future public exposure.
 - Multi-symbol quote responses return per-symbol errors instead of failing the full request.

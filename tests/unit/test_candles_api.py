@@ -47,6 +47,7 @@ class StubCandleService:
         return self.result
 
 
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
 SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
@@ -60,7 +61,9 @@ class FakeCandleRepository:
         self.upserted: list[Candle] = []
 
     async def get_enabled_symbol(self, symbol: str) -> SupportedSymbol | None:
-        return {item.symbol: item for item in (EUR, WTI, SPY, QQQ, YFINANCE_SILVER)}.get(symbol)
+        return {item.symbol: item for item in (BTC, EUR, WTI, SPY, QQQ, YFINANCE_SILVER)}.get(
+            symbol
+        )
 
     async def list_complete(
         self,
@@ -293,8 +296,11 @@ async def test_candles_sanitizes_service_failures(
     assert "raw sdk payload" not in response.text
 
 
-async def test_candles_routes_forex_through_fake_twelvedata_provider(
+@pytest.mark.parametrize(("symbol", "expected"), [("BTC/USD", BTC), ("EUR/USD", EUR)])
+async def test_candles_routes_crypto_and_forex_through_fake_twelvedata_provider(
     client: AsyncClient,
+    symbol: str,
+    expected: SupportedSymbol,
 ) -> None:
     repository = FakeCandleRepository()
     twelvedata = FakeCandleProvider()
@@ -307,7 +313,7 @@ async def test_candles_routes_forex_through_fake_twelvedata_provider(
     response = await client.get(
         "/v1/candles",
         params={
-            "symbol": "EUR/USD",
+            "symbol": symbol,
             "timeframe": "1m",
             "from": "2026-06-22T00:00:00Z",
             "to": "2026-06-22T00:01:00Z",
@@ -317,7 +323,7 @@ async def test_candles_routes_forex_through_fake_twelvedata_provider(
     assert response.status_code == 200
     payload = response.json()
     assert set(payload) == {"symbol", "timeframe", "from", "to", "candles"}
-    assert payload["symbol"] == "EUR/USD"
+    assert payload["symbol"] == symbol
     assert payload["candles"][0]["volume"] == "0"
     assert set(payload["candles"][0]) == {
         "openTime",
@@ -329,7 +335,7 @@ async def test_candles_routes_forex_through_fake_twelvedata_provider(
         "volume",
         "complete",
     }
-    assert twelvedata.calls == [EUR]
+    assert twelvedata.calls == [expected]
     assert repository.upserted[0].provider == "TWELVE_DATA"
 
 
@@ -577,7 +583,7 @@ async def test_candle_dependency_without_twelvedata_key_keeps_binance_available(
         "get_yfinance_candle_provider",
         lambda timeout_seconds: yfinance,
     )
-    provider = get_candle_provider(Settings(twelvedata_api_key=None))
+    provider = get_candle_provider(Settings(twelvedata_api_keys=None))
 
     candles = await provider.fetch_candles(
         SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True),
@@ -607,7 +613,7 @@ async def test_candle_dependency_registers_yfinance_without_twelvedata_key(
         lambda timeout_seconds: yfinance,
     )
 
-    provider = get_candle_provider(Settings(twelvedata_api_key=None))
+    provider = get_candle_provider(Settings(twelvedata_api_keys=None))
 
     candles = await provider.fetch_candles(
         YFINANCE_SILVER,

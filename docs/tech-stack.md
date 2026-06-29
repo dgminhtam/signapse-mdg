@@ -202,8 +202,7 @@ ethusd@kline_1m
 Provider-symbol decision:
 
 - Keep canonical symbols as `BTC/USD` and `ETH/USD`.
-- Map them to Binance Spot `BTCUSD` and `ETHUSD` for the MVP.
-- Add a startup or CI smoke check against Binance exchange metadata so unsupported provider symbols fail loudly.
+- Map them to Twelve Data `BTC/USD` and `ETH/USD`.
 - Open upstream WebSocket streams lazily when downstream clients subscribe, not at app startup.
 - Share matching upstream interests across downstream clients with process-local reference counts.
 - Keep SDK callbacks non-blocking by enqueueing normalized events into bounded async queues.
@@ -221,6 +220,8 @@ Use the official `twelvedata==1.4.0` SDK as the Forex provider foundation for:
 Current seeded Twelve Data catalog:
 
 ```text
+BTC/USD -> TWELVE_DATA:BTC/USD
+ETH/USD -> TWELVE_DATA:ETH/USD
 EUR/USD -> TWELVE_DATA:EUR/USD
 GBP/USD -> TWELVE_DATA:GBP/USD
 USD/JPY -> TWELVE_DATA:USD/JPY
@@ -241,6 +242,8 @@ Important constraints:
 - The SDK REST surface is synchronous; call it through `asyncio.to_thread`.
 - Serialize shared SDK client access.
 - Configure API key, REST base URL, and timeout through environment settings.
+- Configure comma-separated `TWELVEDATA_API_KEYS`; REST calls rotate process-local keys and retry
+  one alternate key on key-related failures.
 - Route Forex latest quotes and historical candles through Twelve Data using persisted registry
   mappings.
 - Keep Twelve Data SDK request builders, raw payloads, callback threads, and exceptions inside
@@ -541,7 +544,7 @@ LOG_LEVEL
 DATABASE_URL
 BINANCE_REST_BASE_URL
 BINANCE_WS_BASE_URL
-TWELVEDATA_API_KEY
+TWELVEDATA_API_KEYS
 TWELVEDATA_REST_BASE_URL
 PROVIDER_WS_RECONNECT_DELAY_SECONDS
 QUOTE_STALE_AFTER_SECONDS
@@ -595,7 +598,7 @@ mypy==2.1.0
 - yfinance is locked as the latest-quote, historical-candle, asynchronous stream, and registry
   mapping source for planned assets.
 - HTTPX only for ASGI route and integration tests.
-- Canonical `BTC/USD` and `ETH/USD` mapped to Binance `BTCUSD` and `ETHUSD`.
+- Canonical `BTC/USD` and `ETH/USD` mapped to Twelve Data `BTC/USD` and `ETH/USD`.
 - Successful latest quotes expose only `symbol`, `price`, and `receivedAt`.
 - Provider identity, symbol mapping, and freshness metadata remain internal to the gateway.
 - Multi-symbol quote failures return per-symbol errors.
