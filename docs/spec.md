@@ -129,18 +129,18 @@ Gateway có 4 trách nhiệm chính:
 
 MVP nên hỗ trợ các timeframe dùng được với Binance kline:
 
-| API timeframe | Binance interval | Notes |
-| --- | --- | --- |
-| `1m` | `1m` | MVP realtime default |
-| `5m` | `5m` | Optional trong MVP |
-| `15m` | `15m` | Optional trong MVP |
-| `30m` | `30m` | Optional trong MVP |
-| `1h` | `1h` | Optional trong MVP |
-| `1d` | `1d` | Optional trong MVP |
-| `1w` | `1w` | Optional trong MVP |
-| `1mo` | `1M` | Mapping khác tên; cần test rõ |
+| API timeframe | Twelve Data | Binance | yfinance |
+| --- | --- | --- | --- |
+| `1m` | `1min` | `1m` | `1m` |
+| `5m` | `5min` | `5m` | `5m` |
+| `15m` | `15min` | `15m` | `15m` |
+| `30m` | `30min` | `30m` | `30m` |
+| `1h` | `1h` | `1h` | `1h` |
+| `1d` | `1day` | `1d` | `1d` |
+| `1w` | `1week` | `1w` | `1wk` |
+| `1mo` | `1month` | `1M` | `1mo` |
 
-MVP tối thiểu có thể bắt đầu với `1m`, `5m`, `15m`, `1h`, và `1d`. Các timeframe còn lại có thể được bật sau nếu contract giữ nguyên.
+Provider-native interval names stay inside adapters.
 
 ## HTTP API Contract
 
@@ -273,8 +273,8 @@ Semantics:
 - `to` is optional; when omitted, the gateway captures request-time UTC once and always returns
   that resolved value in the response.
 - Gateway should reject unsupported timeframe values.
-- MVP timeframes are `1m`, `5m`, `15m`, `1h`, and `1d`.
-- Gateway enforces both `MAX_CANDLE_RANGE_DAYS` and `MAX_CANDLES_PER_REQUEST`.
+- Historical candle timeframes are `1m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1w`, and `1mo`.
+- Gateway enforces `MAX_CANDLES_PER_REQUEST`.
 - Closed candles are read from PostgreSQL first; only missing contiguous ranges are fetched.
 - Missing crypto ranges are routed through the persisted `BINANCE_SPOT` mapping; missing Twelve
   Data ranges for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`, `AAPL`, `TSLA`, `NVDA`,
@@ -566,7 +566,6 @@ PROVIDER_WS_RECONNECT_DELAY_SECONDS=5
 QUOTE_STALE_AFTER_SECONDS=30
 QUOTE_CACHE_TTL_SECONDS=10
 MAX_QUOTE_SYMBOLS=10
-MAX_CANDLE_RANGE_DAYS=30
 MAX_CANDLES_PER_REQUEST=1000
 STREAM_CLIENT_QUEUE_CAPACITY=256
 STREAM_PROVIDER_QUEUE_CAPACITY=1024

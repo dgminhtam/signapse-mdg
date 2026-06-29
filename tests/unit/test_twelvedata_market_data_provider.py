@@ -239,19 +239,30 @@ async def test_provider_rejects_non_allowlisted_candle_symbol() -> None:
 
 
 @pytest.mark.parametrize(
-    ("provider_interval", "expected_interval", "duration"),
+    ("provider_interval", "expected_interval", "start", "end", "expected_end_date"),
     [
-        ("1m", "1min", timedelta(minutes=1)),
-        ("5m", "5min", timedelta(minutes=5)),
-        ("15m", "15min", timedelta(minutes=15)),
-        ("1h", "1h", timedelta(hours=1)),
-        ("1d", "1day", timedelta(days=1)),
+        ("1m", "1min", START, START + timedelta(minutes=1), "2026-06-22 00:00:00"),
+        ("5m", "5min", START, START + timedelta(minutes=5), "2026-06-22 00:00:00"),
+        ("15m", "15min", START, START + timedelta(minutes=15), "2026-06-22 00:00:00"),
+        ("30m", "30min", START, START + timedelta(minutes=30), "2026-06-22 00:00:00"),
+        ("1h", "1h", START, START + timedelta(hours=1), "2026-06-22 00:00:00"),
+        ("1d", "1day", START, START + timedelta(days=1), "2026-06-22 00:00:00"),
+        ("1w", "1week", START, START + timedelta(days=7), "2026-06-22 00:00:00"),
+        (
+            "1mo",
+            "1month",
+            datetime(2026, 6, 1, tzinfo=UTC),
+            datetime(2026, 7, 1, tzinfo=UTC),
+            "2026-06-01 00:00:00",
+        ),
     ],
 )
 async def test_provider_maps_all_supported_candle_intervals(
     provider_interval: str,
     expected_interval: str,
-    duration: timedelta,
+    start: datetime,
+    end: datetime,
+    expected_end_date: str,
 ) -> None:
     client = FakeClient(time_series_payload=(candle_row(),))
     provider = TwelveDataMarketDataProvider(lambda: client)
@@ -260,17 +271,37 @@ async def test_provider_maps_all_supported_candle_intervals(
         EUR,
         provider_interval,
         provider_interval,
-        START,
-        START + duration,
+        start,
+        end,
         1,
     )
 
     assert client.time_series_calls[0]["interval"] == expected_interval
-    assert client.time_series_calls[0]["start_date"] == "2026-06-22 00:00:00"
-    assert client.time_series_calls[0]["end_date"] == "2026-06-22 00:00:00"
+    assert client.time_series_calls[0]["start_date"] == start.strftime("%Y-%m-%d %H:%M:%S")
+    assert client.time_series_calls[0]["end_date"] == expected_end_date
     assert client.time_series_calls[0]["timezone"] == "UTC"
     assert client.time_series_calls[0]["order"] == "ASC"
     assert client.time_series_calls[0]["outputsize"] == 1
+
+
+async def test_provider_derives_monthly_close_time_by_calendar_month() -> None:
+    open_time = datetime(2026, 2, 1, tzinfo=UTC)
+    provider = TwelveDataMarketDataProvider(
+        lambda: FakeClient(time_series_payload=(candle_row(open_time),))
+    )
+
+    candles = await provider.fetch_candles(
+        EUR,
+        "1mo",
+        "1mo",
+        open_time,
+        datetime(2026, 3, 1, tzinfo=UTC),
+        1,
+    )
+
+    assert candles[0].close_time == datetime(2026, 3, 1, tzinfo=UTC) - timedelta(
+        milliseconds=1
+    )
 
 
 @pytest.mark.parametrize("volume", [None, pytest.param("missing", id="omitted")])

@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Protocol, cast, runtime_checkable
 
@@ -12,7 +12,7 @@ from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import ProviderQuoteBatch
 from app.domain.symbols import SupportedSymbol
-from app.domain.timeframes import get_timeframe
+from app.domain.timeframes import Timeframe, candle_close_time, get_timeframe
 from app.providers.normalization import parse_decimal
 
 
@@ -149,7 +149,7 @@ class BinanceSpotCandleProvider:
             timeframe=timeframe,
             start=start,
             end=end,
-            interval_duration=_interval_duration(provider_interval),
+            timeframe_model=_timeframe_model(provider_interval),
         )
 
 
@@ -184,16 +184,19 @@ _KLINE_INTERVALS = {
     "1m": KlinesIntervalEnum.INTERVAL_1m,
     "5m": KlinesIntervalEnum.INTERVAL_5m,
     "15m": KlinesIntervalEnum.INTERVAL_15m,
+    "30m": KlinesIntervalEnum.INTERVAL_30m,
     "1h": KlinesIntervalEnum.INTERVAL_1h,
     "1d": KlinesIntervalEnum.INTERVAL_1d,
+    "1w": KlinesIntervalEnum.INTERVAL_1w,
+    "1mo": KlinesIntervalEnum.INTERVAL_1M,
 }
 
 
-def _interval_duration(provider_interval: str) -> timedelta:
+def _timeframe_model(provider_interval: str) -> Timeframe:
     timeframe = get_timeframe(provider_interval)
     if timeframe is None:
         raise ProviderUnavailableError
-    return timeframe.duration
+    return timeframe
 
 
 def _to_milliseconds(value: datetime) -> int:
@@ -206,7 +209,7 @@ def _normalize_klines(
     timeframe: str,
     start: datetime,
     end: datetime,
-    interval_duration: timedelta,
+    timeframe_model: Timeframe,
 ) -> list[Candle]:
     if not isinstance(payload, list):
         raise ProviderUnavailableError
@@ -221,7 +224,7 @@ def _normalize_klines(
             raise ProviderUnavailableError
         open_time = datetime.fromtimestamp(open_ms / 1000, tz=UTC)
         close_time = datetime.fromtimestamp(close_ms / 1000, tz=UTC)
-        expected_close = open_time + interval_duration - timedelta(milliseconds=1)
+        expected_close = candle_close_time(open_time, timeframe_model)
         if (
             open_time < start
             or open_time >= end

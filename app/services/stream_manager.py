@@ -41,7 +41,8 @@ def parse_stream_request(
         message = getattr(exc, "message", "The symbols query parameter is invalid.")
         raise StreamRequestError(code, message) from exc
     timeframe = (raw_timeframe or "").strip()
-    if get_timeframe(timeframe) is None:
+    timeframe_model = get_timeframe(timeframe)
+    if timeframe_model is None or not _is_stream_timeframe(timeframe_model.value):
         raise StreamRequestError(
             "UNSUPPORTED_TIMEFRAME",
             "Timeframe is not supported by this gateway.",
@@ -483,3 +484,7 @@ def _bucket_open(value: datetime, duration: timedelta) -> datetime:
     utc_value = value.astimezone(UTC)
     elapsed = utc_value - EPOCH
     return EPOCH + (elapsed // duration) * duration
+
+
+def _is_stream_timeframe(timeframe: str) -> bool:
+    return timeframe in {"1m", "5m", "15m", "1h", "1d"}

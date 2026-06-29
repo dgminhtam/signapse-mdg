@@ -151,8 +151,11 @@ Recommended initial timeframes:
 1m -> 1m
 5m -> 5m
 15m -> 15m
+30m -> 30m
 1h -> 1h
 1d -> 1d
+1w -> 1w
+1mo -> 1M
 ```
 
 ### Market Data Service
@@ -274,7 +277,7 @@ Client -> GET /v1/candles?symbol=EUR/USD&timeframe=1m&from=...[&to=...]
   -> API validates required query params
   -> If to is omitted, API captures request-time UTC once
   -> Symbol Registry validates symbol and timeframe
-  -> Service validates exact UTC [from,to), max range, and conservative candle count
+  -> Service validates exact UTC [from,to) and conservative candle count
   -> Service selects market-session policy from persisted asset class
   -> Service selects provider/market-aware candle schedule
   -> Repository loads persisted closed candles
@@ -494,7 +497,6 @@ ON market_data_candles (provider, provider_symbol, timeframe, open_time);
 | `TWELVEDATA_WS_HEARTBEAT_SECONDS` | `15` | Twelve Data WebSocket heartbeat cadence while the shared Forex stream connection is active. |
 | `QUOTE_STALE_AFTER_SECONDS` | `30` | Quote freshness threshold. |
 | `QUOTE_CACHE_TTL_SECONDS` | `10` | Latest quote cache TTL. |
-| `MAX_CANDLE_RANGE_DAYS` | `30` | Max candle query range. |
 | `MAX_CANDLES_PER_REQUEST` | `1000` | Max expected timeframe slots in one candle request. |
 | `MAX_QUOTE_SYMBOLS` | `10` | Max symbols in one quote request. |
 | `PROVIDER_HTTP_TIMEOUT_SECONDS` | `5` | Provider REST timeout. |

@@ -22,6 +22,7 @@ from app.domain.market_sessions import get_market_session_policy
 from app.domain.timeframes import (
     Timeframe,
     get_timeframe,
+    month_opens,
 )
 
 UNSUPPORTED_SYMBOL_MESSAGE = "Symbol is not supported by this gateway."
@@ -35,7 +36,6 @@ def parse_candle_request(
     raw_from: str | None,
     raw_to: str | None,
     *,
-    max_range_days: int,
     max_candles: int,
     clock: Callable[[], datetime] = utc_now,
 ) -> CandleRequest:
@@ -60,7 +60,6 @@ def parse_candle_request(
         start,
         end,
         timeframe,
-        max_range_days=max_range_days,
         max_candles=max_candles,
     )
     return CandleRequest(symbol=symbol, timeframe=timeframe.value, start=start, end=end)
@@ -86,14 +85,12 @@ def _validate_range(
     end: datetime,
     timeframe: Timeframe,
     *,
-    max_range_days: int,
     max_candles: int,
 ) -> None:
     elapsed = end - start
     if (
         elapsed <= timedelta(0)
-        or elapsed > timedelta(days=max_range_days)
-        or ceil(elapsed / timeframe.duration) > max_candles
+        or _conservative_count(start, end, timeframe) > max_candles
     ):
         raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
 
@@ -203,3 +200,9 @@ def _find_gaps(
         if candle.complete and candle.open_time in expected_opens
     }
     return schedule.missing_sections(expected_opens, available)
+
+
+def _conservative_count(start: datetime, end: datetime, timeframe: Timeframe) -> int:
+    if timeframe.calendar_month:
+        return len(month_opens(start, end))
+    return ceil((end - start) / timeframe.duration)

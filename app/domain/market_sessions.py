@@ -7,7 +7,7 @@ from app.domain.symbols import SupportedSymbol
 FOREX_ASSET_CLASS = "FOREX"
 ETF_ASSET_CLASS = "ETF"
 WTI_SYMBOL = "WTI"
-DAILY_TIMEFRAME = "1d"
+COARSE_TIMEFRAMES = frozenset({"1d", "1w"})
 NEW_YORK = ZoneInfo("America/New_York")
 FOREX_SESSION_BOUNDARY = time(hour=17)
 ETF_SESSION_OPEN = time(hour=9, minute=30)
@@ -28,7 +28,9 @@ class AlwaysOpenSessionPolicy:
 
 class ForexWeeklySessionPolicy:
     def is_eligible(self, open_time: datetime, timeframe: str) -> bool:
-        if timeframe == DAILY_TIMEFRAME:
+        if timeframe == "1mo":
+            return True
+        if timeframe in COARSE_TIMEFRAMES:
             return open_time.astimezone(UTC).weekday() < 5
 
         local_open = open_time.astimezone(NEW_YORK)
@@ -45,7 +47,9 @@ class ForexWeeklySessionPolicy:
 
 class UsEtfRegularSessionPolicy:
     def is_eligible(self, open_time: datetime, timeframe: str) -> bool:
-        if timeframe == DAILY_TIMEFRAME:
+        if timeframe == "1mo":
+            return True
+        if timeframe in COARSE_TIMEFRAMES:
             return open_time.astimezone(UTC).weekday() < 5
         local_open = open_time.astimezone(NEW_YORK)
         return (
@@ -56,7 +60,9 @@ class UsEtfRegularSessionPolicy:
 
 class WtiEnergySessionPolicy:
     def is_eligible(self, open_time: datetime, timeframe: str) -> bool:
-        if timeframe == DAILY_TIMEFRAME:
+        if timeframe == "1mo":
+            return True
+        if timeframe in COARSE_TIMEFRAMES:
             return open_time.astimezone(UTC).weekday() < 5
         local_open = open_time.astimezone(NEW_YORK)
         weekday = local_open.weekday()

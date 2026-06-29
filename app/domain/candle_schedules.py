@@ -4,7 +4,7 @@ from typing import Protocol
 
 from app.domain.market_sessions import MarketSessionPolicy
 from app.domain.symbols import SupportedSymbol
-from app.domain.timeframes import EPOCH, Timeframe
+from app.domain.timeframes import EPOCH, Timeframe, add_month, month_opens
 
 TWELVEDATA_OFFSET_HOURLY_SYMBOLS = frozenset({"WTI", "SPY", "QQQ"})
 
@@ -98,10 +98,47 @@ class FixedOffsetCandleSchedule:
         return candidate
 
 
+class CalendarMonthCandleSchedule:
+    def expected_opens(
+        self,
+        start: datetime,
+        end: datetime,
+        policy: MarketSessionPolicy,
+        timeframe: str,
+    ) -> tuple[datetime, ...]:
+        return tuple(
+            value for value in month_opens(start, end) if policy.is_eligible(value, timeframe)
+        )
+
+    def missing_sections(
+        self,
+        expected_opens: tuple[datetime, ...],
+        available_opens: set[datetime],
+    ) -> tuple[ProviderFetchSection, ...]:
+        missing = [value for value in expected_opens if value not in available_opens]
+        if not missing:
+            return ()
+        sections: list[ProviderFetchSection] = []
+        section_start = previous = missing[0]
+        count = 1
+        for value in missing[1:]:
+            if value == add_month(previous):
+                previous = value
+                count += 1
+                continue
+            sections.append(ProviderFetchSection(section_start, add_month(previous), count))
+            section_start = previous = value
+            count = 1
+        sections.append(ProviderFetchSection(section_start, add_month(previous), count))
+        return tuple(sections)
+
+
 def get_candle_schedule(
     symbol: SupportedSymbol,
     timeframe: Timeframe,
 ) -> CandleSchedule:
+    if timeframe.calendar_month:
+        return CalendarMonthCandleSchedule()
     offset = timedelta(0)
     if (
         symbol.provider == "TWELVE_DATA"
@@ -109,4 +146,6 @@ def get_candle_schedule(
         and timeframe.value == "1h"
     ):
         offset = timedelta(minutes=30)
+    if timeframe.value == "1w":
+        offset = timedelta(days=4)
     return FixedOffsetCandleSchedule(timeframe.duration, offset)

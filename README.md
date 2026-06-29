@@ -70,7 +70,6 @@ PROVIDER_HTTP_TIMEOUT_SECONDS=5
 QUOTE_CACHE_TTL_SECONDS=10
 QUOTE_STALE_AFTER_SECONDS=30
 MAX_QUOTE_SYMBOLS=10
-MAX_CANDLE_RANGE_DAYS=30
 MAX_CANDLES_PER_REQUEST=1000
 ```
 
@@ -205,8 +204,8 @@ The response exposes only canonical series context:
 }
 ```
 
-`assetClass`, `provider`, and `providerSymbol` remain internal. Requests are limited by both
-`MAX_CANDLE_RANGE_DAYS` and `MAX_CANDLES_PER_REQUEST`. Live Forex fills require
+`assetClass`, `provider`, and `providerSymbol` remain internal. Requests are limited by
+`MAX_CANDLES_PER_REQUEST`. Live Forex fills require
 `TWELVEDATA_API_KEY`; fully persisted Forex ranges do not. Twelve Data Forex may omit volume, in
 which case the API returns `"volume": "0"` as an unavailable-volume placeholder rather than a
 measured zero-activity value.

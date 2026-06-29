@@ -95,11 +95,23 @@ def test_parse_candle_request_accepts_aligned_half_open_range() -> None:
         "1m",
         "2026-06-19T00:00:00Z",
         "2026-06-19T00:02:00Z",
-        max_range_days=30,
         max_candles=1000,
     )
 
     assert request == CandleRequest("BTC/USD", "1m", START, START + timedelta(minutes=2))
+
+
+@pytest.mark.parametrize("timeframe", ["1m", "5m", "15m", "30m", "1h", "1d", "1w", "1mo"])
+def test_parse_candle_request_accepts_supported_timeframes(timeframe: str) -> None:
+    request = parse_candle_request(
+        "BTC/USD",
+        timeframe,
+        "2026-06-01T00:00:00Z",
+        "2026-06-01T00:01:00Z",
+        max_candles=1000,
+    )
+
+    assert request.timeframe == timeframe
 
 
 def test_parse_candle_request_accepts_unaligned_range() -> None:
@@ -108,7 +120,6 @@ def test_parse_candle_request_accepts_unaligned_range() -> None:
         "1m",
         "2026-06-19T00:00:30Z",
         "2026-06-19T00:02:15Z",
-        max_range_days=30,
         max_candles=1000,
     )
 
@@ -124,7 +135,6 @@ def test_parse_candle_request_defaults_omitted_to_to_captured_now() -> None:
         "1m",
         "2026-06-19T00:00:30Z",
         None,
-        max_range_days=30,
         max_candles=1000,
         clock=lambda: now,
     )
@@ -136,6 +146,7 @@ def test_parse_candle_request_defaults_omitted_to_to_captured_now() -> None:
     ("timeframe", "start", "end", "code"),
     [
         ("2m", "2026-06-19T00:00:00Z", "2026-06-19T00:02:00Z", "UNSUPPORTED_TIMEFRAME"),
+        ("1month", "2026-06-01T00:00:00Z", "2026-07-01T00:00:00Z", "UNSUPPORTED_TIMEFRAME"),
         ("1m", None, "2026-06-19T00:02:00Z", "INVALID_TIME_RANGE"),
         ("1m", "2026-06-19T00:00:00Z", "", "INVALID_TIME_RANGE"),
         ("1m", "2026-06-19T00:02:00Z", "2026-06-19T00:02:00Z", "INVALID_TIME_RANGE"),
@@ -154,21 +165,19 @@ def test_parse_candle_request_rejects_invalid_contract(
             timeframe,
             start,
             end,
-            max_range_days=30,
             max_candles=1000,
         )
     assert exc_info.value.code == code
 
 
-def test_parse_candle_request_enforces_range_and_count_limits() -> None:
+def test_parse_candle_request_enforces_count_limit() -> None:
     with pytest.raises(CandleRequestError):
         parse_candle_request(
             "BTC/USD",
-            "1d",
-            "2026-05-01T00:00:00Z",
+            "1m",
             "2026-06-19T00:00:00Z",
-            max_range_days=30,
-            max_candles=1000,
+            "2026-06-19T00:03:00Z",
+            max_candles=2,
         )
 
 
@@ -179,7 +188,6 @@ def test_parse_candle_request_counts_partial_slots_with_ceiling() -> None:
             "1m",
             "2026-06-19T00:00:30Z",
             "2026-06-19T00:02:00Z",
-            max_range_days=30,
             max_candles=1,
         )
     with pytest.raises(CandleRequestError):
@@ -188,8 +196,25 @@ def test_parse_candle_request_counts_partial_slots_with_ceiling() -> None:
             "1m",
             "2026-06-19T00:00:00Z",
             "2026-06-19T00:03:00Z",
-            max_range_days=30,
             max_candles=2,
+        )
+
+
+def test_parse_candle_request_counts_monthly_range_by_calendar_opens() -> None:
+    parse_candle_request(
+        "BTC/USD",
+        "1mo",
+        "2026-01-15T00:00:00Z",
+        "2026-03-02T00:00:00Z",
+        max_candles=2,
+    )
+    with pytest.raises(CandleRequestError):
+        parse_candle_request(
+            "BTC/USD",
+            "1mo",
+            "2026-01-15T00:00:00Z",
+            "2026-03-02T00:00:00Z",
+            max_candles=1,
         )
 
 
@@ -219,6 +244,31 @@ def test_find_gaps_uses_half_open_slots_and_contiguous_ranges() -> None:
             START + timedelta(minutes=2),
             START + timedelta(minutes=3),
             1,
+        ),
+    )
+
+
+def test_find_gaps_groups_calendar_month_sections() -> None:
+    timeframe = get_timeframe("1mo")
+    assert timeframe is not None
+    schedule = get_candle_schedule(BTC, timeframe)
+    expected = schedule.expected_opens(
+        datetime(2026, 1, 15, tzinfo=UTC),
+        datetime(2026, 4, 2, tzinfo=UTC),
+        get_market_session_policy(BTC),
+        "1mo",
+    )
+
+    assert expected == (
+        datetime(2026, 2, 1, tzinfo=UTC),
+        datetime(2026, 3, 1, tzinfo=UTC),
+        datetime(2026, 4, 1, tzinfo=UTC),
+    )
+    assert _find_gaps([], expected, schedule) == (
+        ProviderFetchSection(
+            datetime(2026, 2, 1, tzinfo=UTC),
+            datetime(2026, 5, 1, tzinfo=UTC),
+            3,
         ),
     )
 

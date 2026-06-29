@@ -190,6 +190,29 @@ def test_iter_chunks_uses_configured_max_candles() -> None:
     ]
 
 
+def test_iter_chunks_handles_monthly_timeframe_by_calendar_months() -> None:
+    start = datetime(2026, 1, 15, tzinfo=UTC)
+    end = datetime(2026, 5, 1, tzinfo=UTC)
+
+    chunks = iter_chunks(BTC, "1mo", start, end, max_candles=2)
+
+    assert [(chunk.start, chunk.end) for chunk in chunks] == [
+        (start, datetime(2026, 3, 15, tzinfo=UTC)),
+        (datetime(2026, 3, 15, tzinfo=UTC), end),
+    ]
+
+
+def test_iter_chunks_handles_monthly_range_starting_on_day_31() -> None:
+    start = datetime(2026, 1, 31, tzinfo=UTC)
+
+    chunks = iter_chunks(BTC, "1mo", start, datetime(2026, 3, 1, tzinfo=UTC), max_candles=1)
+
+    assert [(chunk.start, chunk.end) for chunk in chunks] == [
+        (start, datetime(2026, 2, 28, tzinfo=UTC)),
+        (datetime(2026, 2, 28, tzinfo=UTC), datetime(2026, 3, 1, tzinfo=UTC)),
+    ]
+
+
 async def test_process_backfill_calls_service_for_each_chunk() -> None:
     service = FakeBackfillService()
     stdout = StringIO()

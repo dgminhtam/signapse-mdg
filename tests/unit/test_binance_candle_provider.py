@@ -53,10 +53,14 @@ class FakeKlineClient:
         return FakeResponse(self.payload)
 
 
-def kline(open_time: datetime = START) -> list[object]:
+def kline(open_time: datetime = START, close_time: datetime | None = None) -> list[object]:
     open_ms = int(open_time.timestamp() * 1000)
     close_ms = int(
-        (open_time + timedelta(minutes=1) - timedelta(milliseconds=1)).timestamp() * 1000
+        (
+            close_time
+            or open_time + timedelta(minutes=1) - timedelta(milliseconds=1)
+        ).timestamp()
+        * 1000
     )
     return [
         open_ms,
@@ -96,6 +100,59 @@ async def test_candle_provider_calls_sdk_and_normalizes_nested_klines() -> None:
     assert candles[0].symbol == "BTC/USD"
     assert str(candles[0].close) == "10.50"
     assert candles[0].complete is False
+
+
+@pytest.mark.parametrize(
+    ("provider_interval", "expected"),
+    [
+        ("1m", KlinesIntervalEnum.INTERVAL_1m),
+        ("5m", KlinesIntervalEnum.INTERVAL_5m),
+        ("15m", KlinesIntervalEnum.INTERVAL_15m),
+        ("30m", KlinesIntervalEnum.INTERVAL_30m),
+        ("1h", KlinesIntervalEnum.INTERVAL_1h),
+        ("1d", KlinesIntervalEnum.INTERVAL_1d),
+        ("1w", KlinesIntervalEnum.INTERVAL_1w),
+        ("1mo", KlinesIntervalEnum.INTERVAL_1M),
+    ],
+)
+async def test_candle_provider_maps_supported_intervals(
+    provider_interval: str,
+    expected: KlinesIntervalEnum,
+) -> None:
+    client = FakeKlineClient([])
+    provider = BinanceSpotCandleProvider(cast(BinanceSpotRestClient, client))
+
+    assert (
+        await provider.fetch_candles(
+            BTC,
+            provider_interval,
+            provider_interval,
+            START,
+            START + timedelta(days=31),
+            1,
+        )
+        == []
+    )
+    assert client.calls[0]["interval"] == expected
+
+
+async def test_candle_provider_derives_monthly_close_time_by_calendar_month() -> None:
+    open_time = datetime(2026, 2, 1, tzinfo=UTC)
+    close_time = datetime(2026, 3, 1, tzinfo=UTC) - timedelta(milliseconds=1)
+    provider = BinanceSpotCandleProvider(
+        cast(BinanceSpotRestClient, FakeKlineClient([kline(open_time, close_time)]))
+    )
+
+    candles = await provider.fetch_candles(
+        BTC,
+        "1mo",
+        "1mo",
+        open_time,
+        datetime(2026, 3, 1, tzinfo=UTC),
+        1,
+    )
+
+    assert candles[0].close_time == close_time
 
 
 @pytest.mark.parametrize(

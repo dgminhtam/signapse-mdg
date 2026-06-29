@@ -12,7 +12,7 @@ from app.db.session import build_session_factory
 from app.domain.candles import CandleProvider, CandleRequest, CandleResult
 from app.domain.errors import DatabaseUnavailableError
 from app.domain.symbols import SupportedSymbol
-from app.domain.timeframes import TIMEFRAMES, get_timeframe
+from app.domain.timeframes import TIMEFRAMES, add_month, get_timeframe
 from app.providers.binance_spot import build_binance_spot_candle_provider
 from app.providers.twelvedata_market_data import build_twelvedata_market_data_provider
 from app.providers.yfinance_market_data import build_yfinance_candle_provider
@@ -94,11 +94,13 @@ def iter_chunks(
     max_candles: int,
 ) -> tuple[BackfillChunk, ...]:
     timeframe_model = TIMEFRAMES[timeframe]
-    chunk_size = timeframe_model.duration * max_candles
     chunks: list[BackfillChunk] = []
     cursor = start
     while cursor < end:
-        chunk_end = min(cursor + chunk_size, end)
+        if timeframe_model.calendar_month:
+            chunk_end = min(add_month(cursor, max_candles), end)
+        else:
+            chunk_end = min(cursor + timeframe_model.duration * max_candles, end)
         chunks.append(BackfillChunk(symbol, timeframe, cursor, chunk_end))
         cursor = chunk_end
     return tuple(chunks)

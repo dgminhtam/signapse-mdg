@@ -29,6 +29,8 @@ def test_parse_stream_request_deduplicates_symbols_and_accepts_supported_timefra
         ("BTC/USD,ETH/USD", "1m", 1, "TOO_MANY_SYMBOLS"),
         ("BTC/USD", None, 10, "UNSUPPORTED_TIMEFRAME"),
         ("BTC/USD", "2m", 10, "UNSUPPORTED_TIMEFRAME"),
+        ("BTC/USD", "1w", 10, "UNSUPPORTED_TIMEFRAME"),
+        ("BTC/USD", "1mo", 10, "UNSUPPORTED_TIMEFRAME"),
     ],
 )
 def test_parse_stream_request_rejects_invalid_contract(

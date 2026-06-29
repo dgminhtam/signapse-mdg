@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Protocol, cast
 
@@ -14,7 +14,7 @@ from app.domain.errors import ProviderUnavailableError
 from app.domain.market_sessions import get_market_session_policy
 from app.domain.quotes import ProviderQuoteBatch
 from app.domain.symbols import SupportedSymbol
-from app.domain.timeframes import get_timeframe
+from app.domain.timeframes import Timeframe, candle_close_time, get_timeframe, last_open_before
 from app.providers.normalization import parse_decimal
 
 SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS = frozenset(
@@ -38,8 +38,11 @@ _TWELVEDATA_INTERVALS = {
     "1m": "1min",
     "5m": "5min",
     "15m": "15min",
+    "30m": "30min",
     "1h": "1h",
     "1d": "1day",
+    "1w": "1week",
+    "1mo": "1month",
 }
 
 class JsonEndpoint(Protocol):
@@ -149,7 +152,6 @@ class TwelveDataMarketDataProvider:
         timeframe_model = get_timeframe(provider_interval)
         if interval is None or timeframe_model is None:
             raise ProviderUnavailableError
-        duration = timeframe_model.duration
         try:
             async with self._client_lock:
                 payload = await asyncio.to_thread(
@@ -157,7 +159,7 @@ class TwelveDataMarketDataProvider:
                     symbol.provider_symbol,
                     interval,
                     start,
-                    end - duration,
+                    last_open_before(end, timeframe_model),
                     limit,
                 )
         except TwelveDataNoDataError:
@@ -172,7 +174,7 @@ class TwelveDataMarketDataProvider:
             timeframe=timeframe,
             start=start,
             end=end,
-            interval_duration=duration,
+            timeframe_model=timeframe_model,
         )
 
     def _get_client(self) -> TwelveDataClient:
@@ -267,7 +269,7 @@ def _normalize_time_series(
     timeframe: str,
     start: datetime,
     end: datetime,
-    interval_duration: timedelta,
+    timeframe_model: Timeframe,
 ) -> list[Candle]:
     rows = _extract_time_series_rows(payload, symbol.provider_symbol)
     candles: list[Candle] = []
@@ -276,7 +278,7 @@ def _normalize_time_series(
         open_time = _parse_datetime(row.get("datetime"))
         if open_time is None:
             raise ProviderUnavailableError
-        close_time = open_time + interval_duration - timedelta(milliseconds=1)
+        close_time = candle_close_time(open_time, timeframe_model)
         if open_time < start or open_time >= end:
             continue
         if not get_market_session_policy(symbol).is_eligible(open_time, timeframe):

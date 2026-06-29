@@ -328,8 +328,11 @@ async def test_candles_call_yfinance_download_with_expected_arguments() -> None:
         ("1m", "1m"),
         ("5m", "5m"),
         ("15m", "15m"),
+        ("30m", "30m"),
         ("1h", "1h"),
         ("1d", "1d"),
+        ("1w", "1wk"),
+        ("1mo", "1mo"),
     ],
 )
 async def test_candles_map_supported_timeframes(
@@ -349,6 +352,36 @@ async def test_candles_map_supported_timeframes(
 
     assert result == []
     assert calls[0]["interval"] == expected
+
+
+async def test_candles_derives_monthly_close_time_by_calendar_month() -> None:
+    open_time = datetime(2026, 2, 1, tzinfo=UTC)
+    frame = make_history_frame(
+        [
+            {
+                "Open": "10.00",
+                "High": "11.00",
+                "Low": "9.50",
+                "Close": "10.50",
+                "Volume": "123",
+            }
+        ],
+        index=[open_time],
+    )
+    provider, _ = make_history_provider(frame)
+
+    candles = await provider.fetch_candles(
+        YFINANCE_SILVER,
+        "1mo",
+        "1mo",
+        open_time,
+        datetime(2026, 3, 1, tzinfo=UTC),
+        1,
+    )
+
+    assert candles[0].close_time == datetime(2026, 3, 1, tzinfo=UTC) - timedelta(
+        milliseconds=1
+    )
 
 
 async def test_candles_reject_unsupported_symbol_without_provider_call() -> None:

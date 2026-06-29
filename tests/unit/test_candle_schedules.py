@@ -59,6 +59,27 @@ def test_twelvedata_non_hourly_schedules_keep_verified_epoch_anchor() -> None:
     )
 
 
+def test_weekly_schedule_uses_monday_utc_anchor() -> None:
+    start = datetime(2026, 6, 18, tzinfo=UTC)
+    end = datetime(2026, 7, 1, tzinfo=UTC)
+
+    assert expected_opens(BTC, "1w", start, end) == (
+        datetime(2026, 6, 22, tzinfo=UTC),
+        datetime(2026, 6, 29, tzinfo=UTC),
+    )
+
+
+def test_monthly_schedule_uses_calendar_month_opens() -> None:
+    start = datetime(2026, 1, 15, tzinfo=UTC)
+    end = datetime(2026, 4, 2, tzinfo=UTC)
+
+    assert expected_opens(BTC, "1mo", start, end) == (
+        datetime(2026, 2, 1, tzinfo=UTC),
+        datetime(2026, 3, 1, tzinfo=UTC),
+        datetime(2026, 4, 1, tzinfo=UTC),
+    )
+
+
 def test_schedule_combines_wti_anchor_with_maintenance_policy() -> None:
     start = datetime(2026, 6, 22, 20, 0, tzinfo=UTC)
     end = datetime(2026, 6, 22, 23, 0, tzinfo=UTC)

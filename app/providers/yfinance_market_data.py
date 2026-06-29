@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Protocol, cast
 
@@ -11,7 +11,7 @@ from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import ProviderQuoteBatch
 from app.domain.symbols import SupportedSymbol
-from app.domain.timeframes import get_timeframe
+from app.domain.timeframes import Timeframe, candle_close_time, get_timeframe
 from app.providers.normalization import parse_decimal
 
 SUPPORTED_YFINANCE_PROVIDER_SYMBOLS = frozenset(
@@ -33,8 +33,11 @@ _YFINANCE_INTERVALS = {
     "1m": "1m",
     "5m": "5m",
     "15m": "15m",
+    "30m": "30m",
     "1h": "1h",
     "1d": "1d",
+    "1w": "1wk",
+    "1mo": "1mo",
 }
 
 class YFinanceTicker(Protocol):
@@ -111,7 +114,6 @@ class YFinanceQuoteProvider:
         timeframe_model = get_timeframe(provider_interval)
         if interval is None or timeframe_model is None:
             raise ProviderUnavailableError
-        duration = timeframe_model.duration
         try:
             async with self._client_lock:
                 payload = await asyncio.to_thread(
@@ -131,7 +133,7 @@ class YFinanceQuoteProvider:
             timeframe=timeframe,
             start=start,
             end=end,
-            interval_duration=duration,
+            timeframe_model=timeframe_model,
         )
 
     def _fetch_latest_prices_sync(
@@ -222,7 +224,7 @@ def _normalize_history(
     timeframe: str,
     start: datetime,
     end: datetime,
-    interval_duration: timedelta,
+    timeframe_model: Timeframe,
 ) -> list[Candle]:
     if bool(getattr(payload, "empty", False)):
         return []
@@ -268,7 +270,7 @@ def _normalize_history(
                 provider_symbol=symbol.provider_symbol,
                 timeframe=timeframe,
                 open_time=open_time,
-                close_time=open_time + interval_duration - timedelta(milliseconds=1),
+                close_time=candle_close_time(open_time, timeframe_model),
                 open=open_value,
                 high=high_value,
                 low=low_value,

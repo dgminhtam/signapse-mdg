@@ -87,15 +87,10 @@ SHALL resolve it to one captured request-time UTC instant. `from` MUST be earlie
 - **THEN** the gateway accepts the range and filters actual provider open times within it
 
 ### Requirement: Candle requests are bounded
-The gateway SHALL reject a request that exceeds either `MAX_CANDLE_RANGE_DAYS` or
-`MAX_CANDLES_PER_REQUEST`, with defaults of 30 days and 1,000 expected candles respectively.
-Pre-validation SHALL use the ceiling of elapsed duration divided by timeframe duration; after
-symbol resolution the exact provider/market schedule count SHALL also be enforced.
-
-#### Scenario: Elapsed range is too wide
-- **WHEN** the difference between `from` and `to` exceeds `MAX_CANDLE_RANGE_DAYS`
-- **THEN** the gateway responds with HTTP status `400`
-- **AND** the error code is `INVALID_TIME_RANGE`
+The gateway SHALL reject a request that exceeds `MAX_CANDLES_PER_REQUEST`, with a default of
+1,000 expected candles. Pre-validation SHALL use the conservative expected-count bound for the
+requested timeframe; after symbol resolution the exact provider/market schedule count SHALL also
+be enforced.
 
 #### Scenario: Expected candle count is too large
 - **WHEN** either the conservative or exact scheduled count exceeds `MAX_CANDLES_PER_REQUEST`
