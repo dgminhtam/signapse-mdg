@@ -90,6 +90,106 @@ def test_schedule_combines_wti_anchor_with_maintenance_policy() -> None:
     )
 
 
+def test_schedule_finds_latest_eligible_opens_before_boundary() -> None:
+    timeframe = get_timeframe("1m")
+    assert timeframe is not None
+    schedule = get_candle_schedule(BTC, timeframe)
+
+    assert schedule.latest_opens(
+        datetime(2026, 6, 22, 10, 3, 15, tzinfo=UTC),
+        3,
+        get_market_session_policy(BTC),
+        "1m",
+    ) == (
+        datetime(2026, 6, 22, 10, 1, tzinfo=UTC),
+        datetime(2026, 6, 22, 10, 2, tzinfo=UTC),
+        datetime(2026, 6, 22, 10, 3, tzinfo=UTC),
+    )
+
+
+def test_schedule_latest_opens_skip_maintenance_windows() -> None:
+    timeframe = get_timeframe("1h")
+    assert timeframe is not None
+    schedule = get_candle_schedule(WTI, timeframe)
+
+    assert schedule.latest_opens(
+        datetime(2026, 6, 22, 23, 0, tzinfo=UTC),
+        2,
+        get_market_session_policy(WTI),
+        "1h",
+    ) == (
+        datetime(2026, 6, 22, 20, 30, tzinfo=UTC),
+        datetime(2026, 6, 22, 22, 30, tzinfo=UTC),
+    )
+
+
+def test_schedule_finds_next_eligible_opens_after_boundary() -> None:
+    timeframe = get_timeframe("1m")
+    assert timeframe is not None
+    schedule = get_candle_schedule(BTC, timeframe)
+
+    assert schedule.next_opens(
+        datetime(2026, 6, 22, 10, 0, 30, tzinfo=UTC),
+        3,
+        get_market_session_policy(BTC),
+        "1m",
+    ) == (
+        datetime(2026, 6, 22, 10, 1, tzinfo=UTC),
+        datetime(2026, 6, 22, 10, 2, tzinfo=UTC),
+        datetime(2026, 6, 22, 10, 3, tzinfo=UTC),
+    )
+
+
+def test_schedule_next_opens_skip_maintenance_windows() -> None:
+    timeframe = get_timeframe("1h")
+    assert timeframe is not None
+    schedule = get_candle_schedule(WTI, timeframe)
+
+    assert schedule.next_opens(
+        datetime(2026, 6, 22, 20, 0, tzinfo=UTC),
+        2,
+        get_market_session_policy(WTI),
+        "1h",
+    ) == (
+        datetime(2026, 6, 22, 20, 30, tzinfo=UTC),
+        datetime(2026, 6, 22, 22, 30, tzinfo=UTC),
+    )
+
+
+def test_monthly_schedule_finds_latest_calendar_opens() -> None:
+    timeframe = get_timeframe("1mo")
+    assert timeframe is not None
+    schedule = get_candle_schedule(BTC, timeframe)
+
+    assert schedule.latest_opens(
+        datetime(2026, 4, 2, tzinfo=UTC),
+        3,
+        get_market_session_policy(BTC),
+        "1mo",
+    ) == (
+        datetime(2026, 2, 1, tzinfo=UTC),
+        datetime(2026, 3, 1, tzinfo=UTC),
+        datetime(2026, 4, 1, tzinfo=UTC),
+    )
+
+
+def test_monthly_schedule_finds_next_calendar_opens() -> None:
+    timeframe = get_timeframe("1mo")
+    assert timeframe is not None
+    schedule = get_candle_schedule(BTC, timeframe)
+
+    assert schedule.next_opens(
+        datetime(2026, 1, 15, tzinfo=UTC),
+        3,
+        get_market_session_policy(BTC),
+        "1mo",
+    ) == (
+        datetime(2026, 2, 1, tzinfo=UTC),
+        datetime(2026, 3, 1, tzinfo=UTC),
+        datetime(2026, 4, 1, tzinfo=UTC),
+    )
+
+
 def test_schedule_groups_missing_opens_into_minimal_sections() -> None:
     timeframe = get_timeframe("1h")
     assert timeframe is not None

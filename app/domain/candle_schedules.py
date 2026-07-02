@@ -25,6 +25,24 @@ class CandleSchedule(Protocol):
         timeframe: str,
     ) -> tuple[datetime, ...]: ...
 
+    def latest_opens(
+        self,
+        end: datetime,
+        limit: int,
+        policy: MarketSessionPolicy,
+        timeframe: str,
+    ) -> tuple[datetime, ...]: ...
+
+    def next_opens(
+        self,
+        start: datetime,
+        limit: int,
+        policy: MarketSessionPolicy,
+        timeframe: str,
+    ) -> tuple[datetime, ...]: ...
+
+    def end_after(self, open_time: datetime) -> datetime: ...
+
     def missing_sections(
         self,
         expected_opens: tuple[datetime, ...],
@@ -51,6 +69,41 @@ class FixedOffsetCandleSchedule:
                 opens.append(cursor)
             cursor += self.duration
         return tuple(opens)
+
+    def latest_opens(
+        self,
+        end: datetime,
+        limit: int,
+        policy: MarketSessionPolicy,
+        timeframe: str,
+    ) -> tuple[datetime, ...]:
+        cursor = self._first_open_at_or_after(end)
+        if cursor >= end:
+            cursor -= self.duration
+        opens: list[datetime] = []
+        while len(opens) < limit:
+            if policy.is_eligible(cursor, timeframe):
+                opens.append(cursor)
+            cursor -= self.duration
+        return tuple(reversed(opens))
+
+    def next_opens(
+        self,
+        start: datetime,
+        limit: int,
+        policy: MarketSessionPolicy,
+        timeframe: str,
+    ) -> tuple[datetime, ...]:
+        cursor = self._first_open_at_or_after(start)
+        opens: list[datetime] = []
+        while len(opens) < limit:
+            if policy.is_eligible(cursor, timeframe):
+                opens.append(cursor)
+            cursor += self.duration
+        return tuple(opens)
+
+    def end_after(self, open_time: datetime) -> datetime:
+        return open_time + self.duration
 
     def missing_sections(
         self,
@@ -109,6 +162,45 @@ class CalendarMonthCandleSchedule:
         return tuple(
             value for value in month_opens(start, end) if policy.is_eligible(value, timeframe)
         )
+
+    def latest_opens(
+        self,
+        end: datetime,
+        limit: int,
+        policy: MarketSessionPolicy,
+        timeframe: str,
+    ) -> tuple[datetime, ...]:
+        cursor = end.astimezone(EPOCH.tzinfo)
+        cursor = cursor.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if cursor >= end:
+            cursor = add_month(cursor, -1)
+        opens: list[datetime] = []
+        while len(opens) < limit:
+            if policy.is_eligible(cursor, timeframe):
+                opens.append(cursor)
+            cursor = add_month(cursor, -1)
+        return tuple(reversed(opens))
+
+    def next_opens(
+        self,
+        start: datetime,
+        limit: int,
+        policy: MarketSessionPolicy,
+        timeframe: str,
+    ) -> tuple[datetime, ...]:
+        cursor = start.astimezone(EPOCH.tzinfo)
+        cursor = cursor.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if cursor < start:
+            cursor = add_month(cursor)
+        opens: list[datetime] = []
+        while len(opens) < limit:
+            if policy.is_eligible(cursor, timeframe):
+                opens.append(cursor)
+            cursor = add_month(cursor)
+        return tuple(opens)
+
+    def end_after(self, open_time: datetime) -> datetime:
+        return add_month(open_time)
 
     def missing_sections(
         self,

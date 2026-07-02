@@ -64,6 +64,7 @@ def test_lifespan_starts_idle_and_closes_stream_provider(
         assert application.state.binance_stream_provider is binance_provider
         assert application.state.twelvedata_market_data_stream_provider is twelvedata_provider
         assert application.state.yfinance_market_data_stream_provider is yfinance_provider
+        assert application.state.cronjob_manager.status() == []
 
     assert binance_provider.closed is True
     assert twelvedata_provider.closed is True

@@ -216,6 +216,56 @@ async def test_candles_defaults_omitted_to_and_returns_resolved_boundary(
     assert service.requested.end == resolved_to
 
 
+async def test_candles_accepts_limit_mode_with_omitted_to(
+    client: AsyncClient,
+) -> None:
+    resolved_to = START + timedelta(minutes=10)
+    service = StubCandleService(CandleResult("BTC/USD", "1m", START, resolved_to, []))
+    app.dependency_overrides[get_candle_service] = lambda: service
+    app.dependency_overrides[get_candle_request_clock] = lambda: lambda: resolved_to
+
+    response = await client.get(
+        "/v1/candles",
+        params={
+            "symbol": "BTC/USD",
+            "timeframe": "1m",
+            "limit": "3",
+        },
+    )
+
+    assert response.status_code == 200
+    assert set(response.json()) == {"symbol", "timeframe", "from", "to", "candles"}
+    assert isinstance(service.requested, CandleRequest)
+    assert service.requested.limit == 3
+    assert service.requested.start == resolved_to
+    assert service.requested.end == resolved_to
+
+
+async def test_candles_accepts_forward_limit_mode(
+    client: AsyncClient,
+) -> None:
+    service = StubCandleService(
+        CandleResult("BTC/USD", "1m", START, START + timedelta(minutes=3), [])
+    )
+    app.dependency_overrides[get_candle_service] = lambda: service
+
+    response = await client.get(
+        "/v1/candles",
+        params={
+            "symbol": "BTC/USD",
+            "timeframe": "1m",
+            "from": "2026-06-19T00:00:30Z",
+            "limit": "3",
+        },
+    )
+
+    assert response.status_code == 200
+    assert isinstance(service.requested, CandleRequest)
+    assert service.requested.limit == 3
+    assert service.requested.count_direction == "forward"
+    assert service.requested.start == START + timedelta(seconds=30)
+
+
 async def test_candles_rejects_explicit_empty_to(client: AsyncClient) -> None:
     app.dependency_overrides[get_candle_service] = lambda: StubCandleService()
 
@@ -267,6 +317,32 @@ async def test_candles_applies_configured_count_limit(client: AsyncClient) -> No
     app.dependency_overrides[get_settings] = lambda: Settings(max_candles_per_request=1)
     params = valid_params()
     params["to"] = "2026-06-19T00:02:00Z"
+
+    response = await client.get("/v1/candles", params=params)
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_TIME_RANGE"
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {
+            "symbol": "BTC/USD",
+            "timeframe": "1m",
+            "from": "2026-06-19T00:00:00Z",
+            "to": "2026-06-19T00:01:00Z",
+            "limit": "2",
+        },
+        {"symbol": "BTC/USD", "timeframe": "1m", "limit": "0"},
+        {"symbol": "BTC/USD", "timeframe": "1m", "limit": "bad"},
+    ],
+)
+async def test_candles_rejects_invalid_limit_mode(
+    client: AsyncClient,
+    params: dict[str, str],
+) -> None:
+    app.dependency_overrides[get_candle_service] = lambda: StubCandleService()
 
     response = await client.get("/v1/candles", params=params)
 

@@ -4,7 +4,12 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.domain.errors import CandleRequestError, QuoteRequestError
+from app.domain.errors import (
+    CandleRequestError,
+    EconomicCalendarRequestError,
+    HistoricalPriceNotFoundError,
+    QuoteRequestError,
+)
 
 
 class ErrorDetail(BaseModel):
@@ -59,6 +64,36 @@ async def candle_request_error_handler(
         )
     )
     return JSONResponse(status_code=400, content=response.model_dump(mode="json"))
+
+
+async def economic_calendar_request_error_handler(
+    _request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    if not isinstance(exc, EconomicCalendarRequestError):
+        raise exc
+    response = ErrorResponse(
+        error=ErrorDetail(
+            code=exc.code,
+            message=exc.message,
+        )
+    )
+    return JSONResponse(status_code=400, content=response.model_dump(mode="json"))
+
+
+async def historical_price_not_found_handler(
+    _request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    if not isinstance(exc, HistoricalPriceNotFoundError):
+        raise exc
+    response = ErrorResponse(
+        error=ErrorDetail(
+            code="PRICE_NOT_FOUND",
+            message="No historical price is available for the requested instant.",
+        )
+    )
+    return JSONResponse(status_code=404, content=response.model_dump(mode="json"))
 
 
 async def provider_unavailable_handler(

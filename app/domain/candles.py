@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Protocol
+from typing import Literal, Protocol
 
 from app.domain.symbols import SupportedSymbol
 
@@ -29,6 +29,8 @@ class CandleRequest:
     timeframe: str
     start: datetime
     end: datetime
+    limit: int | None = None
+    count_direction: Literal["forward", "backward"] | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -29,6 +29,16 @@ EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
 WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
 SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
+SPY_NYSE = SupportedSymbol(
+    "SPY",
+    "ETF",
+    "TWELVE_DATA",
+    "SPY",
+    True,
+    "pandas_market_calendars",
+    "NYSE",
+    "America/New_York",
+)
 START = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
 
 
@@ -451,6 +461,29 @@ async def test_manager_marks_new_asset_candle_sessions_closed_and_reopens(
         assert closed.channels == ("candle",)
 
         current = open_time
+        manager._update_market_session_states(current)  # noqa: SLF001
+        reopened = await next_event(registration.queue)
+        assert isinstance(reopened, StatusEvent)
+        assert reopened.state == "CONNECTING"
+        assert reopened.channels == ("candle",)
+    finally:
+        await manager.stop()
+
+
+async def test_manager_marks_inline_exchange_holiday_closed_and_reopens() -> None:
+    provider = FakeProvider()
+    current = datetime(2026, 7, 3, 14, 0, tzinfo=UTC)
+    manager = make_manager(provider, now=current)
+    try:
+        registration = await manager.register(StreamRequest(("SPY",), "1h"), [SPY_NYSE])
+        assert (await next_event(registration.queue)).state == "CONNECTING"
+        closed = await next_event(registration.queue)
+        assert isinstance(closed, StatusEvent)
+        assert closed.state == "MARKET_CLOSED"
+        assert closed.channels == ("candle",)
+
+        current = datetime(2026, 7, 6, 14, 0, tzinfo=UTC)
+        manager._clock = lambda: current  # noqa: SLF001
         manager._update_market_session_states(current)  # noqa: SLF001
         reopened = await next_event(registration.queue)
         assert isinstance(reopened, StatusEvent)

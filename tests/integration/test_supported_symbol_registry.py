@@ -98,6 +98,24 @@ def load_crypto_migration_module() -> ModuleType:
     return module
 
 
+def load_inline_symbol_calendar_config_migration_module() -> ModuleType:
+    migration_path = (
+        Path(__file__).parents[2]
+        / "alembic"
+        / "versions"
+        / "20260630_0012_inline_symbol_calendar_config.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "inline_symbol_calendar_config_migration",
+        migration_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Unable to load inline symbol calendar config migration.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 async def test_migration_creates_schema_and_exact_seed_mappings(
     database_engine: AsyncEngine,
 ) -> None:
@@ -134,6 +152,9 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
         "asset_class",
         "provider",
         "provider_symbol",
+        "calendar_source",
+        "calendar_name",
+        "calendar_timezone",
         "enabled",
         "created_at",
         "updated_at",
@@ -166,6 +187,97 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
         ("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True),
         ("XAU/USD", "COMMODITY", "TWELVE_DATA", "XAU/USD", True),
     ]
+
+
+async def test_inline_calendar_config_migration_has_expected_schema_and_seed_data(
+    database_engine: AsyncEngine,
+) -> None:
+    async with database_engine.connect() as connection:
+        table_names = await connection.run_sync(
+            lambda sync_connection: set(inspect(sync_connection).get_table_names())
+        )
+        columns = await connection.run_sync(
+            lambda sync_connection: {
+                column["name"]
+                for column in inspect(sync_connection).get_columns("supported_symbols")
+            }
+        )
+        configs = (
+            await connection.execute(
+                text(
+                    """
+                    SELECT symbol, calendar_source, calendar_name, calendar_timezone
+                    FROM supported_symbols
+                    WHERE calendar_source IS NOT NULL
+                    ORDER BY symbol
+                    """
+                )
+            )
+        ).all()
+
+    assert "market_calendars" not in table_names
+    assert "market_calendar_sessions" not in table_names
+    assert "calendar_code" not in columns
+    assert {"calendar_source", "calendar_name", "calendar_timezone"} <= columns
+    assert configs == [
+        ("AAPL", "pandas_market_calendars", "NYSE", "America/New_York"),
+        ("AUD/USD", "pandas_market_calendars", "FOREX", "America/New_York"),
+        ("BRENT", "pandas_market_calendars", "CMEGlobex_Energy", "America/New_York"),
+        ("BTC/USD", "internal", "24/7", "UTC"),
+        ("COFFEE", "pandas_market_calendars", "ICEUS", "America/New_York"),
+        ("CORN", "pandas_market_calendars", "CMEGlobex_Grains", "America/Chicago"),
+        ("DJI", "pandas_market_calendars", "NYSE", "America/New_York"),
+        ("EUR/USD", "pandas_market_calendars", "FOREX", "America/New_York"),
+        ("ETH/USD", "internal", "24/7", "UTC"),
+        ("GBP/USD", "pandas_market_calendars", "FOREX", "America/New_York"),
+        ("MSFT", "pandas_market_calendars", "NYSE", "America/New_York"),
+        ("NATGAS", "pandas_market_calendars", "CMEGlobex_Energy", "America/New_York"),
+        ("NDX", "pandas_market_calendars", "NYSE", "America/New_York"),
+        ("NVDA", "pandas_market_calendars", "NYSE", "America/New_York"),
+        ("QQQ", "pandas_market_calendars", "NYSE", "America/New_York"),
+        ("SPX", "pandas_market_calendars", "NYSE", "America/New_York"),
+        ("SPY", "pandas_market_calendars", "NYSE", "America/New_York"),
+        ("SUGAR", "pandas_market_calendars", "ICEUS", "America/New_York"),
+        ("TSLA", "pandas_market_calendars", "NYSE", "America/New_York"),
+        ("USD/JPY", "pandas_market_calendars", "FOREX", "America/New_York"),
+        ("WHEAT", "pandas_market_calendars", "CMEGlobex_Grains", "America/Chicago"),
+        ("WTI", "pandas_market_calendars", "CMEGlobex_Energy", "America/New_York"),
+        ("XAG/USD", "pandas_market_calendars", "CMEGlobex_Metals", "America/New_York"),
+        ("XAU/USD", "pandas_market_calendars", "FOREX", "America/New_York"),
+    ]
+
+
+async def test_inline_calendar_config_seed_helper_is_idempotent(
+    database_engine: AsyncEngine,
+) -> None:
+    migration = load_inline_symbol_calendar_config_migration_module()
+    async with database_engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                UPDATE supported_symbols
+                SET calendar_source = NULL,
+                    calendar_name = NULL,
+                    calendar_timezone = NULL
+                WHERE symbol = 'SPY'
+                """
+            )
+        )
+        await connection.run_sync(migration.seed_inline_calendar_config)
+        await connection.run_sync(migration.seed_inline_calendar_config)
+        rows = (
+            await connection.execute(
+                text(
+                    """
+                    SELECT symbol, calendar_source, calendar_name, calendar_timezone
+                    FROM supported_symbols
+                    WHERE symbol = 'SPY'
+                    """
+                )
+            )
+        ).all()
+
+    assert rows == [("SPY", "pandas_market_calendars", "NYSE", "America/New_York")]
 
 
 async def test_seed_is_idempotent_and_restores_required_mapping(

@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     stream_idle_grace_seconds: float = Field(default=5, ge=0)
     stream_freshness_check_seconds: float = Field(default=1, gt=0)
     twelvedata_ws_heartbeat_seconds: float = Field(default=15, gt=0)
+    economic_calendar_poll_seconds: float = Field(default=300, ge=0)
 
     def twelvedata_effective_api_keys(self) -> tuple[str, ...]:
         return tuple(

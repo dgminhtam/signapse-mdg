@@ -5,6 +5,8 @@ from decimal import Decimal
 
 import pytest
 
+from app.domain import market_sessions as session_module
+from app.domain.market_sessions import CalendarSession
 from app.domain.streams import CandleInterest, StreamCandle, StreamQuote
 from app.domain.symbols import SupportedSymbol
 from app.providers import twelvedata_market_data_stream as stream_module
@@ -20,6 +22,26 @@ EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
 WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
 SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
 QQQ = SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True)
+SPY_NYSE = SupportedSymbol(
+    "SPY",
+    "ETF",
+    "TWELVE_DATA",
+    "SPY",
+    True,
+    "pandas_market_calendars",
+    "NYSE",
+    "America/New_York",
+)
+XAU_FOREX = SupportedSymbol(
+    "XAU/USD",
+    "COMMODITY",
+    "TWELVE_DATA",
+    "XAU/USD",
+    True,
+    "pandas_market_calendars",
+    "FOREX",
+    "America/New_York",
+)
 START = datetime(2026, 6, 22, 0, 0, 10, tzinfo=UTC)
 
 
@@ -332,3 +354,75 @@ def test_candle_builder_applies_wti_and_etf_sessions(
     assert len(events) == 1
     assert events[0].candle.symbol == symbol.symbol
     assert events[0].candle.open_time == open_time
+
+
+def test_candle_builder_applies_inline_exchange_holiday() -> None:
+    builder = PriceTickCandleBuilder()
+
+    events = builder.apply_tick(
+        PriceTick(
+            SPY_NYSE,
+            Decimal("100"),
+            datetime(2026, 7, 3, 14, 0, tzinfo=UTC),
+            START,
+        ),
+        "1h",
+    )
+
+    assert events == []
+
+
+def test_candle_builder_applies_inline_exchange_break(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_sessions(
+        calendar_name: str,
+        start_date: object,
+        end_date: object,
+    ) -> tuple[CalendarSession, ...]:
+        del calendar_name, start_date, end_date
+        return (
+            CalendarSession(
+                datetime(2026, 6, 22, tzinfo=UTC).date(),
+                datetime(2026, 6, 22, 13, 0, tzinfo=UTC),
+                datetime(2026, 6, 22, 21, 0, tzinfo=UTC),
+                datetime(2026, 6, 22, 16, 0, tzinfo=UTC),
+                datetime(2026, 6, 22, 17, 0, tzinfo=UTC),
+            ),
+        )
+
+    monkeypatch.setattr(session_module, "_calendar_exists", lambda _: True)
+    monkeypatch.setattr(session_module, "_calendar_sessions", fake_sessions)
+    symbol = SupportedSymbol(
+        "TEST",
+        "ETF",
+        "TWELVE_DATA",
+        "TEST",
+        True,
+        "pandas_market_calendars",
+        "BREAK_TEST",
+        "UTC",
+    )
+
+    events = PriceTickCandleBuilder().apply_tick(
+        PriceTick(symbol, Decimal("100"), datetime(2026, 6, 22, 16, 30, tzinfo=UTC), START),
+        "1m",
+    )
+
+    assert events == []
+
+
+def test_candle_builder_keeps_xau_on_forex_weekly_session() -> None:
+    builder = PriceTickCandleBuilder()
+
+    events = builder.apply_tick(
+        PriceTick(
+            XAU_FOREX,
+            Decimal("100"),
+            datetime(2026, 6, 20, 12, 0, tzinfo=UTC),
+            START,
+        ),
+        "1h",
+    )
+
+    assert events == []

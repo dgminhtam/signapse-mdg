@@ -9,6 +9,9 @@ class SupportedSymbol:
     provider: str
     provider_symbol: str
     enabled: bool
+    calendar_source: str | None = None
+    calendar_name: str | None = None
+    calendar_timezone: str | None = None
 
 
 class SymbolRepository(Protocol):

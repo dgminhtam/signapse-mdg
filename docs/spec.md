@@ -298,6 +298,83 @@ Semantics:
 - A recognized Twelve Data no-data response produces a successful empty candle list rather than
   `PROVIDER_UNAVAILABLE`.
 
+### Get historical price
+
+```http
+GET /v1/historical-price?symbol=BTC/USD&at=2026-06-19T10:30:12Z
+```
+
+Response:
+
+```json
+{
+  "symbol": "BTC/USD",
+  "price": "104250.12",
+  "pricedAt": "2026-06-19T10:30:00Z"
+}
+```
+
+Semantics:
+
+- A successful response contains exactly `symbol`, `price`, and `pricedAt`.
+- `symbol` is the canonical gateway symbol; provider identity and mapping remain internal.
+- `price` is the selected `1m` candle close and is serialized as a decimal string.
+- `pricedAt` is the selected `1m` candle open timestamp, not the original requested `at`.
+- The client supplies no public `timeframe`; the gateway always uses `1m` internally for this
+  approximation.
+- The gateway floors `at` to the containing one-minute UTC bucket and reuses the historical candle
+  flow for `[pricedAt, pricedAt + 1 minute)`.
+- Missing, empty, invalid, or non-UTC `at` returns `400 INVALID_TIME_RANGE`.
+- Unknown or disabled `symbol` returns `400 UNSUPPORTED_SYMBOL`.
+- No eligible one-minute candle for the resolved bucket returns `404 PRICE_NOT_FOUND`.
+
+### Get economic calendar
+
+```http
+GET /v1/economic-calendar?from=2026-07-01T00:00:00Z&to=2026-07-08T00:00:00Z&types=FOREX,METALS
+```
+
+Response:
+
+```json
+{
+  "from": "2026-07-01T00:00:00Z",
+  "to": "2026-07-08T00:00:00Z",
+  "events": [
+    {
+      "key": "FOREX:123456",
+      "type": "FOREX",
+      "name": "Non-Farm Employment Change",
+      "currency": "USD",
+      "impact": "HIGH",
+      "scheduledAt": "2026-07-03T12:30:00Z",
+      "actual": "210K",
+      "forecast": "190K",
+      "previous": "175K",
+      "revision": null,
+      "actualBetterWorse": "better",
+      "revisionBetterWorse": null,
+      "firstSeenAt": "2026-07-01T00:01:00Z",
+      "lastSeenAt": "2026-07-03T12:31:00Z",
+      "lastChangedAt": "2026-07-03T12:31:00Z"
+    }
+  ]
+}
+```
+
+Semantics:
+
+- The endpoint reads persisted `economic_calendar_events` rows only; it does not scrape upstream
+  calendar sites or trigger refresh jobs.
+- `from` and `to` are required UTC timestamps and form a half-open range:
+  `from <= scheduledAt < to`.
+- Optional CSV filters are `types`, `currencies`, `impact`, and `limit`.
+- `types` accepts `FOREX`, `METALS`, `ENERGY`, and `CRYPTO`.
+- Events are ordered by `scheduledAt`, then `type`, then `key`.
+- `key` is `{type}:{external_event_id}`. Database `id`, `externalEventId`, provider source, and
+  upstream site fields are not exposed.
+- Empty valid ranges return `200` with `events: []`.
+
 ## WebSocket Stream Contract
 
 ### Subscribe
@@ -418,6 +495,11 @@ Recommended error codes:
 | `UNSUPPORTED_SYMBOL` | `400` | Symbol is not in the supported registry. |
 | `UNSUPPORTED_TIMEFRAME` | `400` | Timeframe is not supported. |
 | `INVALID_TIME_RANGE` | `400` | `from`/`to` is missing, invalid, or too wide. |
+| `INVALID_TYPES` | `400` | Economic calendar `types` contains an unsupported value. |
+| `INVALID_CURRENCIES` | `400` | Economic calendar `currencies` is malformed. |
+| `INVALID_IMPACT` | `400` | Economic calendar `impact` is malformed. |
+| `INVALID_LIMIT` | `400` | Economic calendar `limit` is malformed or out of range. |
+| `PRICE_NOT_FOUND` | `404` | No historical price is available for the requested instant. |
 | `PROVIDER_UNAVAILABLE` | `503` | Provider request or stream is unavailable. |
 | `DATA_STALE` | `503` or event status | Data is too stale for the requested operation. |
 | `DATABASE_UNAVAILABLE` | `503` | A database-backed capability cannot query PostgreSQL. |
@@ -541,6 +623,7 @@ Recommended stack:
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation; synchronous REST calls are offloaded from the event loop. |
 | yfinance provider dependency | yfinance 1.4.1 | Open-source Yahoo Finance wrapper used for latest quotes, historical candles, and asynchronous price streaming on planned commodities and indexes. |
+| Economic calendar dependency | market-calendar-tool 0.2.2 | Scrapes ForexFactory, MetalsMine, EnergyExch, and CryptoCraft calendar rows for persistence. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration testing only. |
 | Database | PostgreSQL 18.4 | Reuse relational persistence for candle cache. |
 | DB driver | asyncpg 0.31.0 | Async PostgreSQL driver. |
@@ -579,12 +662,14 @@ STREAM_PROVIDER_QUEUE_CAPACITY=1024
 STREAM_PERSISTENCE_QUEUE_CAPACITY=256
 STREAM_IDLE_GRACE_SECONDS=5
 STREAM_FRESHNESS_CHECK_SECONDS=1
+ECONOMIC_CALENDAR_POLL_SECONDS=300
 ```
 
 Binance public market-data endpoints do not require API keys. `TWELVEDATA_API_KEYS` is the only
 Twelve Data key setting; one key or comma-separated keys are both valid. Twelve Data keys are
 optional at application startup, for crypto-only requests, and for fully persisted Forex candle
 reads; live Twelve Data quote or candle refreshes require at least one key.
+`ECONOMIC_CALENDAR_POLL_SECONDS=0` disables the in-process economic calendar refresh cronjob.
 
 ## Observability
 

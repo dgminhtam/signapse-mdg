@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Index,
     Numeric,
@@ -30,6 +31,9 @@ class SupportedSymbolModel(Base):
     asset_class: Mapped[str] = mapped_column(Text, nullable=False)
     provider: Mapped[str] = mapped_column(Text, nullable=False)
     provider_symbol: Mapped[str] = mapped_column(Text, nullable=False)
+    calendar_source: Mapped[str | None] = mapped_column(Text, nullable=True)
+    calendar_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    calendar_timezone: Mapped[str | None] = mapped_column(Text, nullable=True)
     enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -92,6 +96,72 @@ class MarketDataCandleModel(Base):
         nullable=False,
         default=True,
         server_default=text("true"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class EconomicCalendarEventModel(Base):
+    __tablename__ = "economic_calendar_events"
+    __table_args__ = (
+        CheckConstraint(
+            "calendar_type IN ('FOREX', 'METALS', 'ENERGY', 'CRYPTO')",
+            name="ck_economic_calendar_events_calendar_type",
+        ),
+        UniqueConstraint(
+            "calendar_type",
+            "external_event_id",
+            name="uq_economic_calendar_events_identity",
+        ),
+        Index("ix_economic_calendar_events_scheduled_at", "scheduled_at"),
+        Index(
+            "ix_economic_calendar_events_type_scheduled_at",
+            "calendar_type",
+            "scheduled_at",
+        ),
+        Index(
+            "ix_economic_calendar_events_currency_scheduled_at",
+            "currency",
+            "scheduled_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    calendar_type: Mapped[str] = mapped_column(Text, nullable=False)
+    external_event_id: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    currency: Mapped[str | None] = mapped_column(Text, nullable=True)
+    impact: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    actual: Mapped[str | None] = mapped_column(Text, nullable=True)
+    forecast: Mapped[str | None] = mapped_column(Text, nullable=True)
+    previous: Mapped[str | None] = mapped_column(Text, nullable=True)
+    revision: Mapped[str | None] = mapped_column(Text, nullable=True)
+    actual_better_worse: Mapped[str | None] = mapped_column(Text, nullable=True)
+    revision_better_worse: Mapped[str | None] = mapped_column(Text, nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    last_changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

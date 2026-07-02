@@ -35,6 +35,7 @@ def parse_candle_request(
     raw_timeframe: str | None,
     raw_from: str | None,
     raw_to: str | None,
+    raw_limit: str | None = None,
     *,
     max_candles: int,
     clock: Callable[[], datetime] = utc_now,
@@ -54,8 +55,32 @@ def parse_candle_request(
             UNSUPPORTED_TIMEFRAME_MESSAGE,
             {"timeframe": timeframe_value},
         )
-    start = _parse_utc(raw_from)
+    limit = _parse_limit(raw_limit, max_candles=max_candles)
+    if limit is not None:
+        if raw_from is not None and raw_to is not None:
+            raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
+        if raw_from is not None:
+            start = _parse_utc(raw_from)
+            return CandleRequest(
+                symbol=symbol,
+                timeframe=timeframe.value,
+                start=start,
+                end=start,
+                limit=limit,
+                count_direction="forward",
+            )
+        end = clock().astimezone(UTC) if raw_to is None else _parse_utc(raw_to)
+        return CandleRequest(
+            symbol=symbol,
+            timeframe=timeframe.value,
+            start=end,
+            end=end,
+            limit=limit,
+            count_direction="backward",
+        )
+
     end = clock().astimezone(UTC) if raw_to is None else _parse_utc(raw_to)
+    start = _parse_utc(raw_from)
     _validate_range(
         start,
         end,
@@ -78,6 +103,18 @@ def _parse_utc(raw_value: str | None) -> datetime:
     if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
         raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
     return parsed.astimezone(UTC)
+
+
+def _parse_limit(raw_value: str | None, *, max_candles: int) -> int | None:
+    if raw_value is None:
+        return None
+    try:
+        limit = int(raw_value.strip())
+    except ValueError as exc:
+        raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE) from exc
+    if limit < 1 or limit > max_candles:
+        raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
+    return limit
 
 
 def _validate_range(
@@ -127,19 +164,40 @@ class CandleService:
             )
         policy = get_market_session_policy(symbol)
         schedule = get_candle_schedule(symbol, timeframe)
-        expected_opens = schedule.expected_opens(
-            request.start,
-            request.end,
-            policy,
-            request.timeframe,
-        )
+        if request.limit is None:
+            expected_opens = schedule.expected_opens(
+                request.start,
+                request.end,
+                policy,
+                request.timeframe,
+            )
+            result_start = request.start
+            result_end = request.end
+        elif request.count_direction == "forward":
+            expected_opens = schedule.next_opens(
+                request.start,
+                request.limit,
+                policy,
+                request.timeframe,
+            )
+            result_start = expected_opens[0] if expected_opens else request.start
+            result_end = schedule.end_after(expected_opens[-1]) if expected_opens else request.end
+        else:
+            expected_opens = schedule.latest_opens(
+                request.end,
+                request.limit,
+                policy,
+                request.timeframe,
+            )
+            result_start = expected_opens[0] if expected_opens else request.end
+            result_end = request.end
         if len(expected_opens) > self._max_candles:
             raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
         persisted = await self._repository.list_complete(
             symbol,
             request.timeframe,
-            request.start,
-            request.end,
+            result_start,
+            result_end,
         )
         persisted = [
             candle
@@ -176,15 +234,15 @@ class CandleService:
             current = await self._cache.get(request.symbol, request.timeframe)
             if (
                 current is not None
-                and request.start <= current.open_time < request.end
+                and result_start <= current.open_time < result_end
                 and policy.is_eligible(current.open_time, request.timeframe)
             ):
                 merged.setdefault(current.open_time, current)
         return CandleResult(
             symbol=request.symbol,
             timeframe=request.timeframe,
-            start=request.start,
-            end=request.end,
+            start=result_start,
+            end=result_end,
             candles=sorted(merged.values(), key=lambda candle: candle.open_time),
         )
 

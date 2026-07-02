@@ -135,6 +135,7 @@ async def get_candles(
         request.query_params.get("timeframe"),
         request.query_params.get("from"),
         request.query_params.get("to"),
+        request.query_params.get("limit"),
         max_candles=settings.max_candles_per_request,
         clock=clock,
     )

@@ -1,12 +1,17 @@
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import MarketDataCandleModel, SupportedSymbolModel
+from app.db.models import EconomicCalendarEventModel, MarketDataCandleModel, SupportedSymbolModel
 from app.domain.candles import Candle
+from app.domain.economic_calendar import (
+    EconomicCalendarEvent,
+    EconomicCalendarFetchedEvent,
+    EconomicCalendarRequest,
+)
 from app.domain.errors import DatabaseUnavailableError
 from app.domain.symbols import SupportedSymbol
 
@@ -26,16 +31,7 @@ class PostgresSymbolRepository:
         except SQLAlchemyError as exc:
             raise DatabaseUnavailableError from exc
 
-        return [
-            SupportedSymbol(
-                symbol=row.symbol,
-                asset_class=row.asset_class,
-                provider=row.provider,
-                provider_symbol=row.provider_symbol,
-                enabled=row.enabled,
-            )
-            for row in rows
-        ]
+        return [_to_supported_symbol(row) for row in rows]
 
 
 class PostgresCandleRepository:
@@ -54,13 +50,7 @@ class PostgresCandleRepository:
             raise DatabaseUnavailableError from exc
         if row is None:
             return None
-        return SupportedSymbol(
-            symbol=row.symbol,
-            asset_class=row.asset_class,
-            provider=row.provider,
-            provider_symbol=row.provider_symbol,
-            enabled=row.enabled,
-        )
+        return _to_supported_symbol(row)
 
     async def list_complete(
         self,
@@ -131,6 +121,108 @@ class PostgresCandleRepository:
             raise DatabaseUnavailableError from exc
 
 
+class PostgresEconomicCalendarRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def list_events(
+        self,
+        request: EconomicCalendarRequest,
+    ) -> list[EconomicCalendarEvent]:
+        statement = (
+            select(EconomicCalendarEventModel)
+            .where(
+                EconomicCalendarEventModel.scheduled_at >= request.start,
+                EconomicCalendarEventModel.scheduled_at < request.end,
+            )
+            .order_by(
+                EconomicCalendarEventModel.scheduled_at.asc(),
+                EconomicCalendarEventModel.calendar_type.asc(),
+                EconomicCalendarEventModel.external_event_id.asc(),
+            )
+            .limit(request.limit)
+        )
+        if request.types:
+            statement = statement.where(
+                EconomicCalendarEventModel.calendar_type.in_(request.types)
+            )
+        if request.currencies:
+            statement = statement.where(EconomicCalendarEventModel.currency.in_(request.currencies))
+        if request.impact:
+            statement = statement.where(EconomicCalendarEventModel.impact.in_(request.impact))
+        try:
+            async with self._session_factory() as session:
+                rows = (await session.scalars(statement)).all()
+        except SQLAlchemyError as exc:
+            raise DatabaseUnavailableError from exc
+        return [_to_economic_calendar_event(row) for row in rows]
+
+    async def upsert_events(self, events: list[EconomicCalendarFetchedEvent]) -> None:
+        if not events:
+            return
+        try:
+            async with self._session_factory.begin() as session:
+                for event in events:
+                    statement = insert(EconomicCalendarEventModel).values(
+                        calendar_type=event.calendar_type,
+                        external_event_id=event.external_event_id,
+                        name=event.name,
+                        currency=event.currency,
+                        impact=event.impact,
+                        scheduled_at=event.scheduled_at,
+                        actual=event.actual,
+                        forecast=event.forecast,
+                        previous=event.previous,
+                        revision=event.revision,
+                        actual_better_worse=event.actual_better_worse,
+                        revision_better_worse=event.revision_better_worse,
+                    )
+                    excluded = statement.excluded
+                    changed = or_(
+                        EconomicCalendarEventModel.name.is_distinct_from(excluded.name),
+                        EconomicCalendarEventModel.currency.is_distinct_from(excluded.currency),
+                        EconomicCalendarEventModel.impact.is_distinct_from(excluded.impact),
+                        EconomicCalendarEventModel.scheduled_at.is_distinct_from(
+                            excluded.scheduled_at
+                        ),
+                        EconomicCalendarEventModel.actual.is_distinct_from(excluded.actual),
+                        EconomicCalendarEventModel.forecast.is_distinct_from(excluded.forecast),
+                        EconomicCalendarEventModel.previous.is_distinct_from(excluded.previous),
+                        EconomicCalendarEventModel.revision.is_distinct_from(excluded.revision),
+                        EconomicCalendarEventModel.actual_better_worse.is_distinct_from(
+                            excluded.actual_better_worse
+                        ),
+                        EconomicCalendarEventModel.revision_better_worse.is_distinct_from(
+                            excluded.revision_better_worse
+                        ),
+                    )
+                    await session.execute(
+                        statement.on_conflict_do_update(
+                            constraint="uq_economic_calendar_events_identity",
+                            set_={
+                                "name": excluded.name,
+                                "currency": excluded.currency,
+                                "impact": excluded.impact,
+                                "scheduled_at": excluded.scheduled_at,
+                                "actual": excluded.actual,
+                                "forecast": excluded.forecast,
+                                "previous": excluded.previous,
+                                "revision": excluded.revision,
+                                "actual_better_worse": excluded.actual_better_worse,
+                                "revision_better_worse": excluded.revision_better_worse,
+                                "last_seen_at": func.now(),
+                                "last_changed_at": case(
+                                    (changed, func.now()),
+                                    else_=EconomicCalendarEventModel.last_changed_at,
+                                ),
+                                "updated_at": func.now(),
+                            },
+                        )
+                    )
+        except SQLAlchemyError as exc:
+            raise DatabaseUnavailableError from exc
+
+
 def _to_candle(row: MarketDataCandleModel) -> Candle:
     return Candle(
         symbol=row.symbol,
@@ -146,4 +238,37 @@ def _to_candle(row: MarketDataCandleModel) -> Candle:
         close=row.close,
         volume=row.volume,
         complete=row.complete,
+    )
+
+
+def _to_economic_calendar_event(row: EconomicCalendarEventModel) -> EconomicCalendarEvent:
+    return EconomicCalendarEvent(
+        calendar_type=row.calendar_type,
+        external_event_id=row.external_event_id,
+        name=row.name,
+        currency=row.currency,
+        impact=row.impact,
+        scheduled_at=row.scheduled_at,
+        actual=row.actual,
+        forecast=row.forecast,
+        previous=row.previous,
+        revision=row.revision,
+        actual_better_worse=row.actual_better_worse,
+        revision_better_worse=row.revision_better_worse,
+        first_seen_at=row.first_seen_at,
+        last_seen_at=row.last_seen_at,
+        last_changed_at=row.last_changed_at,
+    )
+
+
+def _to_supported_symbol(row: SupportedSymbolModel) -> SupportedSymbol:
+    return SupportedSymbol(
+        symbol=row.symbol,
+        asset_class=row.asset_class,
+        provider=row.provider,
+        provider_symbol=row.provider_symbol,
+        enabled=row.enabled,
+        calendar_source=row.calendar_source,
+        calendar_name=row.calendar_name,
+        calendar_timezone=row.calendar_timezone,
     )
