@@ -83,6 +83,8 @@ async def test_economic_calendar_repository_upsert_preserves_lifecycle_timestamp
         revision=None,
         actual_better_worse=None,
         revision_better_worse=None,
+        description="Initial description",
+        news_url="https://www.forexfactory.com/news/123/hit",
     )
 
     await repository.upsert_events([event])
@@ -101,13 +103,21 @@ async def test_economic_calendar_repository_upsert_preserves_lifecycle_timestamp
     await repository.upsert_events([event])
     unchanged = await _get_lifecycle(database_engine)
 
-    await repository.upsert_events([replace(event, actual="110K")])
+    await repository.upsert_events([replace(event, description="Updated description")])
     changed = await _get_lifecycle(database_engine)
 
     assert unchanged["first_seen_at"] == changed["first_seen_at"]
     assert unchanged["last_seen_at"] > datetime(2026, 1, 1, tzinfo=UTC)
     assert unchanged["last_changed_at"] == datetime(2026, 1, 2, tzinfo=UTC)
     assert changed["last_changed_at"] > unchanged["last_changed_at"]
+
+    request = parse_economic_calendar_request(
+        "2026-07-01T00:00:00Z",
+        "2026-07-02T00:00:00Z",
+    )
+    [stored] = await repository.list_events(request)
+    assert stored.description == "Updated description"
+    assert stored.news_url == "https://www.forexfactory.com/news/123/hit"
 
 
 async def _get_lifecycle(database_engine: AsyncEngine) -> dict[str, datetime]:

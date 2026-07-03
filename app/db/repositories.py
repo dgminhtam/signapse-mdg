@@ -176,6 +176,8 @@ class PostgresEconomicCalendarRepository:
                         revision=event.revision,
                         actual_better_worse=event.actual_better_worse,
                         revision_better_worse=event.revision_better_worse,
+                        description=event.description,
+                        news_url=event.news_url,
                     )
                     excluded = statement.excluded
                     changed = or_(
@@ -195,6 +197,10 @@ class PostgresEconomicCalendarRepository:
                         EconomicCalendarEventModel.revision_better_worse.is_distinct_from(
                             excluded.revision_better_worse
                         ),
+                        EconomicCalendarEventModel.description.is_distinct_from(
+                            excluded.description
+                        ),
+                        EconomicCalendarEventModel.news_url.is_distinct_from(excluded.news_url),
                     )
                     await session.execute(
                         statement.on_conflict_do_update(
@@ -210,6 +216,8 @@ class PostgresEconomicCalendarRepository:
                                 "revision": excluded.revision,
                                 "actual_better_worse": excluded.actual_better_worse,
                                 "revision_better_worse": excluded.revision_better_worse,
+                                "description": excluded.description,
+                                "news_url": excluded.news_url,
                                 "last_seen_at": func.now(),
                                 "last_changed_at": case(
                                     (changed, func.now()),
@@ -255,6 +263,8 @@ def _to_economic_calendar_event(row: EconomicCalendarEventModel) -> EconomicCale
         revision=row.revision,
         actual_better_worse=row.actual_better_worse,
         revision_better_worse=row.revision_better_worse,
+        description=row.description,
+        news_url=row.news_url,
         first_seen_at=row.first_seen_at,
         last_seen_at=row.last_seen_at,
         last_changed_at=row.last_changed_at,

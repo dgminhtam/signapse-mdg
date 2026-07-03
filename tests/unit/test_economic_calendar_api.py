@@ -62,6 +62,8 @@ async def test_economic_calendar_serializes_public_contract(client: AsyncClient)
         revision=None,
         actual_better_worse="better",
         revision_better_worse=None,
+        description="Change in the number of employed people.",
+        news_url="https://www.forexfactory.com/news/123456-nfp-preview/hit",
         first_seen_at=START,
         last_seen_at=datetime(2026, 7, 3, 12, 31, tzinfo=UTC),
         last_changed_at=datetime(2026, 7, 3, 12, 31, tzinfo=UTC),
@@ -88,12 +90,15 @@ async def test_economic_calendar_serializes_public_contract(client: AsyncClient)
         "revision": None,
         "actualBetterWorse": "better",
         "revisionBetterWorse": None,
+        "description": "Change in the number of employed people.",
+        "newsUrl": "https://www.forexfactory.com/news/123456-nfp-preview/hit",
         "firstSeenAt": "2026-07-01T00:00:00Z",
         "lastSeenAt": "2026-07-03T12:31:00Z",
         "lastChangedAt": "2026-07-03T12:31:00Z",
     }
     assert "externalEventId" not in response.text
     assert '"id"' not in response.text
+    assert "history" not in response.text
 
 
 async def test_economic_calendar_passes_normalized_filters(client: AsyncClient) -> None:

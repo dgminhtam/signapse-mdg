@@ -354,6 +354,8 @@ Response:
       "revision": null,
       "actualBetterWorse": "better",
       "revisionBetterWorse": null,
+      "description": "Change in the number of employed people during the previous month.",
+      "newsUrl": "https://www.forexfactory.com/news/123456-nfp-preview/hit",
       "firstSeenAt": "2026-07-01T00:01:00Z",
       "lastSeenAt": "2026-07-03T12:31:00Z",
       "lastChangedAt": "2026-07-03T12:31:00Z"
@@ -373,6 +375,9 @@ Semantics:
 - Events are ordered by `scheduledAt`, then `type`, then `key`.
 - `key` is `{type}:{external_event_id}`. Database `id`, `externalEventId`, provider source, and
   upstream site fields are not exposed.
+- `description` and `newsUrl` are nullable enrichment fields from upstream event details. `newsUrl`
+  is a single related article redirect URL for downstream crawling; raw news HTML, article content,
+  and history rows are not exposed.
 - Empty valid ranges return `200` with `events: []`.
 
 ## WebSocket Stream Contract

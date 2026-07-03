@@ -39,13 +39,22 @@ and `complete`.
 
 ### Requirement: Initial candle timeframes are explicitly supported
 
-The gateway SHALL support public timeframes `1m`, `5m`, `15m`, `1h`, and `1d` and SHALL map them to
-the corresponding interval inside the selected provider adapter boundary.
+The gateway SHALL support public timeframes `1m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1w`, and
+`1mo` and SHALL map them to the corresponding interval inside the selected provider adapter
+boundary.
 
-#### Scenario: Supported timeframe is requested
+#### Scenario: Supported fixed-duration timeframe is requested
 
-- **WHEN** a client requests `1m`, `5m`, `15m`, `1h`, or `1d`
+- **WHEN** a client requests `1m`, `5m`, `15m`, `30m`, `1h`, `1d`, or `1w`
 - **THEN** the gateway resolves the corresponding interval for the symbol's persisted provider
+
+#### Scenario: Supported monthly timeframe is requested
+
+- **WHEN** a client requests `1mo`
+- **THEN** the gateway resolves the corresponding monthly interval for the symbol's persisted
+  provider
+- **AND** monthly candle opens and closes are calculated using calendar months rather than a fixed
+  day count
 
 #### Scenario: Unsupported timeframe is requested
 
@@ -53,7 +62,6 @@ the corresponding interval inside the selected provider adapter boundary.
 - **THEN** the gateway responds with HTTP status `400`
 - **AND** the error code is `UNSUPPORTED_TIMEFRAME`
 - **AND** the sanitized error details identify the rejected timeframe
-
 ### Requirement: Candle ranges use aligned half-open UTC semantics
 The gateway SHALL interpret the requested range as exact half-open instants `[from, to)`.
 `from` MUST be explicitly UTC. An explicit `to` MUST be explicitly UTC; when omitted, the gateway
@@ -88,7 +96,7 @@ SHALL resolve it to one captured request-time UTC instant. `from` MUST be earlie
 
 ### Requirement: Candle requests are bounded
 The gateway SHALL reject a request that exceeds `MAX_CANDLES_PER_REQUEST`, with a default of
-1,000 expected candles. Pre-validation SHALL use the conservative expected-count bound for the
+1,000 expected candles. Pre-validation SHALL use a conservative expected-count bound for the
 requested timeframe; after symbol resolution the exact provider/market schedule count SHALL also
 be enforced.
 
@@ -97,6 +105,11 @@ be enforced.
 - **THEN** the gateway responds with HTTP status `400`
 - **AND** the error code is `INVALID_TIME_RANGE`
 
+#### Scenario: Monthly range is counted by calendar opens
+- **WHEN** a `1mo` request spans calendar-month candle opens
+- **THEN** the exact scheduled count is based on eligible monthly open timestamps inside
+  `[from,to)`
+- **AND** no fixed 30-day duration is used to accept, reject, or fetch monthly candles
 ### Requirement: Candle symbols come from the enabled registry
 The gateway MUST resolve the canonical symbol through the PostgreSQL-backed enabled symbol
 registry before accessing candle persistence or the provider.
@@ -299,46 +312,46 @@ Persistence MUST NOT run inside the provider SDK callback or block live fanout.
 
 ### Requirement: Forex historical candles are available through the existing endpoint
 
-The gateway SHALL allow enabled `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`, `XAU/USD`, `AAPL`,
-`TSLA`, `NVDA`, and `MSFT` registry mappings using provider `TWELVE_DATA` to be requested through
-the existing `GET /v1/candles` contract.
+The gateway SHALL allow enabled `BTC/USD`, `ETH/USD`, `EUR/USD`, `GBP/USD`, `USD/JPY`,
+`AUD/USD`, `XAU/USD`, `AAPL`, `TSLA`, `NVDA`, and `MSFT` registry mappings using provider
+`TWELVE_DATA` to be requested through the existing `GET /v1/candles` contract.
 
-#### Scenario: Forex candle range requires provider data
+#### Scenario: Twelve Data candle range requires provider data
 
-- **WHEN** a valid Forex candle request contains one or more slots not available as persisted
-  complete candles
-- **THEN** the gateway requests the missing ranges from the Twelve Data Forex adapter
+- **WHEN** a valid Twelve Data-backed candle request contains one or more slots not available as
+  persisted complete candles
+- **THEN** the gateway requests the missing ranges from the Twelve Data adapter
 - **AND** the successful response preserves the existing provider-agnostic candle shape
 
-#### Scenario: Forex candle range is fully persisted
+#### Scenario: Twelve Data candle range is fully persisted
 
-- **WHEN** every requested Forex candle slot is available as a persisted complete candle
+- **WHEN** every requested Twelve Data-backed candle slot is available as a persisted complete
+  candle
 - **THEN** the gateway returns those persisted candles
 - **AND** it makes no Twelve Data request
 - **AND** the response can succeed without a configured Twelve Data API key
 
 #### Scenario: Twelve Data is not configured
 
-- **WHEN** a Forex candle request requires a live provider fill
+- **WHEN** a Twelve Data-backed candle request requires a live provider fill
 - **AND** Twelve Data configuration is missing or unusable
 - **THEN** the gateway responds with HTTP status `503`
 - **AND** the error code is `PROVIDER_UNAVAILABLE`
-- **AND** Binance-backed crypto candle requests remain available
-
+- **AND** other provider-backed candle requests remain available
 ### Requirement: Candle provider fills are routed by persisted provider mapping
 
 The gateway SHALL route every candle provider fill using the enabled symbol's persisted `provider`
 and `provider_symbol` values.
 
-#### Scenario: Crypto candle range requires provider data
+#### Scenario: Binance-backed candle range requires provider data
 
 - **WHEN** an enabled `BINANCE_SPOT` candle request requires a provider fill
 - **THEN** the gateway delegates the missing range to the Binance candle adapter
 
-#### Scenario: Forex candle range requires provider data
+#### Scenario: Twelve Data-backed candle range requires provider data
 
 - **WHEN** an enabled `TWELVE_DATA` candle request requires a provider fill
-- **THEN** the gateway delegates the missing range to the Twelve Data Forex adapter
+- **THEN** the gateway delegates the missing range to the Twelve Data adapter
 
 #### Scenario: Persisted provider is unsupported or unavailable
 
@@ -346,7 +359,6 @@ and `provider_symbol` values.
 - **AND** no usable candle adapter is registered for the persisted provider
 - **THEN** the gateway raises the sanitized provider-unavailable boundary
 - **AND** it does not fall back to a different provider
-
 ### Requirement: Twelve Data Forex candles preserve gateway range semantics
 
 The Twelve Data adapter SHALL map supported public timeframes to Twelve Data intervals, SHALL
@@ -625,3 +637,248 @@ operational and contract failures.
 - **WHEN** Twelve Data reports authentication, entitlement, rate-limit, invalid-parameter,
   unknown-symbol, timeout, transport, or unrecognized failure
 - **THEN** the adapter raises the sanitized provider-unavailable boundary
+
+### Requirement: YFINANCE historical candles use the existing endpoint
+
+The gateway SHALL allow enabled `XAG/USD`, `BRENT`, `NATGAS`, `COFFEE`, `SUGAR`, `WHEAT`,
+`CORN`, `SPX`, `NDX`, and `DJI` registry mappings using provider `YFINANCE` to be requested
+through the existing `GET /v1/candles` contract.
+
+#### Scenario: YFINANCE candle range requires provider data
+
+- **WHEN** a valid yfinance-backed candle request contains one or more slots not available as
+  persisted complete candles
+- **THEN** the gateway requests the missing ranges from the yfinance candle adapter
+- **AND** the successful response preserves the existing provider-agnostic candle shape
+
+#### Scenario: YFINANCE candle range is fully persisted
+
+- **WHEN** every requested yfinance-backed candle slot is available as a persisted complete candle
+- **THEN** the gateway returns those persisted candles
+- **AND** it makes no yfinance request
+
+#### Scenario: YFINANCE provider fails
+
+- **WHEN** a yfinance-backed candle request requires a live provider fill
+- **AND** yfinance or Yahoo Finance cannot provide a usable response
+- **THEN** the gateway responds with HTTP status `503`
+- **AND** the error code is `PROVIDER_UNAVAILABLE`
+- **AND** Binance-backed and Twelve Data-backed candle requests remain available
+
+### Requirement: YFINANCE candle fills are routed by persisted provider mapping
+
+The gateway SHALL route yfinance candle provider fills using the enabled symbol's persisted
+`provider` and `provider_symbol` values.
+
+#### Scenario: YFINANCE candle range requires provider data
+
+- **WHEN** an enabled `YFINANCE` candle request requires a provider fill
+- **THEN** the gateway delegates the missing range to the yfinance candle adapter
+- **AND** it uses the persisted yfinance provider symbol for the upstream request
+- **AND** it does not fall back to a different provider
+
+### Requirement: YFINANCE candles preserve gateway range semantics
+
+The yfinance adapter SHALL map supported public timeframes to yfinance intervals, SHALL request
+historical data using the gateway's half-open UTC range, and SHALL return only candles whose open
+times satisfy `from <= open_time < to`.
+
+#### Scenario: Half-open YFINANCE range is requested
+
+- **WHEN** the gateway requests a yfinance range `[from,to)`
+- **THEN** the adapter sends `start` equal to `from`
+- **AND** it sends `end` equal to `to`
+- **AND** it requests the yfinance interval matching the public timeframe
+
+#### Scenario: Provider includes an ineligible boundary row
+
+- **WHEN** yfinance returns a row whose open time equals or exceeds `to`
+- **THEN** that row is not included in the normalized result
+- **AND** no out-of-range candle is persisted or exposed
+
+### Requirement: YFINANCE candle timestamps remain authoritative
+
+The gateway MUST preserve valid yfinance candle open timestamps after UTC normalization and MUST
+NOT shift them to fit a universal epoch-aligned grid.
+
+#### Scenario: YFINANCE returns an offset candle timestamp
+
+- **WHEN** a valid yfinance candle row opens at a timestamp that is not aligned to the UTC epoch
+  grid for the requested timeframe
+- **THEN** its normalized `openTime` remains that provider timestamp converted to UTC
+- **AND** its `closeTime` is derived from that actual open time and requested timeframe duration
+
+### Requirement: YFINANCE OHLCV rows are normalized strictly
+
+The yfinance adapter SHALL convert valid history rows to repository-owned candle models using
+`Decimal` values and UTC datetimes and MUST reject malformed, duplicate, invalid, or inconsistent
+provider data.
+
+#### Scenario: Valid YFINANCE rows are returned
+
+- **WHEN** yfinance returns valid unique rows inside the requested range
+- **THEN** the adapter normalizes open time, close time, OHLC values, and volume
+- **AND** it ignores provider fields that are outside the gateway candle model
+
+#### Scenario: YFINANCE row omits volume
+
+- **WHEN** a valid yfinance row has no volume value or has a null volume value
+- **THEN** the normalized candle volume is `Decimal("0")`
+- **AND** the API serializes it as a fixed-point decimal string
+
+#### Scenario: YFINANCE payload is invalid
+
+- **WHEN** a yfinance row is malformed, has a non-finite or invalid OHLCV value, has inconsistent
+  prices, has an invalid timestamp, duplicates an open time, or falls outside supported mapping
+- **THEN** the adapter raises the sanitized provider-unavailable boundary
+- **AND** no yfinance DataFrame, exception, or raw provider payload is exposed
+
+### Requirement: Natural YFINANCE provider gaps are preserved
+
+The gateway MUST preserve absent yfinance candle slots as gaps and MUST NOT fabricate OHLCV
+candles for omitted provider data.
+
+#### Scenario: Provider returns no candles for a valid range
+
+- **WHEN** a valid yfinance-backed request covers eligible slots for which yfinance returns no rows
+- **THEN** the gateway returns the valid available candles, which may be an empty list
+- **AND** it does not create or persist synthetic candles
+
+#### Scenario: Provider returns only part of a YFINANCE range
+
+- **WHEN** yfinance omits one or more eligible slots but returns other valid rows
+- **THEN** the gateway returns and persists only the valid eligible complete rows
+- **AND** the omitted eligible slots remain absent
+
+### Requirement: Historical candles can be requested by eligible count
+
+The gateway SHALL allow `GET /v1/candles` clients to request the latest eligible candle slots using
+`limit` instead of `from`.
+
+#### Scenario: Count request resolves latest eligible opens
+
+- **WHEN** a client requests an enabled canonical symbol, supported timeframe, valid `limit`, and
+  no `from`
+- **THEN** the gateway derives the latest `limit` eligible candle opens at or before the resolved
+  `to` boundary using the symbol's candle schedule and market-session policy
+- **AND** the gateway uses those derived opens for persistence lookup, provider gap fill, cache
+  merge, and response filtering
+
+#### Scenario: Count request omits to
+
+- **WHEN** a valid count request omits `to`
+- **THEN** the gateway captures current UTC once and uses it as the exclusive upper boundary for
+  count derivation, provider access, and response serialization
+
+#### Scenario: Count request crosses closed sessions
+
+- **WHEN** a count request crosses weekends, holidays, maintenance breaks, or pandas calendar break
+  windows
+- **THEN** closed-session candle opens do not count toward `limit`
+- **AND** no provider request is made for closed-session-only sections
+
+#### Scenario: Count request encounters natural provider gaps
+
+- **WHEN** a provider omits one or more derived eligible candle slots
+- **THEN** the gateway returns the valid available candles, which can be fewer than `limit`
+- **AND** it does not synthesize missing candles or issue provider-specific paging retries to force
+  exactly `limit` rows
+
+#### Scenario: Count request uses cached forming candle
+
+- **WHEN** a current cached forming candle matches one of the derived eligible opens
+- **THEN** the gateway can merge that candle into the response with `complete=false`
+- **AND** it does not persist the forming candle
+
+### Requirement: Historical candle range and count modes are unambiguous
+
+The gateway SHALL treat `from`/`to` range requests and `limit` count requests as distinct request
+modes.
+
+#### Scenario: Range request behavior is preserved
+
+- **WHEN** a client supplies `from` and omits `limit`
+- **THEN** the gateway preserves the existing half-open `[from,to)` range semantics
+
+#### Scenario: Count request supplies from
+
+- **WHEN** a client supplies both `from` and `limit`
+- **THEN** the gateway responds with HTTP status `400`
+- **AND** the error code is `INVALID_TIME_RANGE`
+
+#### Scenario: Count request has invalid limit
+
+- **WHEN** `limit` is missing in count mode, non-integer, less than one, or greater than
+  `MAX_CANDLES_PER_REQUEST`
+- **THEN** the gateway responds with HTTP status `400`
+- **AND** the error code is `INVALID_TIME_RANGE`
+
+#### Scenario: Count request keeps response shape
+
+- **WHEN** the gateway returns candles for a valid count request
+- **THEN** the response contains the existing `symbol`, `timeframe`, `from`, `to`, and `candles`
+  fields
+- **AND** `from` is the first derived eligible open when any eligible opens exist
+- **AND** `to` is the resolved exclusive upper boundary
+
+### Requirement: Historical candles can be requested by forward eligible count
+
+The gateway SHALL allow `GET /v1/candles` clients to request eligible candle slots forward from an
+explicit UTC `from` boundary by supplying `from` and `limit` without `to`.
+
+#### Scenario: Forward count request resolves next eligible opens
+
+- **WHEN** a client requests an enabled canonical symbol, supported timeframe, valid UTC `from`,
+  valid `limit`, and no `to`
+- **THEN** the gateway derives the next `limit` eligible candle opens at or after `from` using the
+  symbol's candle schedule and market-session policy
+- **AND** the gateway uses those derived opens for persistence lookup, provider gap fill, cache
+  merge, and response filtering
+
+#### Scenario: Forward count request skips closed sessions
+
+- **WHEN** a forward count request crosses weekends, holidays, maintenance breaks, or pandas
+  calendar break windows
+- **THEN** closed-session candle opens do not count toward `limit`
+- **AND** no provider request is made for closed-session-only sections
+
+#### Scenario: Forward count request preserves response shape
+
+- **WHEN** the gateway returns candles for a valid forward count request
+- **THEN** the response contains the existing `symbol`, `timeframe`, `from`, `to`, and `candles`
+  fields
+- **AND** `from` is the first derived eligible open when any eligible opens exist
+- **AND** `to` is the exclusive boundary immediately after the final derived eligible open when any
+  eligible opens exist
+
+### Requirement: Historical candle count mode query combinations are unambiguous
+
+The gateway SHALL assign a single meaning to each supported `from`, `to`, and `limit` query
+combination and MUST reject combinations that mix explicit range and count semantics.
+
+#### Scenario: Explicit range request uses from and to
+
+- **WHEN** a client supplies `from` and `to` without `limit`
+- **THEN** the gateway preserves the existing half-open `[from,to)` range semantics
+
+#### Scenario: Forward count request uses from and limit
+
+- **WHEN** a client supplies `from` and `limit` without `to`
+- **THEN** the gateway treats the request as forward count mode from `from`
+
+#### Scenario: Backward count request uses to and limit
+
+- **WHEN** a client supplies `to` and `limit` without `from`
+- **THEN** the gateway treats the request as backward count mode before `to`
+
+#### Scenario: Backward count request omits boundaries
+
+- **WHEN** a client supplies `limit` without `from` or `to`
+- **THEN** the gateway treats the request as backward count mode before one captured request-time
+  UTC instant
+
+#### Scenario: Count request supplies both range boundaries
+
+- **WHEN** a client supplies `from`, `to`, and `limit`
+- **THEN** the gateway responds with HTTP status `400`
+- **AND** the error code is `INVALID_TIME_RANGE`

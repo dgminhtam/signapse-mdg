@@ -17,6 +17,8 @@ class EconomicCalendarEvent:
     revision: str | None
     actual_better_worse: str | None
     revision_better_worse: str | None
+    description: str | None
+    news_url: str | None
     first_seen_at: datetime
     last_seen_at: datetime
     last_changed_at: datetime
@@ -36,6 +38,8 @@ class EconomicCalendarFetchedEvent:
     revision: str | None
     actual_better_worse: str | None
     revision_better_worse: str | None
+    description: str | None = None
+    news_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

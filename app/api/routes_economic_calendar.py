@@ -29,6 +29,8 @@ class EconomicCalendarEventResponse(BaseModel):
     revision: str | None
     actual_better_worse: str | None
     revision_better_worse: str | None
+    description: str | None
+    news_url: str | None
     first_seen_at: str
     last_seen_at: str
     last_changed_at: str
@@ -95,6 +97,8 @@ def _to_response(result: EconomicCalendarResult) -> EconomicCalendarResponse:
                     revision=event.revision,
                     actual_better_worse=event.actual_better_worse,
                     revision_better_worse=event.revision_better_worse,
+                    description=event.description,
+                    news_url=event.news_url,
                     first_seen_at=format_datetime(event.first_seen_at),
                     last_seen_at=format_datetime(event.last_seen_at),
                     last_changed_at=format_datetime(event.last_changed_at),

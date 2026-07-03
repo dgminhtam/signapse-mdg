@@ -42,8 +42,8 @@ registry records and MUST NOT use a hard-coded runtime mapping.
 #### Scenario: Enabled crypto symbols are requested
 
 - **WHEN** a client requests `BTC/USD,ETH/USD` and both registry records are enabled
-- **THEN** the gateway maps them to persisted provider symbols `BTCUSD` and `ETHUSD`
-- **AND** it uses their persisted `BINANCE_SPOT` provider mapping for refreshes that need provider
+- **THEN** the gateway maps them to persisted provider symbols `BTC/USD` and `ETH/USD`
+- **AND** it uses their persisted `TWELVE_DATA` provider mapping for refreshes that need provider
   data
 
 #### Scenario: Enabled Forex symbols are requested
@@ -72,18 +72,17 @@ registry records and MUST NOT use a hard-coded runtime mapping.
 - **THEN** it responds with HTTP status `503`
 - **AND** the request-level error code is `DATABASE_UNAVAILABLE`
 - **AND** no provider quote request is made
-
 ### Requirement: Binance latest prices are fetched in a batch
 
 The gateway SHALL fetch uncached Binance Spot prices through one Binance ticker-price operation
 per quote refresh containing all required Binance provider symbols in that refresh group.
 
-#### Scenario: Both required crypto quotes need refresh
+#### Scenario: Binance-backed quotes need refresh
 
-- **WHEN** enabled `BTC/USD` and `ETH/USD` have no reusable cache entries
-- **THEN** the adapter requests `BTCUSD` and `ETHUSD` in one Binance ticker-price batch
+- **WHEN** one or more enabled symbols mapped to `BINANCE_SPOT` have no reusable cache entries
+- **THEN** the adapter requests those provider symbols in one Binance ticker-price batch
 
-#### Scenario: Only one crypto quote needs refresh
+#### Scenario: Only one Binance-backed quote needs refresh
 
 - **WHEN** one requested Binance-backed quote is reusable from cache and another is not
 - **THEN** the Binance batch contains only the provider symbol requiring refresh
@@ -93,7 +92,6 @@ per quote refresh containing all required Binance provider symbols in that refre
 - **WHEN** concurrent requests require refresh for the same symbol
 - **THEN** the gateway coalesces the refresh work
 - **AND** does not issue duplicate simultaneous provider calls for that symbol
-
 ### Requirement: Provider prices are normalized without floating point
 
 The gateway SHALL validate provider prices as finite positive decimal values and SHALL expose a
@@ -101,7 +99,7 @@ minimal provider-agnostic public quote without leaking provider payload or routi
 
 #### Scenario: Valid provider prices are returned
 
-- **WHEN** Binance or Twelve Data returns valid prices for requested provider symbols
+- **WHEN** Binance, Twelve Data, or yfinance returns valid prices for requested provider symbols
 - **THEN** each public quote contains exactly `symbol`, `price`, and `receivedAt`
 - **AND** `symbol` is the canonical gateway symbol
 - **AND** `price` is serialized as a decimal string
@@ -115,7 +113,6 @@ minimal provider-agnostic public quote without leaking provider payload or routi
   returns an invalid price for another
 - **THEN** the valid symbol is returned in `quotes` using the minimal public representation
 - **AND** the affected symbol receives a `PROVIDER_UNAVAILABLE` error
-
 ### Requirement: Quote cache limits provider requests
 
 The gateway SHALL store latest normalized quotes in a process-local cache using configurable TTL
@@ -265,12 +262,11 @@ through `GET /v1/quotes` using the existing quote request and response contract.
 The gateway SHALL group uncached quote refreshes by each enabled symbol's persisted provider and
 SHALL isolate provider failures to symbols refreshed through the failing provider group.
 
-#### Scenario: Mixed crypto and Forex symbols are requested
+#### Scenario: Mixed Twelve Data catalog symbols are requested
 
 - **WHEN** a client requests enabled `BTC/USD`, `ETH/USD`, `EUR/USD`, and `GBP/USD` in one quote
   request
-- **THEN** the gateway refreshes Binance provider symbols through the Binance quote adapter
-- **AND** the gateway refreshes Twelve Data provider symbols through the Twelve Data Forex adapter
+- **THEN** the gateway refreshes all four provider symbols through the Twelve Data adapter
 - **AND** the final `quotes` and `errors` arrays preserve the first occurrence order from the
   request
 
@@ -281,7 +277,6 @@ SHALL isolate provider failures to symbols refreshed through the failing provide
 - **THEN** successful Binance-backed symbols appear in `quotes`
 - **AND** affected Twelve Data-backed symbols appear in `errors` with `PROVIDER_UNAVAILABLE`
 - **AND** the response status remains `200`
-
 ### Requirement: WTI and ETF latest quotes are available through the existing endpoint
 
 The gateway SHALL allow enabled WTI, SPY, and QQQ mappings through `GET /v1/quotes`.
@@ -293,3 +288,50 @@ The gateway SHALL allow enabled WTI, SPY, and QQQ mappings through `GET /v1/quot
 #### Scenario: Mixed provider request includes a new symbol
 - **WHEN** a request mixes Binance crypto with WTI or ETFs
 - **THEN** each provider group is routed and failed independently
+
+### Requirement: yfinance latest quotes are available through the existing endpoint
+
+The gateway SHALL allow the ten enabled seeded `YFINANCE` symbols to be requested through
+`GET /v1/quotes` using the existing provider-agnostic response contract.
+
+#### Scenario: yfinance commodity symbols require refresh
+
+- **WHEN** `XAG/USD`, `BRENT`, `NATGAS`, `COFFEE`, `SUGAR`, `WHEAT`, or `CORN` lacks a reusable
+  cached quote
+- **THEN** the gateway requests its persisted yfinance provider symbol through the yfinance quote
+  adapter
+- **AND** a successful result contains exactly `symbol`, `price`, and `receivedAt`
+
+#### Scenario: yfinance stock index symbols require refresh
+
+- **WHEN** `SPX`, `NDX`, or `DJI` lacks a reusable cached quote
+- **THEN** the gateway requests `^GSPC`, `^NDX`, or `^DJI` respectively through the yfinance quote
+  adapter
+- **AND** a successful result contains the canonical gateway symbol rather than the Yahoo ticker
+
+#### Scenario: Mixed request includes yfinance and existing providers
+
+- **WHEN** a quote request mixes enabled Binance, Twelve Data, and yfinance symbols
+- **THEN** each provider group is refreshed independently
+- **AND** successful quotes and symbol-level errors preserve the first occurrence request order
+
+#### Scenario: One yfinance symbol is unavailable
+
+- **WHEN** yfinance returns a valid latest price for one requested symbol but another requested
+  symbol is missing, invalid, rate-limited, or fails to load
+- **THEN** the valid symbol appears in `quotes`
+- **AND** the affected symbol receives `PROVIDER_UNAVAILABLE` when no reusable cached quote exists
+- **AND** the response status remains `200`
+
+#### Scenario: yfinance quote is reused from cache
+
+- **WHEN** a requested yfinance quote is within `QUOTE_CACHE_TTL_SECONDS`
+- **THEN** the cached quote is returned
+- **AND** no yfinance provider request is made for that symbol
+
+#### Scenario: yfinance market is closed
+
+- **WHEN** `regularMarketPrice` contains the last valid regular-session price while the instrument's
+  market is closed
+- **THEN** the gateway returns that price using gateway receive time as `receivedAt`
+- **AND** it does not claim that `receivedAt` is the provider trade time

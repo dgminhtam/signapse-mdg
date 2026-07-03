@@ -24,14 +24,13 @@ application startup.
 #### Scenario: Initial seed is applied
 
 - **WHEN** the migration is applied to an empty database
-- **THEN** the registry contains enabled `BTC/USD` mapped to `BINANCE_SPOT:BTCUSD`
-- **AND** the registry contains enabled `ETH/USD` mapped to `BINANCE_SPOT:ETHUSD`
+- **THEN** the registry contains enabled `BTC/USD` mapped to `TWELVE_DATA:BTC/USD`
+- **AND** the registry contains enabled `ETH/USD` mapped to `TWELVE_DATA:ETH/USD`
 
 #### Scenario: Seed operation is repeated
 
 - **WHEN** the seed operation encounters either required mapping already present
 - **THEN** it updates that mapping without creating a duplicate record
-
 ### Requirement: Enabled symbols can be listed
 
 The gateway SHALL expose `GET /v1/symbols` and return only enabled registry records ordered by
@@ -41,10 +40,10 @@ canonical symbol ascending.
 
 - **WHEN** a client sends `GET /v1/symbols` after the initial migration
 - **THEN** the gateway responds with HTTP status `200`
-- **AND** the response contains `BTC/USD` with asset class `CRYPTO`, provider `BINANCE_SPOT`,
-  provider symbol `BTCUSD`, and enabled value `true`
-- **AND** the response contains `ETH/USD` with asset class `CRYPTO`, provider `BINANCE_SPOT`,
-  provider symbol `ETHUSD`, and enabled value `true`
+- **AND** the response contains `BTC/USD` with asset class `CRYPTO`, provider `TWELVE_DATA`,
+  provider symbol `BTC/USD`, and enabled value `true`
+- **AND** the response contains `ETH/USD` with asset class `CRYPTO`, provider `TWELVE_DATA`,
+  provider symbol `ETH/USD`, and enabled value `true`
 - **AND** the symbols are ordered by canonical symbol ascending
 
 #### Scenario: A registry record is disabled
@@ -57,7 +56,6 @@ canonical symbol ascending.
 - **WHEN** the registry contains no enabled records
 - **THEN** `GET /v1/symbols` responds with HTTP status `200`
 - **AND** the response body is `{"symbols":[]}`
-
 ### Requirement: Symbol API uses the database registry
 
 The gateway MUST obtain the supported-symbol response through the symbol repository and service
@@ -127,7 +125,7 @@ enabled registry records mapped to the Twelve Data provider.
   `TWELVE_DATA`, and provider symbol `XAU/USD`
 - **AND** the registry contains enabled `AAPL`, `TSLA`, `NVDA`, and `MSFT` with asset class
   `US_STOCK`, provider `TWELVE_DATA`, and matching provider symbols
-- **AND** existing `BTC/USD` and `ETH/USD` crypto mappings remain enabled and unchanged
+- **AND** existing `BTC/USD` and `ETH/USD` canonical rows remain enabled
 
 #### Scenario: Forex seed operation is repeated
 
@@ -139,7 +137,6 @@ enabled registry records mapped to the Twelve Data provider.
 - **WHEN** a client sends `GET /v1/symbols` after the Forex seed migration is applied
 - **THEN** the response can include the enabled Forex records ordered by canonical symbol
   ascending with the existing symbol response shape
-
 ### Requirement: Forex registry seeding does not enable Forex market data APIs
 
 Seeding Forex symbols SHALL NOT change public quote, candle, or WebSocket market-data behavior in
