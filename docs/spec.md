@@ -319,14 +319,17 @@ Semantics:
 - A successful response contains exactly `symbol`, `price`, and `pricedAt`.
 - `symbol` is the canonical gateway symbol; provider identity and mapping remain internal.
 - `price` is the selected `1m` candle close and is serialized as a decimal string.
-- `pricedAt` is the selected `1m` candle open timestamp, not the original requested `at`.
+- `pricedAt` is the selected `1m` candle open timestamp, not the original requested `at`; it
+  can be earlier than the containing one-minute bucket when the requested instant falls in a
+  closed session or an unavailable bucket.
 - The client supplies no public `timeframe`; the gateway always uses `1m` internally for this
   approximation.
-- The gateway floors `at` to the containing one-minute UTC bucket and reuses the historical candle
-  flow for `[pricedAt, pricedAt + 1 minute)`.
+- The gateway returns the nearest available eligible `1m` candle close at or before `at`, reusing
+  the historical candle flow and existing market-session rules.
 - Missing, empty, invalid, or non-UTC `at` returns `400 INVALID_TIME_RANGE`.
 - Unknown or disabled `symbol` returns `400 UNSUPPORTED_SYMBOL`.
-- No eligible one-minute candle for the resolved bucket returns `404 PRICE_NOT_FOUND`.
+- No historical one-minute candle is available at or before the requested instant returns
+  `404 PRICE_NOT_FOUND`.
 
 ### Get economic calendar
 

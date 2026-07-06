@@ -81,10 +81,16 @@ def test_historical_price_window_floors_to_one_minute_bucket() -> None:
     )
 
 
-async def test_historical_price_service_uses_one_minute_candle_range() -> None:
+async def test_historical_price_service_uses_latest_one_minute_candle_lookup() -> None:
     candle = make_candle(START)
     candle_service = StubCandleService(
-        CandleResult("BTC/USD", "1m", START, START + timedelta(minutes=1), [candle])
+        CandleResult(
+            "BTC/USD",
+            "1m",
+            START,
+            START + timedelta(minutes=1),
+            [candle],
+        )
     )
     service = HistoricalPriceService(candle_service)  # type: ignore[arg-type]
 
@@ -95,12 +101,30 @@ async def test_historical_price_service_uses_one_minute_candle_range() -> None:
     assert candle_service.requested == CandleRequest(
         "BTC/USD",
         "1m",
-        START,
         START + timedelta(minutes=1),
+        START + timedelta(minutes=1),
+        1,
+        "backward",
     )
     assert result.symbol == "BTC/USD"
     assert result.price == Decimal("104250.12")
     assert result.priced_at == START
+
+
+async def test_historical_price_service_returns_previous_available_candle() -> None:
+    previous = START - timedelta(days=2, minutes=1)
+    candle = make_candle(previous, "103500.00")
+    candle_service = StubCandleService(
+        CandleResult("BTC/USD", "1m", previous, START + timedelta(minutes=1), [candle])
+    )
+    service = HistoricalPriceService(candle_service)  # type: ignore[arg-type]
+
+    result = await service.get_historical_price(
+        HistoricalPriceRequest("BTC/USD", START + timedelta(seconds=12))
+    )
+
+    assert result.price == Decimal("103500.00")
+    assert result.priced_at == previous
 
 
 async def test_historical_price_service_raises_not_found_for_empty_candles() -> None:

@@ -51,13 +51,13 @@ class HistoricalPriceService:
         self,
         request: HistoricalPriceRequest,
     ) -> HistoricalPriceResult:
-        start, end = historical_price_window(request.at)
+        _, end = historical_price_window(request.at)
         result = await self._candle_service.get_candles(
-            CandleRequest(request.symbol, "1m", start, end)
+            CandleRequest(request.symbol, "1m", end, end, limit=1, count_direction="backward")
         )
-        candle = next((item for item in result.candles if item.open_time == start), None)
-        if candle is None:
+        if not result.candles:
             raise HistoricalPriceNotFoundError
+        candle = result.candles[-1]
         return HistoricalPriceResult(result.symbol, candle.close, candle.open_time)
 
 
