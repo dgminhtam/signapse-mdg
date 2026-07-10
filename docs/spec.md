@@ -383,6 +383,64 @@ Semantics:
   and history rows are not exposed.
 - Empty valid ranges return `200` with `events: []`.
 
+### Crawl4AI API
+
+This endpoint converts caller-supplied URLs to fit Markdown. It is always registered but remains
+outside the public `/v1` market-data contract.
+
+```http
+POST /crawl
+Content-Type: application/json
+
+{"urls": ["https://example.com", "https://crawl4ai.com"]}
+```
+
+Response:
+
+```json
+{
+  "results": [
+    {"url": "https://example.com/", "content": "# Example Domain", "error": null},
+    {"url": "https://crawl4ai.com/", "content": null, "error": "Crawl failed."}
+  ]
+}
+```
+
+Example curl:
+
+```bash
+curl --location 'http://localhost:8000/crawl' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "urls": [
+      "https://example.com",
+      "https://crawl4ai.com"
+    ]
+  }'
+```
+
+Semantics:
+
+- Crawl4AI is a required runtime dependency. Local development needs `uv sync` and one
+  `uv run python -m playwright install chromium` setup.
+- The route is always registered.
+- The request accepts only `urls`, containing 1 through 10 HTTP(S) URLs; Crawl4AI configuration
+  fields are rejected.
+- Browser, crawl, and pruning settings are server-owned. Crawl runs use Crawl4AI's undetected
+  browser adapter with stealth and magic modes, wait for the page load event, and allow two seconds
+  for post-load JavaScript. Returned `content` is Crawl4AI fit Markdown without source-specific
+  cleanup.
+- Each result contains its normalized input `url`. Response order is unspecified; callers correlate
+  results by URL rather than list position.
+- URL-level failures set `content` to null and `error` to `"Crawl failed."` without discarding other
+  results. Mixed success/failure and all-item failure responses use HTTP `200`.
+- Browser or batch-execution failures that prevent per-URL outcomes return sanitized HTTP `502`;
+  invalid request bodies return HTTP `422`.
+- Each request owns one browser and submits the URL list through Crawl4AI's native batch operation,
+  then closes the browser when complete.
+- Do not expose this endpoint on a publicly reachable gateway. Public use requires SSRF controls
+  covering DNS resolution, redirects, and browser subrequests.
+
 ## WebSocket Stream Contract
 
 ### Subscribe
