@@ -1,14 +1,20 @@
 import asyncio
 import importlib
+import logging
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
+import aiohttp
 from bs4 import BeautifulSoup
 
-from app.domain.economic_calendar import EconomicCalendarFetchedEvent
+from app.domain.economic_calendar import (
+    EconomicCalendarEnrichment,
+    EconomicCalendarEnrichmentCandidate,
+    EconomicCalendarFetchedEvent,
+)
 from app.domain.errors import ProviderUnavailableError
 
 SITE_BY_TYPE = {
@@ -17,6 +23,15 @@ SITE_BY_TYPE = {
     "ENERGY": "ENERGYEXCH",
     "CRYPTO": "CRYPTOCRAFT",
 }
+SITE_NUMBER_BY_TYPE = {"FOREX": 1, "METALS": 2, "ENERGY": 3, "CRYPTO": 4}
+DETAIL_CONCURRENCY = 5
+DETAIL_HEADERS = {
+    "User-Agent": "market-calendar-tool (+https://github.com/pavelkrusek/market-calendar-tool)",
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+}
+
+logger = logging.getLogger(__name__)
 
 
 class MarketCalendarToolProvider:
@@ -34,6 +49,22 @@ class MarketCalendarToolProvider:
             raise ProviderUnavailableError("Economic calendar provider is unavailable.") from exc
         return _normalize_events(calendar_type, result)
 
+    async def fetch_event_details(
+        self,
+        candidates: list[EconomicCalendarEnrichmentCandidate],
+    ) -> list[EconomicCalendarEnrichment]:
+        if not candidates:
+            return []
+        semaphore = asyncio.Semaphore(DETAIL_CONCURRENCY)
+        async with aiohttp.ClientSession(headers=DETAIL_HEADERS) as session:
+            results = await asyncio.gather(
+                *(
+                    self._fetch_event_detail(session, semaphore, candidate)
+                    for candidate in candidates
+                )
+            )
+        return [result for result in results if result is not None]
+
     def _scrape(self, calendar_type: str, start: datetime, end: datetime) -> object:
         module = importlib.import_module("market_calendar_tool")
         site = getattr(module.Site, SITE_BY_TYPE[calendar_type])
@@ -41,15 +72,36 @@ class MarketCalendarToolProvider:
             site=site,
             date_from=start.date().isoformat(),
             date_to=end.date().isoformat(),
-            extended=True,
+            extended=False,
         )
         clean_base = importlib.import_module("market_calendar_tool.cleaning.cleaner").clean_base
         return SimpleNamespace(
             base=clean_base(result.base),
-            specs=getattr(result, "specs", ()),
-            news=getattr(result, "news", ()),
             site_url=_site_url(site),
         )
+
+    async def _fetch_event_detail(
+        self,
+        session: aiohttp.ClientSession,
+        semaphore: asyncio.Semaphore,
+        candidate: EconomicCalendarEnrichmentCandidate,
+    ) -> EconomicCalendarEnrichment | None:
+        try:
+            async with semaphore:
+                async with session.get(_detail_url(candidate)) as response:
+                    response.raise_for_status()
+                    payload = await response.json()
+            return _normalize_detail(candidate, payload)
+        except Exception:
+            logger.warning(
+                "economic_calendar_detail_failed",
+                extra={
+                    "calendar_type": candidate.calendar_type,
+                    "external_event_id": candidate.external_event_id,
+                },
+                exc_info=True,
+            )
+            return None
 
 
 def _normalize_events(
@@ -98,6 +150,31 @@ def _normalize_row(calendar_type: str, row: dict[str, Any]) -> EconomicCalendarF
         revision_better_worse=_nullable_string(row.get("revision_better_worse")),
         description=_nullable_string(row.get("description")),
         news_url=_nullable_string(row.get("news_url")),
+    )
+
+
+def _normalize_detail(
+    candidate: EconomicCalendarEnrichmentCandidate,
+    payload: object,
+) -> EconomicCalendarEnrichment:
+    if not isinstance(payload, Mapping) or not isinstance(payload.get("data"), Mapping):
+        raise ValueError("Economic calendar detail payload is invalid.")
+    data = payload["data"]
+    event_id = candidate.external_event_id
+    specs = [{**row, "id": event_id} for row in _records(data.get("specs", ()))]
+    linked_threads = data.get("linked_threads", {})
+    news = (
+        [{**row, "id": event_id} for row in _records(linked_threads.get("news", ()))]
+        if isinstance(linked_threads, Mapping)
+        else []
+    )
+    module = importlib.import_module("market_calendar_tool")
+    site = getattr(module.Site, SITE_BY_TYPE[candidate.calendar_type])
+    return EconomicCalendarEnrichment(
+        calendar_type=candidate.calendar_type,
+        external_event_id=event_id,
+        description=_description_by_id(specs).get(event_id),
+        news_url=_news_url_by_id(news, _site_url(site)).get(event_id),
     )
 
 
@@ -178,3 +255,12 @@ def _origin(url: str) -> str:
     if parsed.scheme and parsed.netloc:
         return f"{parsed.scheme}://{parsed.netloc}"
     return url
+
+
+def _detail_url(candidate: EconomicCalendarEnrichmentCandidate) -> str:
+    module = importlib.import_module("market_calendar_tool")
+    site = getattr(module.Site, SITE_BY_TYPE[candidate.calendar_type])
+    return (
+        f"{_site_url(site)}/details/"
+        f"{SITE_NUMBER_BY_TYPE[candidate.calendar_type]}-{candidate.external_event_id}"
+    )

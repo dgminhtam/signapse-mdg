@@ -1,9 +1,11 @@
+import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 
 import app.providers.market_calendar_tool as provider_module
+from app.domain.economic_calendar import EconomicCalendarEnrichmentCandidate
 from app.providers.market_calendar_tool import MarketCalendarToolProvider
 
 
@@ -37,16 +39,6 @@ async def test_market_calendar_tool_provider_maps_type_and_normalizes_rows(
                     "revision_better_worse": None,
                 }
             ],
-            specs=[
-                {"id": 123, "order": 2, "title": "Source", "html": "<p>Ignored</p>"},
-                {"id": 123, "order": 3, "title": "Measures", "html": "<p>Jobs added</p>"},
-            ],
-            news=[
-                {
-                    "id": 123,
-                    "html": '<a href="/news/123-nfp-preview/hit">Read</a>',
-                }
-            ],
         )
 
     fake_cleaner = SimpleNamespace(clean_base=lambda base: base)
@@ -71,15 +63,15 @@ async def test_market_calendar_tool_provider_maps_type_and_normalizes_rows(
             "site": "https://www.forexfactory.com/calendar",
             "date_from": "2026-07-01",
             "date_to": "2026-07-08",
-            "extended": True,
+            "extended": False,
         }
     ]
     assert events[0].calendar_type == "FOREX"
     assert events[0].external_event_id == "123"
     assert events[0].actual == "210K"
     assert events[0].actual_better_worse == "better"
-    assert events[0].description == "Jobs added"
-    assert events[0].news_url == "https://www.forexfactory.com/news/123-nfp-preview/hit"
+    assert events[0].description is None
+    assert events[0].news_url is None
 
 
 async def test_market_calendar_tool_provider_allows_missing_extended_fields(
@@ -133,3 +125,85 @@ async def test_market_calendar_tool_provider_uses_to_thread(
 
     assert called is True
     assert events == []
+
+
+async def test_market_calendar_tool_provider_fetches_only_selected_details_with_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    urls: list[str] = []
+    active = 0
+    max_active = 0
+
+    class FakeResponse:
+        def __init__(self, event_id: str) -> None:
+            self.event_id = event_id
+
+        async def __aenter__(self) -> FakeResponse:
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0)
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            nonlocal active
+            del args
+            active -= 1
+
+        def raise_for_status(self) -> None:
+            if self.event_id == "3":
+                raise RuntimeError("detail failed")
+
+        async def json(self) -> object:
+            return {
+                "data": {
+                    "event_id": self.event_id,
+                    "specs": [
+                        {
+                            "order": 1,
+                            "title": "Measures",
+                            "html": f"<p>Description {self.event_id}</p>",
+                        }
+                    ],
+                    "linked_threads": {
+                        "news": [
+                            {
+                                "html": (
+                                    f'<a href="/news/{self.event_id}-story/hit">Read</a>'
+                                )
+                            }
+                        ]
+                    },
+                }
+            }
+
+    class FakeSession:
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs["headers"] == provider_module.DETAIL_HEADERS
+
+        async def __aenter__(self) -> FakeSession:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            del args
+
+        def get(self, url: str) -> FakeResponse:
+            urls.append(url)
+            return FakeResponse(url.rsplit("-", 1)[-1])
+
+    monkeypatch.setattr(provider_module.aiohttp, "ClientSession", FakeSession)
+    candidates = [
+        EconomicCalendarEnrichmentCandidate("FOREX", str(event_id))
+        for event_id in range(1, 8)
+    ]
+
+    results = await MarketCalendarToolProvider().fetch_event_details(candidates)
+
+    assert urls == [
+        f"https://www.forexfactory.com/calendar/details/1-{event_id}"
+        for event_id in range(1, 8)
+    ]
+    assert max_active == 5
+    assert [result.external_event_id for result in results] == ["1", "2", "4", "5", "6", "7"]
+    assert results[0].description == "Description 1"
+    assert results[0].news_url == "https://www.forexfactory.com/news/1-story/hit"

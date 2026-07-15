@@ -63,6 +63,7 @@ async def test_economic_calendar_migration_has_expected_schema(
         "revision_better_worse",
         "description",
         "news_url",
+        "enrichment_attempted_at",
         "first_seen_at",
         "last_seen_at",
         "last_changed_at",
@@ -81,6 +82,9 @@ async def test_economic_calendar_migration_has_expected_schema(
     ):
         assert isinstance(columns[name]["type"], Text)
         assert columns[name]["nullable"] is True
+    assert isinstance(columns["enrichment_attempted_at"]["type"], DateTime)
+    assert columns["enrichment_attempted_at"]["type"].timezone is True
+    assert columns["enrichment_attempted_at"]["nullable"] is True
     for name in (
         "scheduled_at",
         "first_seen_at",
@@ -128,6 +132,7 @@ def test_economic_calendar_model_matches_table_contract() -> None:
         "revision_better_worse",
         "description",
         "news_url",
+        "enrichment_attempted_at",
         "first_seen_at",
         "last_seen_at",
         "last_changed_at",

@@ -67,7 +67,9 @@ async def test_crawl_provider_returns_batch_with_anti_bot_config(
     )
     _install_fake(monkeypatch, crawler)
 
-    result = await Crawl4AIMarkdownProvider().crawl_fit_markdown(
+    result = await Crawl4AIMarkdownProvider(
+        proxy_url="http://user:secret@proxy.example:8080"
+    ).crawl_fit_markdown(
         ["https://one.example/", "https://two.example/"]
     )
 
@@ -90,7 +92,8 @@ async def test_crawl_provider_returns_batch_with_anti_bot_config(
     assert crawler.run_config.wait_until == "load"
     assert crawler.run_config.delay_before_return_html == 2.0
     assert crawler.run_config.max_retries == 0
-    assert crawler.run_config.proxy_config is None
+    assert crawler.run_config.proxy_config.server == "http://proxy.example:8080"
+    assert crawler.run_config.proxy_config.username == "user"
     assert crawler.browser_config.enable_stealth is True
     assert isinstance(
         crawler.crawler_strategy,

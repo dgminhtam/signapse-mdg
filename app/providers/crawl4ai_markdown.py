@@ -28,6 +28,9 @@ class CrawlMarkdownResult:
 
 
 class Crawl4AIMarkdownProvider:
+    def __init__(self, proxy_url: str | None = None) -> None:
+        self._proxy_url = proxy_url.strip() or None if proxy_url else None
+
     async def crawl_fit_markdown(self, urls: list[str]) -> list[CrawlMarkdownResult]:
         run_config = CrawlerRunConfig(
             markdown_generator=DefaultMarkdownGenerator(
@@ -36,6 +39,7 @@ class Crawl4AIMarkdownProvider:
             magic=True,
             wait_until="load",
             delay_before_return_html=2.0,
+            proxy_config=self._proxy_url,
         )
         try:
             browser_config = BrowserConfig(enable_stealth=True)

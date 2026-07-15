@@ -381,6 +381,9 @@ Semantics:
 - `description` and `newsUrl` are nullable enrichment fields from upstream event details. `newsUrl`
   is a single related article redirect URL for downstream crawling; raw news HTML, article content,
   and history rows are not exposed.
+- The refresh keeps the configured polling cadence (`300` seconds in production) for base values.
+  Each run uses non-extended base scraping, preserves stored enrichment when base values are null,
+  and requests details only for incomplete events not attempted during the current UTC day.
 - Empty valid ranges return `200` with `events: []`.
 
 ### Crawl4AI API
@@ -430,6 +433,8 @@ Semantics:
   browser adapter with stealth and magic modes, wait for the page load event, and allow two seconds
   for post-load JavaScript. Returned `content` is Crawl4AI fit Markdown without source-specific
   cleanup.
+- When `CRAWL_PROXY_URL` is set, every crawl uses that server-owned HTTP, HTTPS, or SOCKS5 proxy;
+  proxy configuration and credentials are never accepted by the API.
 - Each result contains its normalized input `url`. Response order is unspecified; callers correlate
   results by URL rather than list position.
 - URL-level failures set `content` to null and `error` to `"Crawl failed."` without discarding other

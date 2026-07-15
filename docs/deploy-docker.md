@@ -39,6 +39,10 @@ Nếu Docker DNS không resolve được `database`, đổi host thành containe
 public market data does not need an API key. Use one key or comma-separated keys; REST calls rotate
 process-local keys and WebSocket streams pick a key when connecting or reconnecting.
 
+Economic calendar refresh keeps its existing `300` second polling interval during deployment.
+Regular polls fetch base values only; missing description and news metadata is requested per event
+at most once per UTC day.
+
 Lấy password đúng từ compose/env của stack database hiện tại. Lỗi này nghĩa là password đang sai:
 
 ```text

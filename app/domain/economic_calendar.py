@@ -43,6 +43,20 @@ class EconomicCalendarFetchedEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class EconomicCalendarEnrichmentCandidate:
+    calendar_type: str
+    external_event_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class EconomicCalendarEnrichment:
+    calendar_type: str
+    external_event_id: str
+    description: str | None
+    news_url: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class EconomicCalendarRequest:
     start: datetime
     end: datetime
@@ -67,6 +81,18 @@ class EconomicCalendarRepository(Protocol):
 
     async def upsert_events(self, events: list[EconomicCalendarFetchedEvent]) -> None: ...
 
+    async def claim_enrichment_candidates(
+        self,
+        start: datetime,
+        end: datetime,
+        attempted_at: datetime,
+    ) -> list[EconomicCalendarEnrichmentCandidate]: ...
+
+    async def update_enrichments(
+        self,
+        enrichments: list[EconomicCalendarEnrichment],
+    ) -> None: ...
+
 
 class EconomicCalendarProvider(Protocol):
     async def fetch_events(
@@ -75,3 +101,8 @@ class EconomicCalendarProvider(Protocol):
         start: datetime,
         end: datetime,
     ) -> list[EconomicCalendarFetchedEvent]: ...
+
+    async def fetch_event_details(
+        self,
+        candidates: list[EconomicCalendarEnrichmentCandidate],
+    ) -> list[EconomicCalendarEnrichment]: ...

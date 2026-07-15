@@ -150,6 +150,10 @@ class EconomicCalendarEventModel(Base):
     revision_better_worse: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     news_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enrichment_attempted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     first_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

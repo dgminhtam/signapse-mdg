@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.db.models import EconomicCalendarEventModel, MarketDataCandleModel, SupportedSymbolModel
 from app.domain.candles import Candle
 from app.domain.economic_calendar import (
+    EconomicCalendarEnrichment,
+    EconomicCalendarEnrichmentCandidate,
     EconomicCalendarEvent,
     EconomicCalendarFetchedEvent,
     EconomicCalendarRequest,
@@ -180,6 +182,14 @@ class PostgresEconomicCalendarRepository:
                         news_url=event.news_url,
                     )
                     excluded = statement.excluded
+                    description = func.coalesce(
+                        excluded.description,
+                        EconomicCalendarEventModel.description,
+                    )
+                    news_url = func.coalesce(
+                        excluded.news_url,
+                        EconomicCalendarEventModel.news_url,
+                    )
                     changed = or_(
                         EconomicCalendarEventModel.name.is_distinct_from(excluded.name),
                         EconomicCalendarEventModel.currency.is_distinct_from(excluded.currency),
@@ -197,10 +207,8 @@ class PostgresEconomicCalendarRepository:
                         EconomicCalendarEventModel.revision_better_worse.is_distinct_from(
                             excluded.revision_better_worse
                         ),
-                        EconomicCalendarEventModel.description.is_distinct_from(
-                            excluded.description
-                        ),
-                        EconomicCalendarEventModel.news_url.is_distinct_from(excluded.news_url),
+                        EconomicCalendarEventModel.description.is_distinct_from(description),
+                        EconomicCalendarEventModel.news_url.is_distinct_from(news_url),
                     )
                     await session.execute(
                         statement.on_conflict_do_update(
@@ -216,8 +224,8 @@ class PostgresEconomicCalendarRepository:
                                 "revision": excluded.revision,
                                 "actual_better_worse": excluded.actual_better_worse,
                                 "revision_better_worse": excluded.revision_better_worse,
-                                "description": excluded.description,
-                                "news_url": excluded.news_url,
+                                "description": description,
+                                "news_url": news_url,
                                 "last_seen_at": func.now(),
                                 "last_changed_at": case(
                                     (changed, func.now()),
@@ -226,6 +234,105 @@ class PostgresEconomicCalendarRepository:
                                 "updated_at": func.now(),
                             },
                         )
+                    )
+        except SQLAlchemyError as exc:
+            raise DatabaseUnavailableError from exc
+
+    async def claim_enrichment_candidates(
+        self,
+        start: datetime,
+        end: datetime,
+        attempted_at: datetime,
+    ) -> list[EconomicCalendarEnrichmentCandidate]:
+        day_start = attempted_at.astimezone(UTC).replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        statement = (
+            select(EconomicCalendarEventModel)
+            .where(
+                EconomicCalendarEventModel.scheduled_at >= start,
+                EconomicCalendarEventModel.scheduled_at < end,
+                or_(
+                    EconomicCalendarEventModel.description.is_(None),
+                    EconomicCalendarEventModel.news_url.is_(None),
+                ),
+                or_(
+                    EconomicCalendarEventModel.enrichment_attempted_at.is_(None),
+                    EconomicCalendarEventModel.enrichment_attempted_at < day_start,
+                ),
+            )
+            .order_by(
+                EconomicCalendarEventModel.scheduled_at.asc(),
+                EconomicCalendarEventModel.calendar_type.asc(),
+                EconomicCalendarEventModel.external_event_id.asc(),
+            )
+            .with_for_update(skip_locked=True)
+        )
+        try:
+            async with self._session_factory.begin() as session:
+                rows = (await session.scalars(statement)).all()
+                candidates = [
+                    EconomicCalendarEnrichmentCandidate(
+                        calendar_type=row.calendar_type,
+                        external_event_id=row.external_event_id,
+                    )
+                    for row in rows
+                ]
+                for row in rows:
+                    row.enrichment_attempted_at = attempted_at
+        except SQLAlchemyError as exc:
+            raise DatabaseUnavailableError from exc
+        return candidates
+
+    async def update_enrichments(
+        self,
+        enrichments: list[EconomicCalendarEnrichment],
+    ) -> None:
+        usable = [
+            enrichment
+            for enrichment in enrichments
+            if enrichment.description is not None or enrichment.news_url is not None
+        ]
+        if not usable:
+            return
+        try:
+            async with self._session_factory.begin() as session:
+                for enrichment in usable:
+                    values: dict[str, object] = {
+                        "last_seen_at": func.now(),
+                        "updated_at": func.now(),
+                    }
+                    changed = []
+                    if enrichment.description is not None:
+                        values["description"] = enrichment.description
+                        changed.append(
+                            EconomicCalendarEventModel.description.is_distinct_from(
+                                enrichment.description
+                            )
+                        )
+                    if enrichment.news_url is not None:
+                        values["news_url"] = enrichment.news_url
+                        changed.append(
+                            EconomicCalendarEventModel.news_url.is_distinct_from(
+                                enrichment.news_url
+                            )
+                        )
+                    values["last_changed_at"] = case(
+                        (or_(*changed), func.now()),
+                        else_=EconomicCalendarEventModel.last_changed_at,
+                    )
+                    await session.execute(
+                        update(EconomicCalendarEventModel)
+                        .where(
+                            EconomicCalendarEventModel.calendar_type
+                            == enrichment.calendar_type,
+                            EconomicCalendarEventModel.external_event_id
+                            == enrichment.external_event_id,
+                        )
+                        .values(**values)
                     )
         except SQLAlchemyError as exc:
             raise DatabaseUnavailableError from exc

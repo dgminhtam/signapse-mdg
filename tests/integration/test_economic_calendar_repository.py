@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.db.repositories import PostgresEconomicCalendarRepository
-from app.domain.economic_calendar import EconomicCalendarFetchedEvent
+from app.domain.economic_calendar import EconomicCalendarEnrichment, EconomicCalendarFetchedEvent
 from app.services.economic_calendar import parse_economic_calendar_request
 
 pytestmark = pytest.mark.integration
@@ -100,7 +100,7 @@ async def test_economic_calendar_repository_upsert_preserves_lifecycle_timestamp
             )
         )
 
-    await repository.upsert_events([event])
+    await repository.upsert_events([replace(event, description=None, news_url=None)])
     unchanged = await _get_lifecycle(database_engine)
 
     await repository.upsert_events([replace(event, description="Updated description")])
@@ -118,6 +118,74 @@ async def test_economic_calendar_repository_upsert_preserves_lifecycle_timestamp
     [stored] = await repository.list_events(request)
     assert stored.description == "Updated description"
     assert stored.news_url == "https://www.forexfactory.com/news/123/hit"
+
+
+async def test_economic_calendar_repository_throttles_daily_enrichment_candidates(
+    database_engine: AsyncEngine,
+) -> None:
+    repository = PostgresEconomicCalendarRepository(async_sessionmaker(database_engine))
+    incomplete = EconomicCalendarFetchedEvent(
+        calendar_type="FOREX",
+        external_event_id="123",
+        name="Incomplete",
+        currency="USD",
+        impact="high",
+        scheduled_at=datetime(2026, 7, 10, 12, tzinfo=UTC),
+        actual=None,
+        forecast=None,
+        previous=None,
+        revision=None,
+        actual_better_worse=None,
+        revision_better_worse=None,
+    )
+    complete = replace(
+        incomplete,
+        external_event_id="124",
+        name="Complete",
+        description="Description",
+        news_url="https://www.forexfactory.com/news/124/hit",
+    )
+    await repository.upsert_events([incomplete, complete])
+
+    start = datetime(2026, 7, 8, tzinfo=UTC)
+    end = datetime(2026, 7, 17, tzinfo=UTC)
+    first_attempt = datetime(2026, 7, 10, 15, tzinfo=UTC)
+    first = await repository.claim_enrichment_candidates(start, end, first_attempt)
+    same_day = await repository.claim_enrichment_candidates(
+        start,
+        end,
+        datetime(2026, 7, 10, 23, tzinfo=UTC),
+    )
+    await repository.update_enrichments(
+        [
+            EconomicCalendarEnrichment(
+                calendar_type="FOREX",
+                external_event_id="123",
+                description="Fetched description",
+                news_url=None,
+            )
+        ]
+    )
+    next_day = await repository.claim_enrichment_candidates(
+        start,
+        end,
+        datetime(2026, 7, 11, 1, tzinfo=UTC),
+    )
+
+    assert [(item.calendar_type, item.external_event_id) for item in first] == [
+        ("FOREX", "123")
+    ]
+    assert same_day == []
+    assert [(item.calendar_type, item.external_event_id) for item in next_day] == [
+        ("FOREX", "123")
+    ]
+    request = parse_economic_calendar_request(
+        "2026-07-10T00:00:00Z",
+        "2026-07-11T00:00:00Z",
+    )
+    stored = {event.external_event_id: event for event in await repository.list_events(request)}
+    assert stored["123"].description == "Fetched description"
+    assert stored["123"].news_url is None
 
 
 async def _get_lifecycle(database_engine: AsyncEngine) -> dict[str, datetime]:

@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
+from app.core.config import Settings, get_settings
 from app.providers.crawl4ai_markdown import Crawl4AIError, Crawl4AIMarkdownProvider
 
 router = APIRouter(tags=["crawl"])
@@ -28,8 +29,10 @@ class CrawlResponse(BaseModel):
     results: list[CrawlResultResponse]
 
 
-def get_crawl_provider() -> Crawl4AIMarkdownProvider:
-    return Crawl4AIMarkdownProvider()
+def get_crawl_provider(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Crawl4AIMarkdownProvider:
+    return Crawl4AIMarkdownProvider(proxy_url=settings.crawl_proxy_url)
 
 
 @router.post("/crawl", response_model=CrawlResponse)

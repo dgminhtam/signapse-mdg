@@ -22,7 +22,8 @@ class EconomicCalendarRefreshService:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     async def refresh(self) -> None:
-        today = self._clock().astimezone(UTC).replace(
+        now = self._clock().astimezone(UTC)
+        today = now.replace(
             hour=0,
             minute=0,
             second=0,
@@ -34,6 +35,11 @@ class EconomicCalendarRefreshService:
         for calendar_type in CALENDAR_TYPES:
             events.extend(await self._provider.fetch_events(calendar_type, start, end))
         await self._repository.upsert_events(events)
+        candidates = await self._repository.claim_enrichment_candidates(start, end, now)
+        if not candidates:
+            return
+        enrichments = await self._provider.fetch_event_details(candidates)
+        await self._repository.update_enrichments(enrichments)
 
 
 class EconomicCalendarFetchCronjob(Cronjob):

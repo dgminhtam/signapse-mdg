@@ -1,6 +1,10 @@
 from datetime import UTC, datetime
 
-from app.domain.economic_calendar import EconomicCalendarFetchedEvent
+from app.domain.economic_calendar import (
+    EconomicCalendarEnrichment,
+    EconomicCalendarEnrichmentCandidate,
+    EconomicCalendarFetchedEvent,
+)
 from app.services.economic_calendar_refresh import (
     CALENDAR_TYPES,
     EconomicCalendarFetchCronjob,
@@ -9,8 +13,15 @@ from app.services.economic_calendar_refresh import (
 
 
 class FakeProvider:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        details: list[EconomicCalendarEnrichment] | None = None,
+        actions: list[str] | None = None,
+    ) -> None:
         self.calls: list[tuple[str, datetime, datetime]] = []
+        self.detail_calls: list[list[EconomicCalendarEnrichmentCandidate]] = []
+        self.details = details or []
+        self.actions = actions
 
     async def fetch_events(
         self,
@@ -36,10 +47,27 @@ class FakeProvider:
             )
         ]
 
+    async def fetch_event_details(
+        self,
+        candidates: list[EconomicCalendarEnrichmentCandidate],
+    ) -> list[EconomicCalendarEnrichment]:
+        self.detail_calls.append(candidates)
+        if self.actions is not None:
+            self.actions.append("fetch_details")
+        return self.details
+
 
 class FakeRepository:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        candidates: list[EconomicCalendarEnrichmentCandidate] | None = None,
+        actions: list[str] | None = None,
+    ) -> None:
         self.upserted: list[EconomicCalendarFetchedEvent] = []
+        self.candidates = candidates or []
+        self.claims: list[tuple[datetime, datetime, datetime]] = []
+        self.enrichments: list[EconomicCalendarEnrichment] = []
+        self.actions = actions
 
     async def list_events(self, request: object) -> list[object]:
         del request
@@ -47,6 +75,27 @@ class FakeRepository:
 
     async def upsert_events(self, events: list[EconomicCalendarFetchedEvent]) -> None:
         self.upserted.extend(events)
+        if self.actions is not None:
+            self.actions.append("upsert")
+
+    async def claim_enrichment_candidates(
+        self,
+        start: datetime,
+        end: datetime,
+        attempted_at: datetime,
+    ) -> list[EconomicCalendarEnrichmentCandidate]:
+        self.claims.append((start, end, attempted_at))
+        if self.actions is not None:
+            self.actions.append("claim")
+        return self.candidates
+
+    async def update_enrichments(
+        self,
+        enrichments: list[EconomicCalendarEnrichment],
+    ) -> None:
+        self.enrichments.extend(enrichments)
+        if self.actions is not None:
+            self.actions.append("update")
 
 
 async def test_refresh_service_fetches_fixed_window_and_types() -> None:
@@ -64,6 +113,50 @@ async def test_refresh_service_fetches_fixed_window_and_types() -> None:
     assert all(call[1] == datetime(2026, 7, 8, tzinfo=UTC) for call in provider.calls)
     assert all(call[2] == datetime(2026, 7, 17, tzinfo=UTC) for call in provider.calls)
     assert [event.calendar_type for event in repository.upserted] == list(CALENDAR_TYPES)
+    assert repository.claims == [
+        (
+            datetime(2026, 7, 8, tzinfo=UTC),
+            datetime(2026, 7, 17, tzinfo=UTC),
+            datetime(2026, 7, 10, 15, 45, tzinfo=UTC),
+        )
+    ]
+    assert provider.detail_calls == []
+
+
+async def test_refresh_service_enriches_claimed_candidates_after_base_upsert() -> None:
+    actions: list[str] = []
+    candidate = EconomicCalendarEnrichmentCandidate("FOREX", "123")
+    detail = EconomicCalendarEnrichment(
+        calendar_type="FOREX",
+        external_event_id="123",
+        description="Description",
+        news_url=None,
+    )
+    provider = FakeProvider([detail], actions)
+    repository = FakeRepository([candidate], actions)
+    service = EconomicCalendarRefreshService(
+        provider,
+        repository,
+        clock=lambda: datetime(2026, 7, 11, 1, tzinfo=UTC),
+    )
+
+    await service.refresh()
+
+    assert actions == ["upsert", "claim", "fetch_details", "update"]
+    assert provider.detail_calls == [[candidate]]
+    assert repository.enrichments == [detail]
+
+
+async def test_refresh_service_keeps_claim_after_empty_detail_result() -> None:
+    candidate = EconomicCalendarEnrichmentCandidate("FOREX", "123")
+    provider = FakeProvider()
+    repository = FakeRepository([candidate])
+    service = EconomicCalendarRefreshService(provider, repository)
+
+    await service.refresh()
+
+    assert provider.detail_calls == [[candidate]]
+    assert repository.enrichments == []
 
 
 async def test_economic_calendar_fetch_cronjob_runs_refresh_service() -> None:
