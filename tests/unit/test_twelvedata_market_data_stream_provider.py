@@ -288,6 +288,7 @@ def test_twelvedata_candle_builder_bucket_boundaries_and_no_synthetic_gaps() -> 
         ("5m", datetime(2026, 6, 22, 0, 7, tzinfo=UTC), datetime(2026, 6, 22, 0, 5, tzinfo=UTC)),
         ("15m", datetime(2026, 6, 22, 0, 29, tzinfo=UTC), datetime(2026, 6, 22, 0, 15, tzinfo=UTC)),
         ("1h", datetime(2026, 6, 22, 1, 59, tzinfo=UTC), datetime(2026, 6, 22, 1, 0, tzinfo=UTC)),
+        ("4h", datetime(2026, 6, 22, 7, 59, tzinfo=UTC), datetime(2026, 6, 22, 4, 0, tzinfo=UTC)),
         ("1d", datetime(2026, 6, 22, 23, 59, tzinfo=UTC), datetime(2026, 6, 22, 0, 0, tzinfo=UTC)),
     ],
 )
@@ -300,6 +301,23 @@ def test_forex_candle_builder_supports_public_timeframe_boundaries(
     events = builder.apply_tick(PriceTick(EUR, Decimal("1.00"), tick_time, START), timeframe)
 
     assert events[0].candle.open_time == expected_open
+
+
+def test_candle_builder_rolls_over_four_hour_bucket() -> None:
+    builder = PriceTickCandleBuilder()
+
+    builder.apply_tick(
+        PriceTick(EUR, Decimal("1.00"), datetime(2026, 6, 22, 3, 59, tzinfo=UTC), START),
+        "4h",
+    )
+    events = builder.apply_tick(
+        PriceTick(EUR, Decimal("1.10"), datetime(2026, 6, 22, 4, 0, tzinfo=UTC), START),
+        "4h",
+    )
+
+    assert events[0].candle.complete is True
+    assert events[0].candle.close_time == datetime(2026, 6, 22, 3, 59, 59, 999000, tzinfo=UTC)
+    assert events[1].candle.open_time == datetime(2026, 6, 22, 4, 0, tzinfo=UTC)
 
 
 def test_forex_candle_builder_filters_closed_weekend_bucket() -> None:

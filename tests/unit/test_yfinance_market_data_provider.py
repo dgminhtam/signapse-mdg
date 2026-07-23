@@ -330,6 +330,7 @@ async def test_candles_call_yfinance_download_with_expected_arguments() -> None:
         ("15m", "15m"),
         ("30m", "30m"),
         ("1h", "1h"),
+        ("4h", "4h"),
         ("1d", "1d"),
         ("1w", "1wk"),
         ("1mo", "1mo"),
@@ -379,9 +380,7 @@ async def test_candles_derives_monthly_close_time_by_calendar_month() -> None:
         1,
     )
 
-    assert candles[0].close_time == datetime(2026, 3, 1, tzinfo=UTC) - timedelta(
-        milliseconds=1
-    )
+    assert candles[0].close_time == datetime(2026, 3, 1, tzinfo=UTC) - timedelta(milliseconds=1)
 
 
 async def test_candles_reject_unsupported_symbol_without_provider_call() -> None:

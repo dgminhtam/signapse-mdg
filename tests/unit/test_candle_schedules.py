@@ -59,6 +59,17 @@ def test_twelvedata_non_hourly_schedules_keep_verified_epoch_anchor() -> None:
     )
 
 
+def test_four_hour_schedule_uses_utc_grid_and_exchange_session() -> None:
+    start = datetime(2026, 6, 22, 12, 1, tzinfo=UTC)
+    end = datetime(2026, 6, 22, 21, 0, tzinfo=UTC)
+
+    assert expected_opens(BTC, "4h", start, end) == (
+        datetime(2026, 6, 22, 16, 0, tzinfo=UTC),
+        datetime(2026, 6, 22, 20, 0, tzinfo=UTC),
+    )
+    assert expected_opens(SPY, "4h", start, end) == (datetime(2026, 6, 22, 16, 0, tzinfo=UTC),)
+
+
 def test_weekly_schedule_uses_monday_utc_anchor() -> None:
     start = datetime(2026, 6, 18, tzinfo=UTC)
     end = datetime(2026, 7, 1, tzinfo=UTC)

@@ -51,7 +51,7 @@ before opening or extending an upstream subscription.
 - **AND** no partial upstream subscription is opened
 
 #### Scenario: Timeframe is missing or unsupported
-- **WHEN** `timeframe` is absent or is not one of `1m`, `5m`, `15m`, `1h`, or `1d`
+- **WHEN** `timeframe` is absent or is not one of `1m`, `5m`, `15m`, `1h`, `4h`, or `1d`
 - **THEN** the gateway closes the downstream connection with WebSocket code `1008`
 - **AND** the close reason is `UNSUPPORTED_TIMEFRAME`
 - **AND** no provider subscription is opened
@@ -480,7 +480,7 @@ provider-agnostic quote events without exposing Yahoo or yfinance payload fields
 ### Requirement: YFINANCE price ticks derive candle events
 
 The gateway SHALL derive YFINANCE stream candles from accepted price ticks for `1m`, `5m`, `15m`,
-`1h`, and `1d` interests and SHALL use decimal zero volume.
+`1h`, `4h`, and `1d` interests and SHALL use decimal zero volume.
 
 #### Scenario: First tick creates a forming YFINANCE candle
 

@@ -104,7 +104,7 @@ def test_parse_arguments_accepts_filters_and_utc_range() -> None:
             "--to",
             "2026-06-19T00:10:00+00:00",
             "--timeframes",
-            "1m,5m",
+            "1m,5m,4h",
             "--symbols",
             "BTC/USD,EUR/USD",
             "--providers",
@@ -116,7 +116,7 @@ def test_parse_arguments_accepts_filters_and_utc_range() -> None:
 
     assert options.start == START
     assert options.end == START + timedelta(minutes=10)
-    assert options.timeframes == ("1m", "5m")
+    assert options.timeframes == ("1m", "5m", "4h")
     assert options.symbols == frozenset({"BTC/USD", "EUR/USD"})
     assert options.providers == frozenset({"BINANCE_SPOT"})
     assert options.asset_classes == frozenset({"CRYPTO"})
@@ -187,6 +187,18 @@ def test_iter_chunks_uses_configured_max_candles() -> None:
         (START, START + timedelta(minutes=2)),
         (START + timedelta(minutes=2), START + timedelta(minutes=4)),
         (START + timedelta(minutes=4), START + timedelta(minutes=5)),
+    ]
+
+    four_hour_chunks = iter_chunks(
+        BTC,
+        "4h",
+        START,
+        START + timedelta(hours=12),
+        max_candles=2,
+    )
+    assert [(chunk.start, chunk.end) for chunk in four_hour_chunks] == [
+        (START, START + timedelta(hours=8)),
+        (START + timedelta(hours=8), START + timedelta(hours=12)),
     ]
 
 

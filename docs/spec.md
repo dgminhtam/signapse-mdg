@@ -271,7 +271,7 @@ Semantics:
 - `to` is optional; when omitted, the gateway captures request-time UTC once and always returns
   that resolved value in the response.
 - Gateway should reject unsupported timeframe values.
-- Historical candle timeframes are `1m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1w`, and `1mo`.
+- Historical candle timeframes are `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`, and `1mo`.
 - Gateway enforces `MAX_CANDLES_PER_REQUEST`.
 - Closed candles are read from PostgreSQL first; only missing contiguous ranges are fetched.
 - Missing ranges are routed through each symbol's persisted mapping. `BTC/USD`, `ETH/USD`,
@@ -526,7 +526,7 @@ Allowed stream states:
 | `ERROR` | Gateway cannot serve the stream. |
 
 Twelve Data WebSocket events are price ticks, not upstream OHLC candles. The gateway derives
-stream candles locally by bucketizing price ticks into `1m`, `5m`, `15m`, `1h`, and `1d`
+stream candles locally by bucketizing price ticks into `1m`, `5m`, `15m`, `1h`, `4h`, and `1d`
 timeframes with tick price as OHLC and decimal zero volume. It does not synthesize skipped buckets;
 REST historical candles remain authoritative for backfill. Forex stream candles use the same weekly
 session filter as `/v1/candles`; holidays, early closes, late opens, exceptional closures, and

@@ -56,10 +56,7 @@ class FakeKlineClient:
 def kline(open_time: datetime = START, close_time: datetime | None = None) -> list[object]:
     open_ms = int(open_time.timestamp() * 1000)
     close_ms = int(
-        (
-            close_time
-            or open_time + timedelta(minutes=1) - timedelta(milliseconds=1)
-        ).timestamp()
+        (close_time or open_time + timedelta(minutes=1) - timedelta(milliseconds=1)).timestamp()
         * 1000
     )
     return [
@@ -110,6 +107,7 @@ async def test_candle_provider_calls_sdk_and_normalizes_nested_klines() -> None:
         ("15m", KlinesIntervalEnum.INTERVAL_15m),
         ("30m", KlinesIntervalEnum.INTERVAL_30m),
         ("1h", KlinesIntervalEnum.INTERVAL_1h),
+        ("4h", KlinesIntervalEnum.INTERVAL_4h),
         ("1d", KlinesIntervalEnum.INTERVAL_1d),
         ("1w", KlinesIntervalEnum.INTERVAL_1w),
         ("1mo", KlinesIntervalEnum.INTERVAL_1M),

@@ -15,10 +15,10 @@ NOW = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
 
 
 def test_parse_stream_request_deduplicates_symbols_and_accepts_supported_timeframe() -> None:
-    request = parse_stream_request(" ETH/USD, BTC/USD,ETH/USD ", "1m", 10)
+    request = parse_stream_request(" ETH/USD, BTC/USD,ETH/USD ", "4h", 10)
 
     assert request.symbols == ("ETH/USD", "BTC/USD")
-    assert request.timeframe == "1m"
+    assert request.timeframe == "4h"
 
 
 @pytest.mark.parametrize(
@@ -29,6 +29,7 @@ def test_parse_stream_request_deduplicates_symbols_and_accepts_supported_timefra
         ("BTC/USD,ETH/USD", "1m", 1, "TOO_MANY_SYMBOLS"),
         ("BTC/USD", None, 10, "UNSUPPORTED_TIMEFRAME"),
         ("BTC/USD", "2m", 10, "UNSUPPORTED_TIMEFRAME"),
+        ("BTC/USD", "h4", 10, "UNSUPPORTED_TIMEFRAME"),
         ("BTC/USD", "1w", 10, "UNSUPPORTED_TIMEFRAME"),
         ("BTC/USD", "1mo", 10, "UNSUPPORTED_TIMEFRAME"),
     ],

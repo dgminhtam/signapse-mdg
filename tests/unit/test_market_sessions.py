@@ -63,13 +63,17 @@ XAU_FOREX = SupportedSymbol(
         (datetime(2026, 1, 9, 22, 0, tzinfo=UTC), False),
         (datetime(2026, 1, 11, 21, 59, tzinfo=UTC), False),
         (datetime(2026, 1, 11, 22, 0, tzinfo=UTC), True),
+        (datetime(2026, 6, 19, 20, 0, tzinfo=UTC), True),
+        (datetime(2026, 6, 20, 0, 0, tzinfo=UTC), False),
     ],
 )
+@pytest.mark.parametrize("timeframe", ["1h", "4h"])
 def test_forex_intraday_session_tracks_new_york_dst(
     open_time: datetime,
     eligible: bool,
+    timeframe: str,
 ) -> None:
-    assert FOREX_WEEKLY_SESSION.is_eligible(open_time, "1h") is eligible
+    assert FOREX_WEEKLY_SESSION.is_eligible(open_time, timeframe) is eligible
 
 
 @pytest.mark.parametrize(
@@ -135,6 +139,8 @@ def test_policy_selection_falls_back_for_unsupported_inline_calendar() -> None:
     [
         (datetime(2026, 7, 2, 14, 0, tzinfo=UTC), "1h", True),
         (datetime(2026, 7, 3, 14, 0, tzinfo=UTC), "1h", False),
+        (datetime(2026, 7, 2, 16, 0, tzinfo=UTC), "4h", True),
+        (datetime(2026, 7, 3, 16, 0, tzinfo=UTC), "4h", False),
         (datetime(2026, 7, 2, tzinfo=UTC), "1d", True),
         (datetime(2026, 7, 3, tzinfo=UTC), "1d", False),
     ],

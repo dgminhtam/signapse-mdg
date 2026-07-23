@@ -186,6 +186,7 @@ _KLINE_INTERVALS = {
     "15m": KlinesIntervalEnum.INTERVAL_15m,
     "30m": KlinesIntervalEnum.INTERVAL_30m,
     "1h": KlinesIntervalEnum.INTERVAL_1h,
+    "4h": KlinesIntervalEnum.INTERVAL_4h,
     "1d": KlinesIntervalEnum.INTERVAL_1d,
     "1w": KlinesIntervalEnum.INTERVAL_1w,
     "1mo": KlinesIntervalEnum.INTERVAL_1M,
@@ -232,9 +233,7 @@ def _normalize_klines(
             or open_time in seen
         ):
             raise ProviderUnavailableError
-        values = [
-            parse_decimal(value, positive=index < 4) for index, value in enumerate(item[1:6])
-        ]
+        values = [parse_decimal(value, positive=index < 4) for index, value in enumerate(item[1:6])]
         if any(value is None for value in values):
             raise ProviderUnavailableError
         open_price, high, low, close, volume = cast(list[Decimal], values)

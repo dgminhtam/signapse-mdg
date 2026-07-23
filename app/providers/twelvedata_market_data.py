@@ -46,6 +46,7 @@ _TWELVEDATA_INTERVALS = {
     "15m": "15min",
     "30m": "30min",
     "1h": "1h",
+    "4h": "4h",
     "1d": "1day",
     "1w": "1week",
     "1mo": "1month",

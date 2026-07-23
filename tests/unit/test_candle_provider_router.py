@@ -9,7 +9,12 @@ from app.domain.symbols import SupportedSymbol
 from app.services.candle_provider_router import CandleProviderRouter
 
 BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
+TWELVEDATA_BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
+AAPL = SupportedSymbol("AAPL", "US_STOCK", "TWELVE_DATA", "AAPL", True)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
+SPX = SupportedSymbol("SPX", "STOCK_INDEX", "YFINANCE", "^GSPC", True)
 UNKNOWN = SupportedSymbol("XAU/USD", "COMMODITY", "UNKNOWN", "XAU/USD", True)
 YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
 START = datetime(2026, 6, 22, 0, 0, tzinfo=UTC)
@@ -21,9 +26,9 @@ def make_candle(symbol: SupportedSymbol) -> Candle:
         asset_class=symbol.asset_class,
         provider=symbol.provider,
         provider_symbol=symbol.provider_symbol,
-        timeframe="1m",
+        timeframe="4h",
         open_time=START,
-        close_time=START + timedelta(minutes=1) - timedelta(milliseconds=1),
+        close_time=START + timedelta(hours=4) - timedelta(milliseconds=1),
         open=Decimal("1"),
         high=Decimal("2"),
         low=Decimal("1"),
@@ -52,7 +57,16 @@ class FakeProvider:
 
 @pytest.mark.parametrize(
     ("symbol", "provider_name"),
-    [(BTC, "BINANCE_SPOT"), (EUR, "TWELVE_DATA"), (YFINANCE_SILVER, "YFINANCE")],
+    [
+        (BTC, "BINANCE_SPOT"),
+        (TWELVEDATA_BTC, "TWELVE_DATA"),
+        (EUR, "TWELVE_DATA"),
+        (WTI, "TWELVE_DATA"),
+        (AAPL, "TWELVE_DATA"),
+        (SPY, "TWELVE_DATA"),
+        (SPX, "YFINANCE"),
+        (YFINANCE_SILVER, "YFINANCE"),
+    ],
 )
 async def test_router_dispatches_by_persisted_provider(
     symbol: SupportedSymbol,
@@ -67,10 +81,10 @@ async def test_router_dispatches_by_persisted_provider(
 
     result = await router.fetch_candles(
         symbol,
-        "1m",
-        "1m",
+        "4h",
+        "4h",
         START,
-        START + timedelta(minutes=1),
+        START + timedelta(hours=4),
         1,
     )
 
@@ -84,10 +98,10 @@ async def test_router_dispatches_by_persisted_provider(
     assert selected.calls == [
         (
             symbol,
-            "1m",
-            "1m",
+            "4h",
+            "4h",
             START,
-            START + timedelta(minutes=1),
+            START + timedelta(hours=4),
             1,
         )
     ]

@@ -487,4 +487,4 @@ def _bucket_open(value: datetime, duration: timedelta) -> datetime:
 
 
 def _is_stream_timeframe(timeframe: str) -> bool:
-    return timeframe in {"1m", "5m", "15m", "1h", "1d"}
+    return timeframe in {"1m", "5m", "15m", "1h", "4h", "1d"}

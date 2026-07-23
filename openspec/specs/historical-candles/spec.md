@@ -39,13 +39,13 @@ and `complete`.
 
 ### Requirement: Initial candle timeframes are explicitly supported
 
-The gateway SHALL support public timeframes `1m`, `5m`, `15m`, `30m`, `1h`, `1d`, `1w`, and
+The gateway SHALL support public timeframes `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`, and
 `1mo` and SHALL map them to the corresponding interval inside the selected provider adapter
 boundary.
 
 #### Scenario: Supported fixed-duration timeframe is requested
 
-- **WHEN** a client requests `1m`, `5m`, `15m`, `30m`, `1h`, `1d`, or `1w`
+- **WHEN** a client requests `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, or `1w`
 - **THEN** the gateway resolves the corresponding interval for the symbol's persisted provider
 
 #### Scenario: Supported monthly timeframe is requested
@@ -58,7 +58,7 @@ boundary.
 
 #### Scenario: Unsupported timeframe is requested
 
-- **WHEN** a client requests any other timeframe
+- **WHEN** a client requests any other timeframe, including `h4`
 - **THEN** the gateway responds with HTTP status `400`
 - **AND** the error code is `UNSUPPORTED_TIMEFRAME`
 - **AND** the sanitized error details identify the rejected timeframe
@@ -402,7 +402,8 @@ Sunday 17:00 inclusive through Friday 17:00 exclusive in `America/New_York`.
 
 #### Scenario: Forex intraday candle opens before weekly close
 
-- **WHEN** a `1m`, `5m`, `15m`, or `1h` Forex candle opens before Friday 17:00 New York time
+- **WHEN** a `1m`, `5m`, `15m`, `30m`, `1h`, or `4h` Forex candle opens before Friday 17:00 New
+  York time
 - **THEN** it is eligible for normalization, persistence, and response inclusion
 
 #### Scenario: Forex intraday candle opens at weekly close

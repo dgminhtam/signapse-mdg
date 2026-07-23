@@ -111,7 +111,7 @@ def test_parse_candle_request_accepts_aligned_half_open_range() -> None:
     assert request == CandleRequest("BTC/USD", "1m", START, START + timedelta(minutes=2))
 
 
-@pytest.mark.parametrize("timeframe", ["1m", "5m", "15m", "30m", "1h", "1d", "1w", "1mo"])
+@pytest.mark.parametrize("timeframe", ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "1mo"])
 def test_parse_candle_request_accepts_supported_timeframes(timeframe: str) -> None:
     request = parse_candle_request(
         "BTC/USD",
@@ -192,6 +192,7 @@ def test_parse_candle_request_accepts_forward_limit_mode() -> None:
     ("timeframe", "start", "end", "code"),
     [
         ("2m", "2026-06-19T00:00:00Z", "2026-06-19T00:02:00Z", "UNSUPPORTED_TIMEFRAME"),
+        ("h4", "2026-06-19T00:00:00Z", "2026-06-19T04:00:00Z", "UNSUPPORTED_TIMEFRAME"),
         ("1month", "2026-06-01T00:00:00Z", "2026-07-01T00:00:00Z", "UNSUPPORTED_TIMEFRAME"),
         ("1m", None, "2026-06-19T00:02:00Z", "INVALID_TIME_RANGE"),
         ("1m", "2026-06-19T00:00:00Z", "", "INVALID_TIME_RANGE"),
@@ -238,6 +239,22 @@ def test_parse_candle_request_enforces_count_limit() -> None:
             "1m",
             "2026-06-19T00:00:00Z",
             "2026-06-19T00:03:00Z",
+            max_candles=2,
+        )
+
+    parse_candle_request(
+        "BTC/USD",
+        "4h",
+        "2026-06-19T00:00:00Z",
+        "2026-06-19T08:00:00Z",
+        max_candles=2,
+    )
+    with pytest.raises(CandleRequestError):
+        parse_candle_request(
+            "BTC/USD",
+            "4h",
+            "2026-06-19T00:00:00Z",
+            "2026-06-19T12:00:00Z",
             max_candles=2,
         )
 

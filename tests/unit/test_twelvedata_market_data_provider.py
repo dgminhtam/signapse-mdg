@@ -179,17 +179,17 @@ async def test_provider_normalizes_time_series_candles() -> None:
 
     candles = await provider.fetch_candles(
         EUR,
-        "1m",
-        "1m",
+        "4h",
+        "4h",
         START,
-        START + timedelta(minutes=1),
+        START + timedelta(hours=4),
         1,
     )
 
     assert client.time_series_calls == [
         {
             "symbol": "EUR/USD",
-            "interval": "1min",
+            "interval": "4h",
             "start_date": "2026-06-22 00:00:00",
             "end_date": "2026-06-22 00:00:00",
             "timezone": "UTC",
@@ -199,7 +199,7 @@ async def test_provider_normalizes_time_series_candles() -> None:
     ]
     assert candles[0].symbol == "EUR/USD"
     assert candles[0].open == Decimal("1.1000")
-    assert candles[0].close_time == START + timedelta(minutes=1) - timedelta(milliseconds=1)
+    assert candles[0].close_time == START + timedelta(hours=4) - timedelta(milliseconds=1)
     assert candles[0].volume == Decimal("0")
     assert candles[0].complete is False
 
@@ -253,6 +253,7 @@ async def test_provider_rejects_non_allowlisted_candle_symbol() -> None:
         ("15m", "15min", START, START + timedelta(minutes=15), "2026-06-22 00:00:00"),
         ("30m", "30min", START, START + timedelta(minutes=30), "2026-06-22 00:00:00"),
         ("1h", "1h", START, START + timedelta(hours=1), "2026-06-22 00:00:00"),
+        ("4h", "4h", START, START + timedelta(hours=4), "2026-06-22 00:00:00"),
         ("1d", "1day", START, START + timedelta(days=1), "2026-06-22 00:00:00"),
         ("1w", "1week", START, START + timedelta(days=7), "2026-06-22 00:00:00"),
         (

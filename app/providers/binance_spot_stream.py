@@ -316,5 +316,6 @@ _KLINE_INTERVALS = {
     "5m": KlineIntervalEnum.INTERVAL_5m,
     "15m": KlineIntervalEnum.INTERVAL_15m,
     "1h": KlineIntervalEnum.INTERVAL_1h,
+    "4h": KlineIntervalEnum.INTERVAL_4h,
     "1d": KlineIntervalEnum.INTERVAL_1d,
 }

@@ -111,6 +111,25 @@ async def test_stream_provider_subscribes_with_lowercase_sdk_names_and_normalize
     assert str(candle.candle.volume) == "0E-8"
 
 
+async def test_stream_provider_maps_four_hour_interval() -> None:
+    streams = FakeStreams()
+    provider = BinanceSpotStreamProvider(cast(BinanceWebSocketStreams, streams), queue_capacity=10)
+
+    await provider.subscribe_candle(BTC, "4h", "4h")
+
+    assert streams.kline_calls == [("btcusd", KlineIntervalEnum.INTERVAL_4h)]
+
+
+async def test_stream_provider_rejects_unknown_interval_before_connecting() -> None:
+    streams = FakeStreams()
+    provider = BinanceSpotStreamProvider(cast(BinanceWebSocketStreams, streams), queue_capacity=10)
+
+    with pytest.raises(ProviderUnavailableError):
+        await provider.subscribe_candle(BTC, "2m", "2m")
+
+    assert streams.connections == []
+
+
 @pytest.mark.parametrize(
     "payload",
     [
