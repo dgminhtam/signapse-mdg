@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.api.serialization import format_datetime, format_decimal
+from app.api.serialization import format_datetime, format_decimal, format_price
 from app.cache.candle_cache import CandleCache
 from app.core.config import Settings, get_settings
 from app.core.time import utc_now
@@ -154,10 +154,10 @@ def _to_response(result: CandleResult) -> CandleListResponse:
                 CandleResponse(
                     open_time=format_datetime(candle.open_time),
                     close_time=format_datetime(candle.close_time),
-                    open=format_decimal(candle.open),
-                    high=format_decimal(candle.high),
-                    low=format_decimal(candle.low),
-                    close=format_decimal(candle.close),
+                    open=format_price(candle.open, result.price_display_decimals),
+                    high=format_price(candle.high, result.price_display_decimals),
+                    low=format_price(candle.low, result.price_display_decimals),
+                    close=format_price(candle.close, result.price_display_decimals),
                     volume=format_decimal(candle.volume),
                     complete=candle.complete,
                 )

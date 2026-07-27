@@ -9,6 +9,7 @@ class SupportedSymbol:
     provider: str
     provider_symbol: str
     enabled: bool
+    price_display_decimals: int
     calendar_source: str | None = None
     calendar_name: str | None = None
     calendar_timezone: str | None = None

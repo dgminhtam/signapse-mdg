@@ -20,6 +20,7 @@ async def test_service_delegates_to_repository() -> None:
             provider="TWELVE_DATA",
             provider_symbol="BTC/USD",
             enabled=True,
+            price_display_decimals=2,
         )
     ]
     repository = FakeSymbolRepository(expected)

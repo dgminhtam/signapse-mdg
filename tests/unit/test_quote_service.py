@@ -69,10 +69,10 @@ class FakeProviderSymbolProvider:
         )
 
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
-ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-GBP = SupportedSymbol("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
+ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+GBP = SupportedSymbol("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True, 5)
 NOW = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
 
 
@@ -131,6 +131,7 @@ async def test_service_batches_supported_symbols_and_preserves_request_order() -
     assert [quote.symbol for quote in result.quotes] == ["ETH/USD", "BTC/USD"]
     assert [error.symbol for error in result.errors] == ["SOL/USD"]
     assert result.errors[0].code == "UNSUPPORTED_SYMBOL"
+    assert result.price_display_decimals == {"ETH/USD": 2, "BTC/USD": 2}
     assert provider.calls == [["ETH/USD", "BTC/USD"]]
 
 

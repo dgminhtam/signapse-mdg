@@ -16,18 +16,19 @@ from app.providers.twelvedata_market_data_stream import (
     build_twelvedata_market_data_stream_provider,
 )
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
-ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
-SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
-QQQ = SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
+ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2)
+QQQ = SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True, 2)
 SPY_NYSE = SupportedSymbol(
     "SPY",
     "ETF",
     "TWELVE_DATA",
     "SPY",
     True,
+    2,
     "pandas_market_calendars",
     "NYSE",
     "America/New_York",
@@ -38,6 +39,7 @@ XAU_FOREX = SupportedSymbol(
     "TWELVE_DATA",
     "XAU/USD",
     True,
+    2,
     "pandas_market_calendars",
     "FOREX",
     "America/New_York",
@@ -417,6 +419,7 @@ def test_candle_builder_applies_inline_exchange_break(
         "TWELVE_DATA",
         "TEST",
         True,
+        2,
         "pandas_market_calendars",
         "BREAK_TEST",
         "UTC",

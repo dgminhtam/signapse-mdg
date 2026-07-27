@@ -23,18 +23,19 @@ from app.domain.streams import (
 from app.domain.symbols import SupportedSymbol
 from app.services.stream_manager import StreamManager
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
-ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
-WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
-SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
+ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2)
+SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
 SPY_NYSE = SupportedSymbol(
     "SPY",
     "ETF",
     "TWELVE_DATA",
     "SPY",
     True,
+    2,
     "pandas_market_calendars",
     "NYSE",
     "America/New_York",
@@ -171,6 +172,8 @@ async def test_manager_shares_upstream_interests_and_fans_out_events(
     first = await manager.register(request, [BTC])
     second = await manager.register(request, [BTC])
 
+    assert first.price_display_decimals == {"BTC/USD": 2}
+    assert second.price_display_decimals == {"BTC/USD": 2}
     assert provider.quote_subscriptions == ["BTC/USD"]
     assert provider.candle_subscriptions == [("BTC/USD", "1m", "1m")]
     assert isinstance(await next_event(first.queue), StatusEvent)

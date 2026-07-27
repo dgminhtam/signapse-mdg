@@ -15,17 +15,18 @@ from app.domain.market_sessions import (
 )
 from app.domain.symbols import SupportedSymbol
 
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
-SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
-WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
-XAU = SupportedSymbol("XAU/USD", "COMMODITY", "TWELVE_DATA", "XAU/USD", True)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2)
+XAU = SupportedSymbol("XAU/USD", "COMMODITY", "TWELVE_DATA", "XAU/USD", True, 2)
 BTC_247 = SupportedSymbol(
     "BTC/USD",
     "CRYPTO",
     "TWELVE_DATA",
     "BTC/USD",
     True,
+    2,
     "internal",
     "24/7",
     "UTC",
@@ -36,6 +37,7 @@ SPY_NYSE = SupportedSymbol(
     "TWELVE_DATA",
     "SPY",
     True,
+    2,
     "pandas_market_calendars",
     "NYSE",
     "America/New_York",
@@ -46,6 +48,7 @@ XAU_FOREX = SupportedSymbol(
     "TWELVE_DATA",
     "XAU/USD",
     True,
+    2,
     "pandas_market_calendars",
     "FOREX",
     "America/New_York",
@@ -126,6 +129,7 @@ def test_policy_selection_falls_back_for_unsupported_inline_calendar() -> None:
         "TWELVE_DATA",
         "SPY",
         True,
+        2,
         "pandas_market_calendars",
         "MISSING_CALENDAR",
         "UTC",

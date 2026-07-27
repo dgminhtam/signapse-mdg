@@ -26,7 +26,7 @@ class StubQuoteService:
         result: QuoteResult | None = None,
         error: Exception | None = None,
     ) -> None:
-        self.result = result or QuoteResult(quotes=[], errors=[])
+        self.result = result or QuoteResult(quotes=[], errors=[], price_display_decimals={})
         self.error = error
         self.requested: list[str] = []
 
@@ -40,13 +40,13 @@ class StubQuoteService:
 class FakeSymbolRepository:
     async def list_enabled(self) -> list[SupportedSymbol]:
         return [
-            SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True),
-            SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
-            SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
-            SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True),
-            SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True),
-            SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True),
-            SupportedSymbol("SPX", "STOCK_INDEX", "YFINANCE", "^GSPC", True),
+            SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2),
+            SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5),
+            SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2),
+            SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2),
+            SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True, 2),
+            SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3),
+            SupportedSymbol("SPX", "STOCK_INDEX", "YFINANCE", "^GSPC", True, 2),
         ]
 
 
@@ -97,6 +97,7 @@ async def test_quotes_serializes_success_and_partial_error(client: AsyncClient) 
                     message="Symbol is not supported by this gateway.",
                 )
             ],
+            price_display_decimals={"BTC/USD": 2},
         )
     )
     app.dependency_overrides[get_quote_service] = lambda: service
@@ -105,11 +106,12 @@ async def test_quotes_serializes_success_and_partial_error(client: AsyncClient) 
 
     assert response.status_code == 200
     assert service.requested == ["BTC/USD", "SOL/USD"]
+    assert service.result.quotes[0].price == Decimal("62373.79000000")
     assert response.json() == {
         "quotes": [
             {
                 "symbol": "BTC/USD",
-                "price": "62373.79000000",
+                "price": "62373.79",
                 "receivedAt": "2026-06-19T10:30:00Z",
             }
         ],
@@ -156,6 +158,7 @@ async def test_quotes_returns_200_when_all_symbols_fail(client: AsyncClient) -> 
             errors=[
                 QuoteError("SOL/USD", "UNSUPPORTED_SYMBOL", "Unsupported."),
             ],
+            price_display_decimals={},
         )
     )
 
@@ -287,5 +290,5 @@ async def test_quotes_reuse_cached_yfinance_quote(client: AsyncClient) -> None:
 
     assert first.status_code == second.status_code == 200
     assert first.json()["quotes"][0]["symbol"] == "XAG/USD"
-    assert second.json()["quotes"][0]["price"] == "63.20"
+    assert second.json()["quotes"][0]["price"] == "63.200"
     assert yfinance.calls == [["SI=F"]]

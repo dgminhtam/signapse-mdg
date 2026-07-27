@@ -385,6 +385,7 @@ def _to_supported_symbol(row: SupportedSymbolModel) -> SupportedSymbol:
         provider=row.provider,
         provider_symbol=row.provider_symbol,
         enabled=row.enabled,
+        price_display_decimals=row.price_display_decimals,
         calendar_source=row.calendar_source,
         calendar_name=row.calendar_name,
         calendar_timezone=row.calendar_timezone,

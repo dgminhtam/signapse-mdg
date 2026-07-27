@@ -22,6 +22,7 @@ class HistoricalPriceResult:
     symbol: str
     price: Decimal
     priced_at: datetime
+    price_display_decimals: int
 
 
 def parse_historical_price_request(
@@ -58,7 +59,12 @@ class HistoricalPriceService:
         if not result.candles:
             raise HistoricalPriceNotFoundError
         candle = result.candles[-1]
-        return HistoricalPriceResult(result.symbol, candle.close, candle.open_time)
+        return HistoricalPriceResult(
+            result.symbol,
+            candle.close,
+            candle.open_time,
+            result.price_display_decimals,
+        )
 
 
 def _parse_utc(raw_value: str | None) -> datetime:

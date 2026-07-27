@@ -18,9 +18,9 @@ from app.providers.yfinance_market_data_stream import (
     YFinanceMarketDataStreamProvider,
 )
 
-SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
-BRENT = SupportedSymbol("BRENT", "COMMODITY", "YFINANCE", "BZ=F", True)
-UNSUPPORTED = SupportedSymbol("AAPL", "US_STOCK", "YFINANCE", "AAPL", True)
+SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
+BRENT = SupportedSymbol("BRENT", "COMMODITY", "YFINANCE", "BZ=F", True, 2)
+UNSUPPORTED = SupportedSymbol("AAPL", "US_STOCK", "YFINANCE", "AAPL", True, 2)
 NOW = datetime(2026, 6, 23, 9, 0, 30, tzinfo=UTC)
 
 

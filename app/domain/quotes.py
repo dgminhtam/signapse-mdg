@@ -30,6 +30,7 @@ class QuoteError:
 class QuoteResult:
     quotes: list[Quote]
     errors: list[QuoteError]
+    price_display_decimals: dict[str, int]
 
 
 @dataclass(frozen=True, slots=True)

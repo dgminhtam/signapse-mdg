@@ -40,6 +40,7 @@ class CandleResult:
     start: datetime
     end: datetime
     candles: list[Candle]
+    price_display_decimals: int
 
 
 class CandleRepository(Protocol):

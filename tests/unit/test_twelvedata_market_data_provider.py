@@ -20,12 +20,12 @@ from app.providers.twelvedata_market_data import (
     build_twelvedata_market_data_provider,
 )
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
-ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
-SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
-QQQ = SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
+ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2)
+QQQ = SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True, 2)
 START = datetime(2026, 6, 22, 0, 0, tzinfo=UTC)
 
 
@@ -231,7 +231,7 @@ async def test_provider_normalizes_wti_and_etf_candles(
 
 
 async def test_provider_rejects_non_allowlisted_candle_symbol() -> None:
-    unsupported = SupportedSymbol("BRENT", "COMMODITY", "TWELVE_DATA", "BRENT", True)
+    unsupported = SupportedSymbol("BRENT", "COMMODITY", "TWELVE_DATA", "BRENT", True, 2)
     provider = TwelveDataMarketDataProvider(lambda: FakeClient())
 
     with pytest.raises(ProviderUnavailableError):

@@ -271,6 +271,21 @@ return `400 INVALID_SYMBOLS`; exceeding `MAX_QUOTE_SYMBOLS` returns
 `price`, and gateway-recorded `receivedAt`; provider and freshness metadata remain internal.
 Provider failures are isolated by group.
 
+### Price Display Formatting Flow
+
+```text
+Provider -> raw Decimal normalization
+  -> domain/cache/candle aggregation/PostgreSQL retain raw Decimal
+  -> Symbol Registry supplies priceDisplayDecimals
+  -> HTTP/WebSocket serialization rounds ROUND_HALF_UP and pads price fields
+  -> Signapse renders the returned strings directly
+```
+
+Display precision is presentation policy, not tick size or storage precision. It is not repeated
+in quote, candle, historical-price, or WebSocket payloads. Latest/historical price fields and
+candle OHLC use the persisted symbol precision consistently across HTTP and WebSocket; candle
+volume remains a raw fixed-point decimal string.
+
 ### Candle HTTP Flow
 
 ```text
@@ -427,6 +442,8 @@ CREATE TABLE supported_symbols (
     asset_class TEXT NOT NULL,
     provider TEXT NOT NULL,
     provider_symbol TEXT NOT NULL,
+    price_display_decimals SMALLINT NOT NULL
+        CHECK (price_display_decimals BETWEEN 0 AND 18),
     enabled BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

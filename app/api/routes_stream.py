@@ -3,7 +3,7 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.api.serialization import format_datetime, format_decimal
+from app.api.serialization import format_datetime, format_decimal, format_price
 from app.core.config import get_settings
 from app.db.repositories import PostgresSymbolRepository
 from app.db.session import build_session_factory
@@ -115,17 +115,25 @@ async def _send_events(
             if queue_task in done:
                 event = queue_task.result()
                 registration.queue.task_done()
-                await websocket.send_json(stream_event_payload(event))
+                await websocket.send_json(
+                    stream_event_payload(event, registration.price_display_decimals)
+                )
     except WebSocketDisconnect:
         registration.closed.set()
 
 
-def stream_event_payload(event: DownstreamEvent) -> dict[str, Any]:
+def stream_event_payload(
+    event: DownstreamEvent,
+    price_display_decimals: dict[str, int],
+) -> dict[str, Any]:
     if isinstance(event, StreamQuote):
         return {
             "type": "quote",
             "symbol": event.quote.symbol,
-            "price": format_decimal(event.quote.price),
+            "price": format_price(
+                event.quote.price,
+                price_display_decimals[event.quote.symbol],
+            ),
             "receivedAt": format_datetime(event.quote.received_at),
         }
     if isinstance(event, StreamCandle):
@@ -136,10 +144,10 @@ def stream_event_payload(event: DownstreamEvent) -> dict[str, Any]:
             "timeframe": candle.timeframe,
             "openTime": format_datetime(candle.open_time),
             "closeTime": format_datetime(candle.close_time),
-            "open": format_decimal(candle.open),
-            "high": format_decimal(candle.high),
-            "low": format_decimal(candle.low),
-            "close": format_decimal(candle.close),
+            "open": format_price(candle.open, price_display_decimals[candle.symbol]),
+            "high": format_price(candle.high, price_display_decimals[candle.symbol]),
+            "low": format_price(candle.low, price_display_decimals[candle.symbol]),
+            "close": format_price(candle.close, price_display_decimals[candle.symbol]),
             "volume": format_decimal(candle.volume),
             "complete": candle.complete,
             "receivedAt": format_datetime(event.received_at),

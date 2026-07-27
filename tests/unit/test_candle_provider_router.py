@@ -8,15 +8,15 @@ from app.domain.errors import ProviderUnavailableError
 from app.domain.symbols import SupportedSymbol
 from app.services.candle_provider_router import CandleProviderRouter
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
-TWELVEDATA_BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
-AAPL = SupportedSymbol("AAPL", "US_STOCK", "TWELVE_DATA", "AAPL", True)
-SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
-SPX = SupportedSymbol("SPX", "STOCK_INDEX", "YFINANCE", "^GSPC", True)
-UNKNOWN = SupportedSymbol("XAU/USD", "COMMODITY", "UNKNOWN", "XAU/USD", True)
-YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True, 2)
+TWELVEDATA_BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2)
+AAPL = SupportedSymbol("AAPL", "US_STOCK", "TWELVE_DATA", "AAPL", True, 2)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2)
+SPX = SupportedSymbol("SPX", "STOCK_INDEX", "YFINANCE", "^GSPC", True, 2)
+UNKNOWN = SupportedSymbol("XAU/USD", "COMMODITY", "UNKNOWN", "XAU/USD", True, 2)
+YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
 START = datetime(2026, 6, 22, 0, 0, tzinfo=UTC)
 
 

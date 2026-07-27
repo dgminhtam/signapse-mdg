@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 from app.api.routes_candles import get_candle_service
-from app.api.serialization import format_datetime, format_decimal
+from app.api.serialization import format_datetime, format_price
 from app.services.candles import CandleService
 from app.services.historical_prices import (
     HistoricalPriceResult,
@@ -46,6 +46,6 @@ async def get_historical_price(
 def _to_response(result: HistoricalPriceResult) -> HistoricalPriceResponse:
     return HistoricalPriceResponse(
         symbol=result.symbol,
-        price=format_decimal(result.price),
+        price=format_price(result.price, result.price_display_decimals),
         priced_at=format_datetime(result.priced_at),
     )

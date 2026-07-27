@@ -71,7 +71,7 @@ def make_provider(
     return provider, calls
 
 
-YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
+YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
 START = datetime(2026, 6, 22, 0, 0, tzinfo=UTC)
 
 
@@ -388,7 +388,7 @@ async def test_candles_reject_unsupported_symbol_without_provider_call() -> None
 
     with pytest.raises(ProviderUnavailableError):
         await provider.fetch_candles(
-            SupportedSymbol("AAPL", "US_STOCK", "YFINANCE", "AAPL", True),
+            SupportedSymbol("AAPL", "US_STOCK", "YFINANCE", "AAPL", True, 2),
             "1m",
             "1m",
             START,

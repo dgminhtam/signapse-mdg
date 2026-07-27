@@ -16,7 +16,7 @@ from app.domain.streams import (
 from app.domain.symbols import SupportedSymbol
 from app.providers.binance_spot_stream import BinanceSpotStreamProvider, BinanceWebSocketStreams
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True, 2)
 START = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
 
 

@@ -30,7 +30,7 @@ class StubHistoricalPriceService:
         self.requested = request
         if self.error is not None:
             raise self.error
-        return HistoricalPriceResult("BTC/USD", Decimal("104250.12"), START)
+        return HistoricalPriceResult("XAU/USD", Decimal("2934.5678"), START, 2)
 
 
 @pytest.fixture
@@ -52,8 +52,8 @@ async def test_historical_price_serializes_minimal_contract(client: AsyncClient)
 
     assert response.status_code == 200
     assert response.json() == {
-        "symbol": "BTC/USD",
-        "price": "104250.12",
+        "symbol": "XAU/USD",
+        "price": "2934.57",
         "pricedAt": "2026-06-19T10:30:00Z",
     }
     assert service.requested == HistoricalPriceRequest(

@@ -14,11 +14,11 @@ from app.domain.streams import (
 from app.domain.symbols import SupportedSymbol
 from app.services.stream_provider_router import MultiProviderStreamProvider
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
-BINANCE_BTC = SupportedSymbol("BTC/BINANCE", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-UNKNOWN = SupportedSymbol("X/USD", "FOREX", "MISSING", "X/USD", True)
-YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
+BINANCE_BTC = SupportedSymbol("BTC/BINANCE", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+UNKNOWN = SupportedSymbol("X/USD", "FOREX", "MISSING", "X/USD", True, 5)
+YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
 
 
 class FakeProvider:

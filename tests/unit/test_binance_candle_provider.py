@@ -11,7 +11,7 @@ from app.domain.errors import ProviderUnavailableError
 from app.domain.symbols import SupportedSymbol
 from app.providers.binance_spot import BinanceSpotCandleProvider, BinanceSpotRestClient
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True, 2)
 START = datetime(2026, 6, 19, 0, 0, tzinfo=UTC)
 
 

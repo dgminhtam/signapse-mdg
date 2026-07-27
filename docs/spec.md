@@ -175,18 +175,26 @@ Response:
       "assetClass": "CRYPTO",
       "provider": "TWELVE_DATA",
       "providerSymbol": "BTC/USD",
-      "enabled": true
+      "enabled": true,
+      "priceDisplayDecimals": 2
     },
     {
       "symbol": "ETH/USD",
       "assetClass": "CRYPTO",
       "provider": "TWELVE_DATA",
       "providerSymbol": "ETH/USD",
-      "enabled": true
+      "enabled": true,
+      "priceDisplayDecimals": 2
     }
   ]
 }
 ```
+
+`priceDisplayDecimals` is required per persisted symbol and controls public price serialization.
+MDG rounds with decimal `ROUND_HALF_UP` and pads to exactly that many fractional digits for latest
+quotes, historical prices, candle OHLC, and WebSocket quote/candle OHLC. Provider normalization,
+internal `Decimal` values, caches, candle aggregation, persistence, and candle volume retain raw
+precision.
 
 ### Get latest quotes
 
@@ -213,7 +221,8 @@ Semantics:
 
 - A successful quote contains exactly `symbol`, `price`, and `receivedAt`.
 - `symbol` is the canonical gateway symbol; provider identity and mapping remain internal.
-- `price` is the latest trade/market price and is serialized as a decimal string.
+- `price` is the latest trade/market price rounded with `ROUND_HALF_UP` and padded to the symbol's
+  exact `priceDisplayDecimals`.
 - `receivedAt` is the gateway receive/snapshot timestamp.
 - Asset class, provider metadata, volume, provider time, and freshness state are not exposed.
 - Multi-symbol requests return per-symbol errors for unsupported, stale, or provider-failed symbols.
@@ -264,6 +273,8 @@ Semantics:
 
 - A successful response contains exactly `symbol`, `timeframe`, `from`, `to`, and `candles`.
 - Asset class, provider identity, and provider symbol remain internal to the gateway.
+- Candle `open`, `high`, `low`, and `close` are rounded with `ROUND_HALF_UP` and padded to the
+  symbol's exact `priceDisplayDecimals`; `volume` retains its raw fixed-point decimal string.
 - Closed candles should be cacheable.
 - Current forming candle may be returned with `complete = false`.
 - Candle windows use exact UTC half-open ranges: `from` is inclusive and resolved `to` is
@@ -318,7 +329,8 @@ Semantics:
 
 - A successful response contains exactly `symbol`, `price`, and `pricedAt`.
 - `symbol` is the canonical gateway symbol; provider identity and mapping remain internal.
-- `price` is the selected `1m` candle close and is serialized as a decimal string.
+- `price` is the selected `1m` candle close rounded with `ROUND_HALF_UP` and padded to the symbol's
+  exact `priceDisplayDecimals`.
 - `pricedAt` is the selected `1m` candle open timestamp, not the original requested `at`; it
   can be earlier than the containing one-minute bucket when the requested instant falls in a
   closed session or an unavailable bucket.
@@ -536,6 +548,10 @@ YFINANCE WebSocket events are also price ticks. The gateway applies the same UTC
 zero-volume derived-candle behavior. Yahoo day volume is not interval volume and is ignored.
 Successful subscriptions that have not emitted a valid first tick remain `CONNECTING`; the gateway
 does not poll, remap provider symbols, fabricate events, or fall back to another provider.
+
+WebSocket quote `price` and candle `open`, `high`, `low`, and `close` use the same
+`ROUND_HALF_UP`/exact-padding policy as HTTP responses. Stream candle `volume` retains raw
+fixed-point precision, and no `priceDisplayDecimals` field is repeated in market-data events.
 
 SPY and QQQ candle slots use the regular US ETF session, Monday-Friday 09:30-16:00 New York time.
 WTI uses Sunday 18:00-Friday 17:00 New York time with the Monday-Thursday 17:00-18:00 maintenance

@@ -15,8 +15,8 @@ from app.domain.candles import Candle, CandleRequest, CandleResult
 from app.domain.symbols import SupportedSymbol
 from app.services.candles import CandleService
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
 START = datetime(2026, 6, 19, 0, 0, tzinfo=UTC)
 
 
@@ -35,6 +35,7 @@ class FakeBackfillService:
             start=request.start,
             end=request.end,
             candles=[],
+            price_display_decimals=2,
         )
 
 

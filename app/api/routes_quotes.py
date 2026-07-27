@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.serialization import format_datetime, format_decimal
+from app.api.serialization import format_datetime, format_price
 from app.cache.quote_cache import QuoteCache
 from app.core.config import Settings, get_settings
 from app.db.repositories import PostgresSymbolRepository
@@ -129,7 +129,10 @@ def _to_response(result: QuoteResult) -> QuoteListResponse:
         quotes=[
             QuoteResponse(
                 symbol=quote.symbol,
-                price=format_decimal(quote.price),
+                price=format_price(
+                    quote.price,
+                    result.price_display_decimals[quote.symbol],
+                ),
                 received_at=format_datetime(quote.received_at),
             )
             for quote in result.quotes

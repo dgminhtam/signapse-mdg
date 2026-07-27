@@ -15,10 +15,10 @@ from app.domain.symbols import SupportedSymbol
 from app.main import app
 from app.services.stream_manager import ClientRegistration
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
-ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
+ETH = SupportedSymbol("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
 NOW = datetime(2026, 6, 19, 10, 30, tzinfo=UTC)
 
 
@@ -40,6 +40,7 @@ class FakeManager:
             "client-1",
             request,
             (),
+            {symbol.symbol: symbol.price_display_decimals for symbol in symbols},
             asyncio.Queue(10),
         )
         registration.queue.put_nowait(
@@ -181,7 +182,7 @@ def test_stream_route_sends_exact_status_and_quote_events_and_unregisters(
             assert ws.receive_json() == {
                 "type": "quote",
                 "symbol": "BTC/USD",
-                "price": "0.00000001",
+                    "price": "0.00",
                 "receivedAt": "2026-06-19T10:30:00Z",
             }
 

@@ -5,12 +5,12 @@ from app.domain.quotes import ProviderQuoteBatch
 from app.domain.symbols import SupportedSymbol
 from app.services.quote_provider_router import QuoteProviderRouter
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True)
-ETH = SupportedSymbol("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-GBP = SupportedSymbol("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True)
-UNKNOWN = SupportedSymbol("XAU/USD", "COMMODITY", "UNKNOWN", "XAU/USD", True)
-YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True, 2)
+ETH = SupportedSymbol("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+GBP = SupportedSymbol("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True, 5)
+UNKNOWN = SupportedSymbol("XAU/USD", "COMMODITY", "UNKNOWN", "XAU/USD", True, 2)
+YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
 
 
 class FakeProvider:

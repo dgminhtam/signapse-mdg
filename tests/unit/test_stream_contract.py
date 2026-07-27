@@ -63,26 +63,27 @@ def test_stream_settings_have_valid_defaults_and_constraints() -> None:
         Settings(stream_freshness_check_seconds=0)
 
 
-def test_stream_quote_payload_is_minimal_and_fixed_point() -> None:
+def test_stream_quote_payload_is_minimal_and_display_formatted() -> None:
     quote = Quote(
-        "BTC/USD",
-        "CRYPTO",
+        "XAU/USD",
+        "COMMODITY",
         "TWELVE_DATA",
-        "BTC/USD",
-        Decimal("1E-8"),
+        "XAU/USD",
+        Decimal("2934.5678"),
         None,
         None,
         NOW,
     )
 
-    payload = stream_event_payload(StreamQuote(quote))
+    payload = stream_event_payload(StreamQuote(quote), {"XAU/USD": 2})
 
     assert payload == {
         "type": "quote",
-        "symbol": "BTC/USD",
-        "price": "0.00000001",
+        "symbol": "XAU/USD",
+        "price": "2934.57",
         "receivedAt": "2026-06-19T10:30:00Z",
     }
+    assert quote.price == Decimal("2934.5678")
 
 
 def test_stream_candle_payload_is_minimal_and_fixed_point() -> None:
@@ -97,12 +98,15 @@ def test_stream_candle_payload_is_minimal_and_fixed_point() -> None:
         Decimal("10.00"),
         Decimal("11.00"),
         Decimal("9.00"),
-        Decimal("10.50"),
+        Decimal("10.5678"),
         Decimal("0E-8"),
         False,
     )
 
-    payload = stream_event_payload(StreamCandle(candle, NOW + timedelta(seconds=1)))
+    payload = stream_event_payload(
+        StreamCandle(candle, NOW + timedelta(seconds=1)),
+        {"BTC/USD": 2},
+    )
 
     assert set(payload) == {
         "type",
@@ -119,16 +123,21 @@ def test_stream_candle_payload_is_minimal_and_fixed_point() -> None:
         "receivedAt",
     }
     assert "provider" not in payload
+    assert "priceDisplayDecimals" not in payload
+    assert payload["close"] == "10.57"
     assert payload["volume"] == "0.00000000"
     assert payload["receivedAt"] == "2026-06-19T10:30:01Z"
+    assert candle.close == Decimal("10.5678")
 
 
 def test_status_event_payload_includes_error_fields_only_for_error() -> None:
     subscribed = stream_event_payload(
-        StatusEvent("SUBSCRIBED", ("BTC/USD",), ("quote", "candle"), NOW)
+        StatusEvent("SUBSCRIBED", ("BTC/USD",), ("quote", "candle"), NOW),
+        {},
     )
     market_closed = stream_event_payload(
-        StatusEvent("MARKET_CLOSED", ("EUR/USD",), ("candle",), NOW)
+        StatusEvent("MARKET_CLOSED", ("EUR/USD",), ("candle",), NOW),
+        {},
     )
     error = stream_event_payload(
         StatusEvent(
@@ -138,7 +147,8 @@ def test_status_event_payload_includes_error_fields_only_for_error() -> None:
             NOW,
             "PROVIDER_UNAVAILABLE",
             "Provider unavailable.",
-        )
+        ),
+        {},
     )
 
     assert subscribed == {

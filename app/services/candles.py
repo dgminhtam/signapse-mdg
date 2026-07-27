@@ -244,6 +244,7 @@ class CandleService:
             start=result_start,
             end=result_end,
             candles=sorted(merged.values(), key=lambda candle: candle.open_time),
+            price_display_decimals=symbol.price_display_decimals,
         )
 
 

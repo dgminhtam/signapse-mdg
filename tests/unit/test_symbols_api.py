@@ -44,6 +44,7 @@ async def test_symbols_serializes_camel_case_fields_in_service_order(
                 provider="TWELVE_DATA",
                 provider_symbol="BTC/USD",
                 enabled=True,
+                price_display_decimals=2,
             ),
             SupportedSymbol(
                 symbol="ETH/USD",
@@ -51,6 +52,7 @@ async def test_symbols_serializes_camel_case_fields_in_service_order(
                 provider="TWELVE_DATA",
                 provider_symbol="ETH/USD",
                 enabled=True,
+                price_display_decimals=2,
             ),
             SupportedSymbol(
                 symbol="SPX",
@@ -58,6 +60,15 @@ async def test_symbols_serializes_camel_case_fields_in_service_order(
                 provider="YFINANCE",
                 provider_symbol="^GSPC",
                 enabled=True,
+                price_display_decimals=2,
+            ),
+            SupportedSymbol(
+                symbol="XAU/USD",
+                asset_class="COMMODITY",
+                provider="TWELVE_DATA",
+                provider_symbol="XAU/USD",
+                enabled=True,
+                price_display_decimals=2,
             ),
         ]
     )
@@ -73,6 +84,7 @@ async def test_symbols_serializes_camel_case_fields_in_service_order(
                 "provider": "TWELVE_DATA",
                 "providerSymbol": "BTC/USD",
                 "enabled": True,
+                "priceDisplayDecimals": 2,
             },
             {
                 "symbol": "ETH/USD",
@@ -80,6 +92,7 @@ async def test_symbols_serializes_camel_case_fields_in_service_order(
                 "provider": "TWELVE_DATA",
                 "providerSymbol": "ETH/USD",
                 "enabled": True,
+                "priceDisplayDecimals": 2,
             },
             {
                 "symbol": "SPX",
@@ -87,6 +100,15 @@ async def test_symbols_serializes_camel_case_fields_in_service_order(
                 "provider": "YFINANCE",
                 "providerSymbol": "^GSPC",
                 "enabled": True,
+                "priceDisplayDecimals": 2,
+            },
+            {
+                "symbol": "XAU/USD",
+                "assetClass": "COMMODITY",
+                "provider": "TWELVE_DATA",
+                "providerSymbol": "XAU/USD",
+                "enabled": True,
+                "priceDisplayDecimals": 2,
             },
         ]
     }

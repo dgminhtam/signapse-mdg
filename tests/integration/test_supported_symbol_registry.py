@@ -134,6 +134,25 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
                 )
             }
         )
+        check_constraints = await connection.run_sync(
+            lambda sync_connection: {
+                constraint["name"]
+                for constraint in inspect(sync_connection).get_check_constraints(
+                    "supported_symbols"
+                )
+            }
+        )
+        display_rows = (
+            await connection.execute(
+                text(
+                    """
+                    SELECT symbol, price_display_decimals
+                    FROM supported_symbols
+                    ORDER BY symbol
+                    """
+                )
+            )
+        ).all()
         rows = (
             await connection.execute(
                 text(
@@ -146,7 +165,7 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
             )
         ).all()
 
-    assert columns == {
+    assert set(columns) == {
         "id",
         "symbol",
         "asset_class",
@@ -155,12 +174,47 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
         "calendar_source",
         "calendar_name",
         "calendar_timezone",
+        "price_display_decimals",
         "enabled",
         "created_at",
         "updated_at",
     }
     assert ("symbol",) in constraints
     assert ("provider", "provider_symbol") in constraints
+    assert columns["price_display_decimals"]["nullable"] is False
+    assert columns["price_display_decimals"]["default"] is None
+    assert "ck_supported_symbols_price_display_decimals" in check_constraints
+    assert {symbol for symbol, decimals in display_rows if decimals == 5} == {
+        "AUD/USD",
+        "EUR/USD",
+        "GBP/USD",
+    }
+    assert {symbol for symbol, decimals in display_rows if decimals == 3} == {
+        "NATGAS",
+        "USD/JPY",
+        "XAG/USD",
+    }
+    assert {symbol for symbol, decimals in display_rows if decimals == 2} == {
+        "AAPL",
+        "BRENT",
+        "BTC/USD",
+        "COFFEE",
+        "CORN",
+        "DJI",
+        "ETH/USD",
+        "MSFT",
+        "NDX",
+        "NVDA",
+        "QQQ",
+        "SPX",
+        "SPY",
+        "SUGAR",
+        "TSLA",
+        "WHEAT",
+        "WTI",
+        "XAU/USD",
+    }
+    assert len(display_rows) == 24
     assert rows == [
         ("AAPL", "US_STOCK", "TWELVE_DATA", "AAPL", True),
         ("AUD/USD", "FOREX", "TWELVE_DATA", "AUD/USD", True),
@@ -198,7 +252,7 @@ async def test_inline_calendar_config_migration_has_expected_schema_and_seed_dat
         )
         columns = await connection.run_sync(
             lambda sync_connection: {
-                column["name"]
+                column["name"]: column
                 for column in inspect(sync_connection).get_columns("supported_symbols")
             }
         )
@@ -286,6 +340,9 @@ async def test_seed_is_idempotent_and_restores_required_mapping(
     migration = load_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
+            text("ALTER TABLE supported_symbols ALTER COLUMN price_display_decimals SET DEFAULT 2")
+        )
+        await connection.execute(
             text(
                 """
                 UPDATE supported_symbols
@@ -307,6 +364,9 @@ async def test_seed_is_idempotent_and_restores_required_mapping(
                 )
             )
         ).all()
+        await connection.execute(
+            text("ALTER TABLE supported_symbols ALTER COLUMN price_display_decimals DROP DEFAULT")
+        )
 
     assert rows == [
         ("AAPL", "AAPL", True),
@@ -342,6 +402,9 @@ async def test_forex_seed_is_idempotent_and_preserves_crypto_mappings(
     migration = load_forex_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
+            text("ALTER TABLE supported_symbols ALTER COLUMN price_display_decimals SET DEFAULT 2")
+        )
+        await connection.execute(
             text(
                 """
                 UPDATE supported_symbols
@@ -363,6 +426,9 @@ async def test_forex_seed_is_idempotent_and_preserves_crypto_mappings(
                 )
             )
         ).all()
+        await connection.execute(
+            text("ALTER TABLE supported_symbols ALTER COLUMN price_display_decimals DROP DEFAULT")
+        )
 
     assert rows == [
         ("AAPL", "US_STOCK", "TWELVE_DATA", "AAPL", True),
@@ -398,6 +464,9 @@ async def test_wti_etf_seed_is_idempotent_and_preserves_existing_mappings(
     migration = load_wti_etf_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
+            text("ALTER TABLE supported_symbols ALTER COLUMN price_display_decimals SET DEFAULT 2")
+        )
+        await connection.execute(
             text(
                 """
                 UPDATE supported_symbols
@@ -420,6 +489,9 @@ async def test_wti_etf_seed_is_idempotent_and_preserves_existing_mappings(
                 )
             )
         ).all()
+        await connection.execute(
+            text("ALTER TABLE supported_symbols ALTER COLUMN price_display_decimals DROP DEFAULT")
+        )
 
     assert rows == [
         ("QQQ", "ETF", "TWELVE_DATA", "QQQ", True),
@@ -465,6 +537,9 @@ async def test_yfinance_seed_is_idempotent_and_preserves_existing_mappings(
     migration = load_yfinance_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
+            text("ALTER TABLE supported_symbols ALTER COLUMN price_display_decimals SET DEFAULT 2")
+        )
+        await connection.execute(
             text(
                 """
                 UPDATE supported_symbols
@@ -499,6 +574,9 @@ async def test_yfinance_seed_is_idempotent_and_preserves_existing_mappings(
                 )
             )
         ).all()
+        await connection.execute(
+            text("ALTER TABLE supported_symbols ALTER COLUMN price_display_decimals DROP DEFAULT")
+        )
 
     assert rows == [
         ("BRENT", "COMMODITY", "YFINANCE", "BZ=F", True),
@@ -557,6 +635,9 @@ async def test_crypto_twelvedata_migration_is_idempotent_and_downgrades(
     migration = load_crypto_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
+            text("ALTER TABLE supported_symbols ALTER COLUMN price_display_decimals SET DEFAULT 2")
+        )
+        await connection.execute(
             text(
                 """
                 UPDATE supported_symbols
@@ -607,6 +688,9 @@ async def test_crypto_twelvedata_migration_is_idempotent_and_downgrades(
                 )
             )
         ).all()
+        await connection.execute(
+            text("ALTER TABLE supported_symbols ALTER COLUMN price_display_decimals DROP DEFAULT")
+        )
 
     assert rows == [
         ("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True),
@@ -627,11 +711,50 @@ async def test_registry_constraints_reject_duplicate_provider_mapping(
                 text(
                     """
                     INSERT INTO supported_symbols
-                        (symbol, asset_class, provider, provider_symbol, enabled)
+                        (
+                            symbol,
+                            asset_class,
+                            provider,
+                            provider_symbol,
+                            enabled,
+                            price_display_decimals
+                        )
                     VALUES
-                        ('XBT/USD', 'CRYPTO', 'BINANCE_SPOT', 'BTCUSD', true)
+                        ('XBT/USD', 'CRYPTO', 'BINANCE_SPOT', 'BTCUSD', true, 2)
                     """
                 )
+            )
+
+
+@pytest.mark.parametrize("price_display_decimals", [None, -1, 19])
+async def test_registry_rejects_invalid_price_display_decimals(
+    database_engine: AsyncEngine,
+    price_display_decimals: int | None,
+) -> None:
+    with pytest.raises(IntegrityError):
+        async with database_engine.begin() as connection:
+            await connection.execute(
+                text(
+                    """
+                    INSERT INTO supported_symbols (
+                        symbol,
+                        asset_class,
+                        provider,
+                        provider_symbol,
+                        enabled,
+                        price_display_decimals
+                    )
+                    VALUES (
+                        'TEST/USD',
+                        'FOREX',
+                        'TEST',
+                        'TEST/USD',
+                        true,
+                        :price_display_decimals
+                    )
+                    """
+                ),
+                {"price_display_decimals": price_display_decimals},
             )
 
 
@@ -695,7 +818,33 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
         response = await client.get("/v1/symbols")
 
     assert response.status_code == 200
-    assert response.json() == {
+    symbols = response.json()["symbols"]
+    assert {symbol["symbol"]: symbol.pop("priceDisplayDecimals") for symbol in symbols} == {
+        "AAPL": 2,
+        "AUD/USD": 5,
+        "BRENT": 2,
+        "BTC/USD": 2,
+        "COFFEE": 2,
+        "CORN": 2,
+        "DJI": 2,
+        "EUR/USD": 5,
+        "GBP/USD": 5,
+        "MSFT": 2,
+        "NATGAS": 3,
+        "NDX": 2,
+        "NVDA": 2,
+        "QQQ": 2,
+        "SPX": 2,
+        "SPY": 2,
+        "SUGAR": 2,
+        "TSLA": 2,
+        "USD/JPY": 3,
+        "WHEAT": 2,
+        "WTI": 2,
+        "XAG/USD": 3,
+        "XAU/USD": 2,
+    }
+    assert {"symbols": symbols} == {
         "symbols": [
             {
                 "symbol": "AAPL",
@@ -910,5 +1059,5 @@ async def test_quotes_use_persisted_provider_mapping(
     quote = response.json()["quotes"][0]
     assert set(quote) == {"symbol", "price", "receivedAt"}
     assert quote["symbol"] == "BTC/USD"
-    assert quote["price"] == "123.4500"
+    assert quote["price"] == "123.45"
     assert quote["receivedAt"].endswith("Z")

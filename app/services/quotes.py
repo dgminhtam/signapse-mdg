@@ -67,6 +67,11 @@ class QuoteService:
                 for symbol in requested_symbols
                 if symbol in errors_by_symbol
             ],
+            price_display_decimals={
+                symbol: registry[symbol].price_display_decimals
+                for symbol in requested_symbols
+                if symbol in registry
+            },
         )
 
     async def _resolve_supported(

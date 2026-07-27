@@ -24,7 +24,7 @@ from app.services.stream_manager import StreamManager
 pytestmark = pytest.mark.integration
 
 START = datetime(2026, 6, 19, 0, 0, tzinfo=UTC)
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
 
 
 def make_candle(open_time: datetime, close: str = "10.50") -> Candle:

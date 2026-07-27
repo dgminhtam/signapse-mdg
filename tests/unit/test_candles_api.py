@@ -36,6 +36,7 @@ class StubCandleService:
             START,
             START + timedelta(minutes=1),
             [],
+            2,
         )
         self.error = error
         self.requested: object | None = None
@@ -47,12 +48,12 @@ class StubCandleService:
         return self.result
 
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
-SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
-QQQ = SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True)
-YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2)
+QQQ = SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True, 2)
+YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
 
 
 class FakeCandleRepository:
@@ -149,7 +150,7 @@ async def test_candles_serializes_minimal_provider_agnostic_contract(
         Decimal("10.00"),
         Decimal("11.00"),
         Decimal("9.00"),
-        Decimal("10.50"),
+        Decimal("10.5678"),
         Decimal("0E-8"),
         True,
     )
@@ -160,6 +161,7 @@ async def test_candles_serializes_minimal_provider_agnostic_contract(
             START,
             START + timedelta(minutes=1),
             [candle],
+            2,
         )
     )
 
@@ -179,9 +181,10 @@ async def test_candles_serializes_minimal_provider_agnostic_contract(
         "complete",
     }
     assert "provider" not in response.text
-    assert payload["candles"][0]["close"] == "10.50"
+    assert payload["candles"][0]["close"] == "10.57"
     assert payload["candles"][0]["volume"] == "0.00000000"
     assert payload["candles"][0]["openTime"].endswith("Z")
+    assert candle.close == Decimal("10.5678")
 
 
 async def test_candles_returns_empty_series(client: AsyncClient) -> None:
@@ -197,7 +200,7 @@ async def test_candles_defaults_omitted_to_and_returns_resolved_boundary(
     client: AsyncClient,
 ) -> None:
     resolved_to = START + timedelta(minutes=2, seconds=17)
-    service = StubCandleService(CandleResult("BTC/USD", "1m", START, resolved_to, []))
+    service = StubCandleService(CandleResult("BTC/USD", "1m", START, resolved_to, [], 2))
     app.dependency_overrides[get_candle_service] = lambda: service
     app.dependency_overrides[get_candle_request_clock] = lambda: lambda: resolved_to
 
@@ -220,7 +223,7 @@ async def test_candles_accepts_limit_mode_with_omitted_to(
     client: AsyncClient,
 ) -> None:
     resolved_to = START + timedelta(minutes=10)
-    service = StubCandleService(CandleResult("BTC/USD", "1m", START, resolved_to, []))
+    service = StubCandleService(CandleResult("BTC/USD", "1m", START, resolved_to, [], 2))
     app.dependency_overrides[get_candle_service] = lambda: service
     app.dependency_overrides[get_candle_request_clock] = lambda: lambda: resolved_to
 
@@ -245,7 +248,7 @@ async def test_candles_accepts_forward_limit_mode(
     client: AsyncClient,
 ) -> None:
     service = StubCandleService(
-        CandleResult("BTC/USD", "1m", START, START + timedelta(minutes=3), [])
+        CandleResult("BTC/USD", "1m", START, START + timedelta(minutes=3), [], 2)
     )
     app.dependency_overrides[get_candle_service] = lambda: service
 
@@ -491,7 +494,7 @@ async def test_candles_reuse_persisted_yfinance_without_provider_call(
     )
 
     assert response.status_code == 200
-    assert response.json()["candles"][0]["close"] == "63.50"
+    assert response.json()["candles"][0]["close"] == "63.500"
     assert yfinance.calls == []
     assert repository.upserted == []
 
@@ -662,7 +665,7 @@ async def test_candle_dependency_without_twelvedata_key_keeps_binance_available(
     provider = get_candle_provider(Settings(twelvedata_api_keys=None))
 
     candles = await provider.fetch_candles(
-        SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True),
+        SupportedSymbol("BTC/USD", "CRYPTO", "BINANCE_SPOT", "BTCUSD", True, 2),
         "1m",
         "1m",
         START,

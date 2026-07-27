@@ -12,16 +12,17 @@ from app.domain.symbols import SupportedSymbol
 from app.domain.timeframes import get_timeframe
 from app.services.candles import CandleService, _find_gaps, parse_candle_request
 
-BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True)
-EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True)
-SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True)
-WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True)
+BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
+EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
+SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2)
+WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2)
 SPY_NYSE = SupportedSymbol(
     "SPY",
     "ETF",
     "TWELVE_DATA",
     "SPY",
     True,
+    2,
     "pandas_market_calendars",
     "NYSE",
     "America/New_York",
@@ -379,6 +380,7 @@ async def test_service_skips_provider_on_full_database_hit() -> None:
     )
 
     assert result.candles == persisted
+    assert result.price_display_decimals == 2
     assert provider.calls == []
 
 

@@ -55,6 +55,7 @@ class ClientRegistration:
     id: str
     request: StreamRequest
     interests: tuple[StreamInterest, ...]
+    price_display_decimals: dict[str, int]
     queue: asyncio.Queue[DownstreamEvent]
     closed: asyncio.Event = field(default_factory=asyncio.Event)
     close_code: int = 1000
@@ -139,6 +140,9 @@ class StreamManager:
             id=uuid4().hex,
             request=request,
             interests=tuple(interests),
+            price_display_decimals={
+                name: symbols_by_name[name].price_display_decimals for name in request.symbols
+            },
             queue=asyncio.Queue(self._client_queue_capacity),
         )
         opened: list[StreamInterest] = []

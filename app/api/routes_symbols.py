@@ -21,6 +21,7 @@ class SymbolResponse(BaseModel):
     provider: str
     provider_symbol: str
     enabled: bool
+    price_display_decimals: int
 
 
 class SymbolListResponse(BaseModel):
@@ -52,6 +53,7 @@ async def list_supported_symbols(
                 provider=symbol.provider,
                 provider_symbol=symbol.provider_symbol,
                 enabled=symbol.enabled,
+                price_display_decimals=symbol.price_display_decimals,
             )
             for symbol in symbols
         ]
