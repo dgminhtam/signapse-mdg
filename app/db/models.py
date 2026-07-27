@@ -27,16 +27,11 @@ class SupportedSymbolModel(Base):
             "price_display_decimals BETWEEN 0 AND 18",
             name="ck_supported_symbols_price_display_decimals",
         ),
-        UniqueConstraint(
-            "provider", "provider_symbol", name="uq_supported_symbols_provider_symbol"
-        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     symbol: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     asset_class: Mapped[str] = mapped_column(Text, nullable=False)
-    provider: Mapped[str] = mapped_column(Text, nullable=False)
-    provider_symbol: Mapped[str] = mapped_column(Text, nullable=False)
     price_display_decimals: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     calendar_source: Mapped[str | None] = mapped_column(Text, nullable=True)
     calendar_name: Mapped[str | None] = mapped_column(Text, nullable=True)

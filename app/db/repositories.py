@@ -1,11 +1,16 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import case, func, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import EconomicCalendarEventModel, MarketDataCandleModel, SupportedSymbolModel
+from app.db.models import (
+    EconomicCalendarEventModel,
+    MarketDataCandleModel,
+    SupportedSymbolModel,
+    SymbolProviderMappingModel,
+)
 from app.domain.candles import Candle
 from app.domain.economic_calendar import (
     EconomicCalendarEnrichment,
@@ -24,16 +29,23 @@ class PostgresSymbolRepository:
 
     async def list_enabled(self) -> list[SupportedSymbol]:
         statement = (
-            select(SupportedSymbolModel)
+            select(SupportedSymbolModel, SymbolProviderMappingModel)
+            .outerjoin(
+                SymbolProviderMappingModel,
+                and_(
+                    SymbolProviderMappingModel.supported_symbol_id == SupportedSymbolModel.id,
+                    SymbolProviderMappingModel.is_active.is_(True),
+                ),
+            )
             .where(SupportedSymbolModel.enabled.is_(True))
             .order_by(SupportedSymbolModel.symbol.asc())
         )
         try:
-            rows = (await self._session.scalars(statement)).all()
+            rows = (await self._session.execute(statement)).all()
         except SQLAlchemyError as exc:
             raise DatabaseUnavailableError from exc
 
-        return [_to_supported_symbol(row) for row in rows]
+        return [_to_supported_symbol(symbol, mapping) for symbol, mapping in rows]
 
 
 class PostgresCandleRepository:
@@ -41,18 +53,28 @@ class PostgresCandleRepository:
         self._session_factory = session_factory
 
     async def get_enabled_symbol(self, symbol: str) -> SupportedSymbol | None:
-        statement = select(SupportedSymbolModel).where(
-            SupportedSymbolModel.symbol == symbol,
-            SupportedSymbolModel.enabled.is_(True),
+        statement = (
+            select(SupportedSymbolModel, SymbolProviderMappingModel)
+            .outerjoin(
+                SymbolProviderMappingModel,
+                and_(
+                    SymbolProviderMappingModel.supported_symbol_id == SupportedSymbolModel.id,
+                    SymbolProviderMappingModel.is_active.is_(True),
+                ),
+            )
+            .where(
+                SupportedSymbolModel.symbol == symbol,
+                SupportedSymbolModel.enabled.is_(True),
+            )
         )
         try:
             async with self._session_factory() as session:
-                row = await session.scalar(statement)
+                row = (await session.execute(statement)).one_or_none()
         except SQLAlchemyError as exc:
             raise DatabaseUnavailableError from exc
         if row is None:
             return None
-        return _to_supported_symbol(row)
+        return _to_supported_symbol(*row)
 
     async def list_complete(
         self,
@@ -375,12 +397,17 @@ def _to_economic_calendar_event(row: EconomicCalendarEventModel) -> EconomicCale
     )
 
 
-def _to_supported_symbol(row: SupportedSymbolModel) -> SupportedSymbol:
+def _to_supported_symbol(
+    row: SupportedSymbolModel,
+    mapping: SymbolProviderMappingModel | None,
+) -> SupportedSymbol:
+    if mapping is None:
+        raise DatabaseUnavailableError
     return SupportedSymbol(
         symbol=row.symbol,
         asset_class=row.asset_class,
-        provider=row.provider,
-        provider_symbol=row.provider_symbol,
+        provider=mapping.provider,
+        provider_symbol=mapping.provider_symbol,
         enabled=row.enabled,
         price_display_decimals=row.price_display_decimals,
         calendar_source=row.calendar_source,

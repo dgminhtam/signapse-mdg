@@ -63,7 +63,11 @@ Các asset dưới đây nằm trong phạm vi mong muốn nhưng chưa được
 - MDG dùng `priceDisplayDecimals` để round `ROUND_HALF_UP` và pad giá public tại HTTP/WebSocket
   serialization boundary. Provider, domain, cache, candle aggregation và database vẫn giữ raw
   `Decimal`; candle volume không dùng price precision.
-- Các asset `XAG/USD`, `BRENT`, `NATGAS`, `COFFEE`, `SUGAR`, `WHEAT`, `CORN`, `SPX`, `NDX` và `DJI` được seed với provider `YFINANCE` và đã bật latest quote, candle và WebSocket stream.
+- Default provider hiện tại: Twelve Data cho `AAPL`, `BTC/USD`, `EUR/USD`, `QQQ`, `XAU/USD`;
+  Binance Spot cho `ETH/USD`; YFINANCE cho 18 asset còn lại. Cả quote, candle và WebSocket của một
+  asset luôn dùng cùng default provider và không fallback.
+- Năm mapping YFINANCE bổ sung nhưng không active là `AAPL`, `BTC-USD`, `ETH-USD`, `EURUSD=X` và
+  `QQQ`. `XAU/USD` chỉ dùng Twelve Data; không seed `GC=F` hoặc `XAUUSD=X`.
 - Các mapping hàng hóa qua `YFINANCE` là futures hoặc rolling-futures proxy; riêng `XAG/USD` dùng provider symbol `SI=F`, không phải spot silver trực tiếp.
 - Quote YFINANCE dùng `regularMarketPrice`; `receivedAt` là thời điểm gateway nhận snapshot, không phải provider trade time. Candle YFINANCE dùng yfinance `download`; missing/null volume được normalize thành decimal zero vì candle contract yêu cầu volume. WebSocket dùng một `AsyncWebSocket` lazy dùng chung, dựng candle từ price tick với volume zero; symbol đã subscribe nhưng chưa có tick giữ trạng thái `CONNECTING` và không fallback. Đơn vị giá futures được giữ theo Yahoo Finance vì public contract chưa có trường unit.
 - Một asset chỉ nên được coi là "đang hỗ trợ" khi Signapse có thể nhận diện asset đó trong catalog, cho phép chọn vào watchlist và dùng nhất quán trong các surface phân tích liên quan.

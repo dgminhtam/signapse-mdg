@@ -16,16 +16,29 @@ from app.providers.normalization import parse_decimal
 
 SUPPORTED_YFINANCE_PROVIDER_SYMBOLS = frozenset(
     {
-        "SI=F",
+        "AAPL",
+        "AUDUSD=X",
         "BZ=F",
-        "NG=F",
+        "BTC-USD",
         "KC=F",
-        "SB=F",
-        "ZW=F",
         "ZC=F",
-        "^GSPC",
-        "^NDX",
         "^DJI",
+        "ETH-USD",
+        "EURUSD=X",
+        "GBPUSD=X",
+        "MSFT",
+        "NG=F",
+        "^NDX",
+        "NVDA",
+        "QQQ",
+        "^GSPC",
+        "SPY",
+        "SB=F",
+        "TSLA",
+        "JPY=X",
+        "ZW=F",
+        "CL=F",
+        "SI=F",
     }
 )
 

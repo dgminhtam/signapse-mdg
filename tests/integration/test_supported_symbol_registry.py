@@ -1,14 +1,17 @@
 import importlib.util
+from asyncio import to_thread
 from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from alembic import command
 from app.api.routes_quotes import get_quote_cache, get_quote_provider
 from app.core.config import get_settings
 from app.domain.quotes import ProviderQuoteBatch
@@ -16,6 +19,10 @@ from app.domain.symbols import SupportedSymbol
 from app.main import app
 
 pytestmark = pytest.mark.integration
+
+
+async def use_legacy_registry_schema() -> None:
+    await to_thread(command.downgrade, Config("alembic.ini"), "20260727_0019")
 
 
 def load_migration_module() -> ModuleType:
@@ -158,8 +165,16 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
             await connection.execute(
                 text(
                     """
-                    SELECT symbol, asset_class, provider, provider_symbol, enabled
+                    SELECT
+                        supported_symbols.symbol,
+                        supported_symbols.asset_class,
+                        symbol_provider_mappings.provider,
+                        symbol_provider_mappings.provider_symbol,
+                        supported_symbols.enabled
                     FROM supported_symbols
+                    JOIN symbol_provider_mappings
+                      ON symbol_provider_mappings.supported_symbol_id = supported_symbols.id
+                     AND symbol_provider_mappings.is_active
                     ORDER BY symbol
                     """
                 )
@@ -170,8 +185,6 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
         "id",
         "symbol",
         "asset_class",
-        "provider",
-        "provider_symbol",
         "calendar_source",
         "calendar_name",
         "calendar_timezone",
@@ -181,7 +194,7 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
         "updated_at",
     }
     assert ("symbol",) in constraints
-    assert ("provider", "provider_symbol") in constraints
+    assert ("provider", "provider_symbol") not in constraints
     assert columns["price_display_decimals"]["nullable"] is False
     assert columns["price_display_decimals"]["default"] is None
     assert "ck_supported_symbols_price_display_decimals" in check_constraints
@@ -218,27 +231,27 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
     assert len(display_rows) == 24
     assert rows == [
         ("AAPL", "US_STOCK", "TWELVE_DATA", "AAPL", True),
-        ("AUD/USD", "FOREX", "TWELVE_DATA", "AUD/USD", True),
+        ("AUD/USD", "FOREX", "YFINANCE", "AUDUSD=X", True),
         ("BRENT", "COMMODITY", "YFINANCE", "BZ=F", True),
         ("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True),
         ("COFFEE", "COMMODITY", "YFINANCE", "KC=F", True),
         ("CORN", "COMMODITY", "YFINANCE", "ZC=F", True),
         ("DJI", "STOCK_INDEX", "YFINANCE", "^DJI", True),
-        ("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True),
+        ("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True),
         ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
-        ("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True),
-        ("MSFT", "US_STOCK", "TWELVE_DATA", "MSFT", True),
+        ("GBP/USD", "FOREX", "YFINANCE", "GBPUSD=X", True),
+        ("MSFT", "US_STOCK", "YFINANCE", "MSFT", True),
         ("NATGAS", "COMMODITY", "YFINANCE", "NG=F", True),
         ("NDX", "STOCK_INDEX", "YFINANCE", "^NDX", True),
-        ("NVDA", "US_STOCK", "TWELVE_DATA", "NVDA", True),
+        ("NVDA", "US_STOCK", "YFINANCE", "NVDA", True),
         ("QQQ", "ETF", "TWELVE_DATA", "QQQ", True),
         ("SPX", "STOCK_INDEX", "YFINANCE", "^GSPC", True),
-        ("SPY", "ETF", "TWELVE_DATA", "SPY", True),
+        ("SPY", "ETF", "YFINANCE", "SPY", True),
         ("SUGAR", "COMMODITY", "YFINANCE", "SB=F", True),
-        ("TSLA", "US_STOCK", "TWELVE_DATA", "TSLA", True),
-        ("USD/JPY", "FOREX", "TWELVE_DATA", "USD/JPY", True),
+        ("TSLA", "US_STOCK", "YFINANCE", "TSLA", True),
+        ("USD/JPY", "FOREX", "YFINANCE", "JPY=X", True),
         ("WHEAT", "COMMODITY", "YFINANCE", "ZW=F", True),
-        ("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
+        ("WTI", "COMMODITY", "YFINANCE", "CL=F", True),
         ("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True),
         ("XAU/USD", "COMMODITY", "TWELVE_DATA", "XAU/USD", True),
     ]
@@ -338,6 +351,7 @@ async def test_inline_calendar_config_seed_helper_is_idempotent(
 async def test_seed_is_idempotent_and_restores_required_mapping(
     database_engine: AsyncEngine,
 ) -> None:
+    await use_legacy_registry_schema()
     migration = load_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
@@ -371,7 +385,7 @@ async def test_seed_is_idempotent_and_restores_required_mapping(
 
     assert rows == [
         ("AAPL", "AAPL", True),
-        ("AUD/USD", "AUD/USD", True),
+        ("AUD/USD", "AUDUSD=X", True),
         ("BRENT", "BZ=F", True),
         ("BTC/USD", "BTCUSD", True),
         ("COFFEE", "KC=F", True),
@@ -379,7 +393,7 @@ async def test_seed_is_idempotent_and_restores_required_mapping(
         ("DJI", "^DJI", True),
         ("ETH/USD", "ETHUSD", True),
         ("EUR/USD", "EUR/USD", True),
-        ("GBP/USD", "GBP/USD", True),
+        ("GBP/USD", "GBPUSD=X", True),
         ("MSFT", "MSFT", True),
         ("NATGAS", "NG=F", True),
         ("NDX", "^NDX", True),
@@ -389,9 +403,9 @@ async def test_seed_is_idempotent_and_restores_required_mapping(
         ("SPY", "SPY", True),
         ("SUGAR", "SB=F", True),
         ("TSLA", "TSLA", True),
-        ("USD/JPY", "USD/JPY", True),
+        ("USD/JPY", "JPY=X", True),
         ("WHEAT", "ZW=F", True),
-        ("WTI", "WTI", True),
+        ("WTI", "CL=F", True),
         ("XAG/USD", "SI=F", True),
         ("XAU/USD", "XAU/USD", True),
     ]
@@ -400,6 +414,7 @@ async def test_seed_is_idempotent_and_restores_required_mapping(
 async def test_forex_seed_is_idempotent_and_preserves_crypto_mappings(
     database_engine: AsyncEngine,
 ) -> None:
+    await use_legacy_registry_schema()
     migration = load_forex_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
@@ -439,21 +454,21 @@ async def test_forex_seed_is_idempotent_and_preserves_crypto_mappings(
         ("COFFEE", "COMMODITY", "YFINANCE", "KC=F", True),
         ("CORN", "COMMODITY", "YFINANCE", "ZC=F", True),
         ("DJI", "STOCK_INDEX", "YFINANCE", "^DJI", True),
-        ("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True),
+        ("ETH/USD", "CRYPTO", "BINANCE_SPOT", "ETHUSD", True),
         ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
         ("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True),
-        ("MSFT", "US_STOCK", "TWELVE_DATA", "MSFT", True),
+        ("MSFT", "US_STOCK", "YFINANCE", "MSFT", True),
         ("NATGAS", "COMMODITY", "YFINANCE", "NG=F", True),
         ("NDX", "STOCK_INDEX", "YFINANCE", "^NDX", True),
-        ("NVDA", "US_STOCK", "TWELVE_DATA", "NVDA", True),
+        ("NVDA", "US_STOCK", "YFINANCE", "NVDA", True),
         ("QQQ", "ETF", "TWELVE_DATA", "QQQ", True),
         ("SPX", "STOCK_INDEX", "YFINANCE", "^GSPC", True),
-        ("SPY", "ETF", "TWELVE_DATA", "SPY", True),
+        ("SPY", "ETF", "YFINANCE", "SPY", True),
         ("SUGAR", "COMMODITY", "YFINANCE", "SB=F", True),
-        ("TSLA", "US_STOCK", "TWELVE_DATA", "TSLA", True),
+        ("TSLA", "US_STOCK", "YFINANCE", "TSLA", True),
         ("USD/JPY", "FOREX", "TWELVE_DATA", "USD/JPY", True),
         ("WHEAT", "COMMODITY", "YFINANCE", "ZW=F", True),
-        ("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
+        ("WTI", "COMMODITY", "YFINANCE", "CL=F", True),
         ("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True),
         ("XAU/USD", "COMMODITY", "TWELVE_DATA", "XAU/USD", True),
     ]
@@ -462,6 +477,7 @@ async def test_forex_seed_is_idempotent_and_preserves_crypto_mappings(
 async def test_wti_etf_seed_is_idempotent_and_preserves_existing_mappings(
     database_engine: AsyncEngine,
 ) -> None:
+    await use_legacy_registry_schema()
     migration = load_wti_etf_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
@@ -504,14 +520,18 @@ async def test_wti_etf_seed_is_idempotent_and_preserves_existing_mappings(
 async def test_wti_etf_downgrade_preserves_changed_mapping(
     database_engine: AsyncEngine,
 ) -> None:
+    await use_legacy_registry_schema()
     migration = load_wti_etf_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
             text(
                 """
                 UPDATE supported_symbols
-                SET provider_symbol = 'SPY_CUSTOM'
-                WHERE symbol = 'SPY'
+                SET provider_symbol = CASE symbol
+                    WHEN 'QQQ' THEN 'QQQ_CUSTOM'
+                    ELSE 'SPY_CUSTOM'
+                END
+                WHERE symbol IN ('QQQ', 'SPY')
                 """
             )
         )
@@ -529,12 +549,17 @@ async def test_wti_etf_downgrade_preserves_changed_mapping(
             )
         ).all()
 
-    assert rows == [("SPY", "SPY_CUSTOM")]
+    assert rows == [
+        ("QQQ", "QQQ_CUSTOM"),
+        ("SPY", "SPY_CUSTOM"),
+        ("WTI", "CL=F"),
+    ]
 
 
 async def test_yfinance_seed_is_idempotent_and_preserves_existing_mappings(
     database_engine: AsyncEngine,
 ) -> None:
+    await use_legacy_registry_schema()
     migration = load_yfinance_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
@@ -580,36 +605,45 @@ async def test_yfinance_seed_is_idempotent_and_preserves_existing_mappings(
         )
 
     assert rows == [
+        ("AUD/USD", "FOREX", "YFINANCE", "AUDUSD=X", True),
         ("BRENT", "COMMODITY", "YFINANCE", "BZ=F", True),
         ("COFFEE", "COMMODITY", "YFINANCE", "KC=F", True),
         ("CORN", "COMMODITY", "YFINANCE", "ZC=F", True),
         ("DJI", "STOCK_INDEX", "YFINANCE", "^DJI", True),
+        ("GBP/USD", "FOREX", "YFINANCE", "GBPUSD=X", True),
+        ("MSFT", "US_STOCK", "YFINANCE", "MSFT", True),
         ("NATGAS", "COMMODITY", "YFINANCE", "NG=F", True),
         ("NDX", "STOCK_INDEX", "YFINANCE", "^NDX", True),
+        ("NVDA", "US_STOCK", "YFINANCE", "NVDA", True),
         ("SPX", "STOCK_INDEX", "YFINANCE", "^GSPC", True),
+        ("SPY", "ETF", "YFINANCE", "SPY", True),
         ("SUGAR", "COMMODITY", "YFINANCE", "SB=F", True),
+        ("TSLA", "US_STOCK", "YFINANCE", "TSLA", True),
+        ("USD/JPY", "FOREX", "YFINANCE", "JPY=X", True),
         ("WHEAT", "COMMODITY", "YFINANCE", "ZW=F", True),
+        ("WTI", "COMMODITY", "YFINANCE", "CL=F", True),
         ("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True),
     ]
     assert existing == [
         ("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True),
         ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
-        ("SPY", "ETF", "TWELVE_DATA", "SPY", True),
-        ("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True),
+        ("SPY", "ETF", "YFINANCE", "SPY", True),
+        ("WTI", "COMMODITY", "YFINANCE", "CL=F", True),
     ]
 
 
 async def test_yfinance_downgrade_preserves_changed_mapping(
     database_engine: AsyncEngine,
 ) -> None:
+    await use_legacy_registry_schema()
     migration = load_yfinance_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
             text(
                 """
                 UPDATE supported_symbols
-                SET provider_symbol = 'CUSTOM_SPX'
-                WHERE symbol = 'SPX'
+                SET provider_symbol = provider_symbol || '_CUSTOM'
+                WHERE provider = 'YFINANCE'
                 """
             )
         )
@@ -620,19 +654,19 @@ async def test_yfinance_downgrade_preserves_changed_mapping(
                     """
                     SELECT symbol, provider_symbol
                     FROM supported_symbols
-                    WHERE provider = 'YFINANCE' OR symbol = 'SPX'
-                    ORDER BY symbol
+                    WHERE symbol = 'SPX'
                     """
                 )
             )
         ).all()
 
-    assert rows == [("SPX", "CUSTOM_SPX")]
+    assert rows == [("SPX", "^GSPC_CUSTOM")]
 
 
 async def test_crypto_twelvedata_migration_is_idempotent_and_downgrades(
     database_engine: AsyncEngine,
 ) -> None:
+    await use_legacy_registry_schema()
     migration = load_crypto_migration_module()
     async with database_engine.begin() as connection:
         await connection.execute(
@@ -711,17 +745,24 @@ async def test_registry_constraints_reject_duplicate_provider_mapping(
             await connection.execute(
                 text(
                     """
-                    INSERT INTO supported_symbols
-                        (
+                    WITH inserted_symbol AS (
+                        INSERT INTO supported_symbols (
                             symbol,
                             asset_class,
-                            provider,
-                            provider_symbol,
                             enabled,
                             price_display_decimals
+                        )
+                        VALUES ('XBT/USD', 'CRYPTO', true, 2)
+                        RETURNING id
                     )
-                    VALUES
-                        ('XBT/USD', 'CRYPTO', 'TWELVE_DATA', 'BTC/USD', true, 2)
+                    INSERT INTO symbol_provider_mappings (
+                        supported_symbol_id,
+                        provider,
+                        provider_symbol,
+                        is_active
+                    )
+                    SELECT id, 'TWELVE_DATA', 'BTC/USD', true
+                    FROM inserted_symbol
                     """
                 )
             )
@@ -740,16 +781,12 @@ async def test_registry_rejects_invalid_price_display_decimals(
                     INSERT INTO supported_symbols (
                         symbol,
                         asset_class,
-                        provider,
-                        provider_symbol,
                         enabled,
                         price_display_decimals
                     )
                     VALUES (
                         'TEST/USD',
                         'FOREX',
-                        'TEST',
-                        'TEST/USD',
                         true,
                         :price_display_decimals
                     )
@@ -806,9 +843,12 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
         await connection.execute(
             text(
                 """
-                UPDATE supported_symbols
+                UPDATE symbol_provider_mappings
                 SET provider_symbol = 'BTC/USD_TEST'
-                WHERE symbol = 'BTC/USD'
+                WHERE supported_symbol_id = (
+                    SELECT id FROM supported_symbols WHERE symbol = 'BTC/USD'
+                )
+                  AND is_active
                 """
             )
         )
@@ -857,8 +897,8 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
             {
                 "symbol": "AUD/USD",
                 "assetClass": "FOREX",
-                "provider": "TWELVE_DATA",
-                "providerSymbol": "AUD/USD",
+                "provider": "YFINANCE",
+                "providerSymbol": "AUDUSD=X",
                 "enabled": True,
             },
             {
@@ -906,14 +946,14 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
             {
                 "symbol": "GBP/USD",
                 "assetClass": "FOREX",
-                "provider": "TWELVE_DATA",
-                "providerSymbol": "GBP/USD",
+                "provider": "YFINANCE",
+                "providerSymbol": "GBPUSD=X",
                 "enabled": True,
             },
             {
                 "symbol": "MSFT",
                 "assetClass": "US_STOCK",
-                "provider": "TWELVE_DATA",
+                "provider": "YFINANCE",
                 "providerSymbol": "MSFT",
                 "enabled": True,
             },
@@ -934,7 +974,7 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
             {
                 "symbol": "NVDA",
                 "assetClass": "US_STOCK",
-                "provider": "TWELVE_DATA",
+                "provider": "YFINANCE",
                 "providerSymbol": "NVDA",
                 "enabled": True,
             },
@@ -955,7 +995,7 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
             {
                 "symbol": "SPY",
                 "assetClass": "ETF",
-                "provider": "TWELVE_DATA",
+                "provider": "YFINANCE",
                 "providerSymbol": "SPY",
                 "enabled": True,
             },
@@ -969,15 +1009,15 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
             {
                 "symbol": "TSLA",
                 "assetClass": "US_STOCK",
-                "provider": "TWELVE_DATA",
+                "provider": "YFINANCE",
                 "providerSymbol": "TSLA",
                 "enabled": True,
             },
             {
                 "symbol": "USD/JPY",
                 "assetClass": "FOREX",
-                "provider": "TWELVE_DATA",
-                "providerSymbol": "USD/JPY",
+                "provider": "YFINANCE",
+                "providerSymbol": "JPY=X",
                 "enabled": True,
             },
             {
@@ -990,8 +1030,8 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
             {
                 "symbol": "WTI",
                 "assetClass": "COMMODITY",
-                "provider": "TWELVE_DATA",
-                "providerSymbol": "WTI",
+                "provider": "YFINANCE",
+                "providerSymbol": "CL=F",
                 "enabled": True,
             },
             {
@@ -1019,9 +1059,12 @@ async def test_quotes_use_persisted_provider_mapping(
         await connection.execute(
             text(
                 """
-                UPDATE supported_symbols
+                UPDATE symbol_provider_mappings
                 SET provider_symbol = 'BTC/USD_TEST'
-                WHERE symbol = 'BTC/USD'
+                WHERE supported_symbol_id = (
+                    SELECT id FROM supported_symbols WHERE symbol = 'BTC/USD'
+                )
+                  AND is_active
                 """
             )
         )

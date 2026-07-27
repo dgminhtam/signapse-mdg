@@ -7,7 +7,7 @@ Market Data Gateway is an independent service that exposes normalized market dat
 | Canonical symbol | Asset class | Provider | Provider symbol |
 | --- | --- | --- | --- |
 | `BTC/USD` | `CRYPTO` | `TWELVE_DATA` | `BTC/USD` |
-| `ETH/USD` | `CRYPTO` | `TWELVE_DATA` | `ETH/USD` |
+| `ETH/USD` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSD` |
 
 The gateway contract is provider-agnostic for clients. Provider-specific details stay inside the registry and adapter layer.
 
@@ -16,16 +16,8 @@ A Twelve Data foundation now exists for the current Forex/metal catalog symbols:
 | Canonical symbol | Asset class | Provider | Provider symbol |
 | --- | --- | --- | --- |
 | `EUR/USD` | `FOREX` | `TWELVE_DATA` | `EUR/USD` |
-| `GBP/USD` | `FOREX` | `TWELVE_DATA` | `GBP/USD` |
-| `USD/JPY` | `FOREX` | `TWELVE_DATA` | `USD/JPY` |
-| `AUD/USD` | `FOREX` | `TWELVE_DATA` | `AUD/USD` |
 | `XAU/USD` | `COMMODITY` | `TWELVE_DATA` | `XAU/USD` |
 | `AAPL` | `US_STOCK` | `TWELVE_DATA` | `AAPL` |
-| `TSLA` | `US_STOCK` | `TWELVE_DATA` | `TSLA` |
-| `NVDA` | `US_STOCK` | `TWELVE_DATA` | `NVDA` |
-| `MSFT` | `US_STOCK` | `TWELVE_DATA` | `MSFT` |
-| `WTI` | `COMMODITY` | `TWELVE_DATA` | `WTI` |
-| `SPY` | `ETF` | `TWELVE_DATA` | `SPY` |
 | `QQQ` | `ETF` | `TWELVE_DATA` | `QQQ` |
 
 These rows are seeded in the registry and enabled through the provider routers.
@@ -35,6 +27,7 @@ asynchronous stream adapter exist for planned catalog assets:
 
 | Canonical symbol | Asset class | Provider | Provider symbol |
 | --- | --- | --- | --- |
+| `AUD/USD` | `FOREX` | `YFINANCE` | `AUDUSD=X` |
 | `XAG/USD` | `COMMODITY` | `YFINANCE` | `SI=F` |
 | `BRENT` | `COMMODITY` | `YFINANCE` | `BZ=F` |
 | `NATGAS` | `COMMODITY` | `YFINANCE` | `NG=F` |
@@ -45,10 +38,23 @@ asynchronous stream adapter exist for planned catalog assets:
 | `SPX` | `STOCK_INDEX` | `YFINANCE` | `^GSPC` |
 | `NDX` | `STOCK_INDEX` | `YFINANCE` | `^NDX` |
 | `DJI` | `STOCK_INDEX` | `YFINANCE` | `^DJI` |
+| `GBP/USD` | `FOREX` | `YFINANCE` | `GBPUSD=X` |
+| `MSFT` | `US_STOCK` | `YFINANCE` | `MSFT` |
+| `NVDA` | `US_STOCK` | `YFINANCE` | `NVDA` |
+| `SPY` | `ETF` | `YFINANCE` | `SPY` |
+| `TSLA` | `US_STOCK` | `YFINANCE` | `TSLA` |
+| `USD/JPY` | `FOREX` | `YFINANCE` | `JPY=X` |
+| `WTI` | `COMMODITY` | `YFINANCE` | `CL=F` |
 
 These `YFINANCE` rows are available through `/v1/quotes`, `/v1/candles`, and `/v1/stream`.
 Commodity symbols are futures or rolling-futures proxies, including `XAG/USD -> SI=F`. Yahoo stream
 event coverage is not guaranteed for every accepted symbol.
+
+The registry contains five inactive yfinance alternatives for manual switching:
+`AAPL`, `BTC-USD`, `ETH-USD`, `EURUSD=X`, and `QQQ`, owned by canonical `AAPL`, `BTC/USD`,
+`ETH/USD`, `EUR/USD`, and `QQQ` respectively. `XAU/USD` has no yfinance alternative because
+`GC=F` is a futures proxy rather than an approved equivalent. Selection is asset-wide and shared
+by quote, candle, and stream; no route-specific selection or fallback exists.
 
 ## 2. Goals
 
@@ -202,8 +208,8 @@ Recommended initial timeframes:
 
 - Locks the open-source `yfinance==1.4.1` package for latest quote, historical candle, and
   asynchronous price-stream retrieval.
-- Seeds planned `YFINANCE` registry mappings for silver, Brent crude, natural gas, agricultural
-  commodities, and stock indexes.
+- Supports the 23-symbol approved yfinance allowlist used by active defaults and inactive manual
+  alternatives.
 - Uses `Ticker.get_info().regularMarketPrice` behind a provider-owned adapter.
 - Uses yfinance `download` for historical candles with explicit `start`, `end`, `interval`,
   `timeout`, and shared-session controls.
@@ -440,18 +446,15 @@ CREATE TABLE supported_symbols (
     id BIGSERIAL PRIMARY KEY,
     symbol TEXT NOT NULL UNIQUE,
     asset_class TEXT NOT NULL,
-    provider TEXT NOT NULL,
-    provider_symbol TEXT NOT NULL,
     price_display_decimals SMALLINT NOT NULL
         CHECK (price_display_decimals BETWEEN 0 AND 18),
     enabled BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (provider, provider_symbol)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
-Normalized provider mappings are added expand-only:
+Provider identities are normalized into:
 
 ```sql
 CREATE TABLE symbol_provider_mappings (
@@ -472,41 +475,29 @@ ON symbol_provider_mappings (supported_symbol_id)
 WHERE is_active;
 ```
 
-Revision `20260727_0017` backfills the legacy provider rows, and corrective revision
-`20260727_0018` converts each asset's shared priority-zero mapping into its active mapping. Multiple
-provider mappings may be configured for one asset, but at most one can be active.
+Revision `20260727_0017` backfills the original provider rows, corrective revision
+`20260727_0018` converts each asset's shared priority-zero mapping into its active mapping, and
+revision `20260727_0019` seeds 29 mappings for 24 assets: 24 active defaults and five inactive
+yfinance alternatives. Revision `20260727_0020` validates exactly one active mapping per canonical
+symbol and removes the legacy provider columns from `supported_symbols`.
 
-This is the expand phase only. Quote, candle, and stream routing continue to read the legacy
-`supported_symbols.provider` and `supported_symbols.provider_symbol` columns until a later runtime
-change is deployed. That change will resolve the same active mapping for all three routes; it will
-not select providers per route or fall back automatically. The compatibility window permits legacy
-and normalized values to drift if edited, so registry writes must remain paused until routing moves
-to the normalized table. A later contract migration may remove the legacy columns after all
-application versions stop reading them.
+Runtime repositories outer-join enabled canonical symbols to their active mapping and fail closed
+when one is missing. The resolved mapping is shared by quote, candle, stream, and backfill without
+automatic fallback. Provider switching changes `is_active` in one transaction and requires no
+legacy mirror write.
 
-The initial Alembic migration seeded `BTC/USD -> BINANCE_SPOT:BTCUSD` and
-`ETH/USD -> BINANCE_SPOT:ETHUSD`; a later migration moves both rows to `TWELVE_DATA`.
-A later Forex seed migration adds
-`EUR/USD`, `GBP/USD`, `USD/JPY`, and `AUD/USD` as enabled `FOREX` records, `XAU/USD` as an enabled
-`COMMODITY` record, and `AAPL`, `TSLA`, `NVDA`, and `MSFT` as enabled `US_STOCK` records. The
-next seed adds `WTI` as `COMMODITY` and `SPY`/`QQQ` as `ETF`; all are mapped to `TWELVE_DATA`.
-The next registry seed adds planned `YFINANCE` mappings for `XAG/USD`, `BRENT`, `NATGAS`,
-`COFFEE`, `SUGAR`, `WHEAT`, `CORN`, `SPX`, `NDX`, and `DJI`; these rows are wired to latest quotes,
-historical candles, and the shared YFINANCE WebSocket provider.
+The historical seed chain first built the 24-asset catalog. Revision `0019` reconciles that catalog
+to the approved matrix above while preserving unknown custom mappings and provider-owned candles.
 `/v1/symbols` queries enabled rows from this table and returns
 `503 DATABASE_UNAVAILABLE` when the registry cannot be queried.
 `/health` remains independent of database configuration and connectivity.
 
-Existing databases that do not replay migrations from scratch need the same in-place update:
-
-```sql
-UPDATE supported_symbols
-SET provider = 'TWELVE_DATA',
-    provider_symbol = symbol,
-    enabled = true,
-    updated_at = now()
-WHERE symbol IN ('BTC/USD', 'ETH/USD');
-```
+Rollout order is application allowlist first, migration `0019`, then an application release that
+reads active mappings while the database remains at `0019`. Apply migration `0020` only after every
+runtime instance has cut over. Rollback downgrades the database first so legacy columns are
+reconstructed from active mappings, then deploys the previous runtime. A provider switch starts a
+new provider-owned candle history; existing candles remain under their original
+`(provider, provider_symbol, timeframe, open_time)` identity and are not relabeled.
 
 Initial candle table:
 

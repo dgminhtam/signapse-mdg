@@ -14,13 +14,14 @@ from app.domain.streams import (
     StreamQuote,
 )
 from app.domain.symbols import SupportedSymbol
+from app.providers.yfinance_market_data import SUPPORTED_YFINANCE_PROVIDER_SYMBOLS
 from app.providers.yfinance_market_data_stream import (
     YFinanceMarketDataStreamProvider,
 )
 
 SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
 BRENT = SupportedSymbol("BRENT", "COMMODITY", "YFINANCE", "BZ=F", True, 2)
-UNSUPPORTED = SupportedSymbol("AAPL", "US_STOCK", "YFINANCE", "AAPL", True, 2)
+UNSUPPORTED = SupportedSymbol("XAU/USD", "COMMODITY", "YFINANCE", "GC=F", True, 2)
 NOW = datetime(2026, 6, 23, 9, 0, 30, tzinfo=UTC)
 
 
@@ -328,3 +329,21 @@ async def test_provider_rejects_unsupported_symbol_and_timeframe_without_client(
         await provider.subscribe_candle(SILVER, "2m", "2m")
 
     assert factory.created == []
+
+
+async def test_provider_subscribes_every_approved_provider_symbol() -> None:
+    client = FakeWebSocket()
+    provider = make_provider(FakeFactory(client))
+
+    for provider_symbol in sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS):
+        await provider.subscribe_quote(
+            SupportedSymbol(provider_symbol, "TEST", "YFINANCE", provider_symbol, True, 2)
+        )
+
+    subscribed = [
+        symbol
+        for call in client.subscribed
+        for symbol in ([call] if isinstance(call, str) else call)
+    ]
+    assert subscribed == sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS)
+    await provider.close()

@@ -34,18 +34,18 @@ Registry hiện chứa các asset được hỗ trợ hoặc đã được seed 
 | Canonical symbol | Asset class | Provider | Provider symbol | Status |
 | --- | --- | --- | --- | --- |
 | `BTC/USD` | `CRYPTO` | `TWELVE_DATA` | `BTC/USD` | Supported |
-| `ETH/USD` | `CRYPTO` | `TWELVE_DATA` | `ETH/USD` | Supported |
+| `ETH/USD` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSD` | Supported |
 | `EUR/USD` | `FOREX` | `TWELVE_DATA` | `EUR/USD` | Supported |
-| `GBP/USD` | `FOREX` | `TWELVE_DATA` | `GBP/USD` | Supported |
-| `USD/JPY` | `FOREX` | `TWELVE_DATA` | `USD/JPY` | Supported |
-| `AUD/USD` | `FOREX` | `TWELVE_DATA` | `AUD/USD` | Supported |
+| `GBP/USD` | `FOREX` | `YFINANCE` | `GBPUSD=X` | Supported |
+| `USD/JPY` | `FOREX` | `YFINANCE` | `JPY=X` | Supported |
+| `AUD/USD` | `FOREX` | `YFINANCE` | `AUDUSD=X` | Supported |
 | `XAU/USD` | `COMMODITY` | `TWELVE_DATA` | `XAU/USD` | Supported |
 | `AAPL` | `US_STOCK` | `TWELVE_DATA` | `AAPL` | Supported |
-| `TSLA` | `US_STOCK` | `TWELVE_DATA` | `TSLA` | Supported |
-| `NVDA` | `US_STOCK` | `TWELVE_DATA` | `NVDA` | Supported |
-| `MSFT` | `US_STOCK` | `TWELVE_DATA` | `MSFT` | Supported |
-| `WTI` | `COMMODITY` | `TWELVE_DATA` | `WTI` | Supported |
-| `SPY` | `ETF` | `TWELVE_DATA` | `SPY` | Supported |
+| `TSLA` | `US_STOCK` | `YFINANCE` | `TSLA` | Supported |
+| `NVDA` | `US_STOCK` | `YFINANCE` | `NVDA` | Supported |
+| `MSFT` | `US_STOCK` | `YFINANCE` | `MSFT` | Supported |
+| `WTI` | `COMMODITY` | `YFINANCE` | `CL=F` | Supported |
+| `SPY` | `ETF` | `YFINANCE` | `SPY` | Supported |
 | `QQQ` | `ETF` | `TWELVE_DATA` | `QQQ` | Supported |
 | `XAG/USD` | `COMMODITY` | `YFINANCE` | `SI=F` | Quote, candle, and stream supported |
 | `BRENT` | `COMMODITY` | `YFINANCE` | `BZ=F` | Quote, candle, and stream supported |
@@ -63,6 +63,13 @@ for historical candles, and one lazy shared `AsyncWebSocket` for stream price ti
 accept a stream symbol without emitting ticks; such interests remain `CONNECTING` until usable data
 arrives. Commodity mappings are futures or rolling-futures proxies; for example, `XAG/USD` maps to
 `SI=F` rather than spot silver.
+
+Five inactive mappings are available for manual provider switching:
+`AAPL -> YFINANCE:AAPL`, `BTC/USD -> YFINANCE:BTC-USD`,
+`ETH/USD -> YFINANCE:ETH-USD`, `EUR/USD -> YFINANCE:EURUSD=X`, and
+`QQQ -> YFINANCE:QQQ`. `XAU/USD` is Twelve Data-only; `GC=F` and `XAUUSD=X` are not approved
+alternatives. One asset-wide active mapping serves quote, candle, and stream, with no automatic
+fallback.
 
 MVP không hỗ trợ:
 
@@ -614,8 +621,6 @@ supported_symbols
   id
   symbol
   asset_class
-  provider
-  provider_symbol
   enabled
   created_at
   updated_at
@@ -652,37 +657,33 @@ Recommended uniqueness:
 
 ```text
 unique(symbol)
-unique(provider, provider_symbol)
 unique(supported_symbol_id, provider)
+unique(provider, provider_symbol)
 unique(supported_symbol_id) where is_active
 unique(provider, provider_symbol, timeframe, open_time)
 ```
 
 Notes:
 
-- `GET /v1/symbols` reads enabled rows from `supported_symbols`; no hard-coded runtime fallback is used.
-- `symbol_provider_mappings` is an expand-only normalized copy. Runtime routing still reads the
-  legacy provider columns.
+- `GET /v1/symbols` joins enabled rows from `supported_symbols` to their active normalized mapping;
+  no hard-coded runtime fallback is used.
+- `symbol_provider_mappings` is the sole runtime source of provider identity.
 - Multiple provider mappings can be configured for an asset, but at most one is active. The active
-  mapping is the single future provider selection shared by quote, candle, and stream; there is no
+  mapping is the single provider selection shared by quote, candle, stream, and backfill; there is no
   per-route selection, aggregation, or provider fallback.
-- Every legacy registry row, including a disabled asset, is backfilled as one active mapping.
+- Revision `20260727_0019` seeds 29 mappings for the 24 assets: 24 active defaults and five
+  inactive yfinance alternatives. Revision `20260727_0020` validates one active mapping per asset
+  and removes the duplicated provider columns from `supported_symbols`.
+- A provider switch deactivates the current mapping and activates the replacement in one
+  transaction; no legacy mirror write is required.
 - The initial migration seeded `BTC/USD -> BINANCE_SPOT:BTCUSD` and
   `ETH/USD -> BINANCE_SPOT:ETHUSD`; a later migration moves both rows to `TWELVE_DATA`.
-- Later migrations seed Twelve Data symbols and the quote, candle, and stream-enabled `YFINANCE`
-  planned assets.
-- Existing databases can apply the same in-place update manually:
-
-```sql
-UPDATE supported_symbols
-SET provider = 'TWELVE_DATA',
-    provider_symbol = symbol,
-    enabled = true,
-    updated_at = now()
-WHERE symbol IN ('BTC/USD', 'ETH/USD');
-```
+- Deploy the expanded 23-symbol yfinance allowlist before applying revision `0019`, then verify the
+  24 active defaults and five inactive alternatives before resuming provider-selection writes.
+- Switching provider starts a new provider-owned candle history. Existing candle rows retain their
+  recorded provider identity and are never relabeled.
 - `symbol` stores canonical symbol such as `BTC/USD`.
-- `provider_symbol` stores provider symbol such as `BTC/USD`.
+- `symbol_provider_mappings.provider_symbol` stores an upstream identifier such as `BTC/USD`.
 - Decimal values should use database decimal/numeric types, not float.
 
 ## Provider Adapter

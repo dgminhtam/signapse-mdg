@@ -36,24 +36,22 @@ parameter and SHALL enforce the configured maximum number of distinct symbols.
 
 ### Requirement: Quote requests use enabled registry mappings
 
-The gateway MUST validate canonical symbols and obtain provider mappings from enabled PostgreSQL
-registry records and MUST NOT use a hard-coded runtime mapping.
+The gateway MUST validate canonical symbols and obtain provider mappings by joining enabled
+PostgreSQL registry records to their single active normalized mapping. It MUST NOT use a hard-coded
+runtime mapping, a legacy provider column, or an inactive mapping.
 
 #### Scenario: Enabled crypto symbols are requested
 
 - **WHEN** a client requests `BTC/USD,ETH/USD` and both registry records are enabled
-- **THEN** the gateway maps them to persisted provider symbols `BTC/USD` and `ETH/USD`
-- **AND** it uses their persisted `TWELVE_DATA` provider mapping for refreshes that need provider
-  data
+- **THEN** the gateway resolves their provider symbols from their active mappings
+- **AND** it refreshes each symbol through the provider selected by that active mapping
 
 #### Scenario: Enabled Forex symbols are requested
 
 - **WHEN** a client requests `EUR/USD,GBP/USD,USD/JPY,AUD/USD,XAU/USD,AAPL,TSLA,NVDA,MSFT` and
   those registry records are enabled
-- **THEN** the gateway maps them to persisted provider symbols `EUR/USD`, `GBP/USD`, `USD/JPY`,
-  `AUD/USD`, `XAU/USD`, `AAPL`, `TSLA`, `NVDA`, and `MSFT`
-- **AND** it uses their persisted `TWELVE_DATA` provider mapping for refreshes that need provider
-  data
+- **THEN** the gateway resolves every provider and provider symbol from its active mapping
+- **AND** it groups refreshes by those resolved providers
 
 #### Scenario: Unknown or disabled symbol is requested
 
@@ -61,10 +59,18 @@ registry records and MUST NOT use a hard-coded runtime mapping.
 - **THEN** the response includes an `UNSUPPORTED_SYMBOL` error for that symbol
 - **AND** other requested symbols continue to be processed
 
-#### Scenario: Persisted provider mapping changes
+#### Scenario: Active provider mapping changes
 
-- **WHEN** an enabled symbol's provider mapping is changed in PostgreSQL
-- **THEN** a subsequent quote request uses the changed persisted mapping
+- **WHEN** an enabled symbol's active provider mapping is changed in PostgreSQL
+- **THEN** a subsequent quote refresh uses the newly active provider and provider symbol
+- **AND** it does not fall back to the previous or another inactive mapping
+
+#### Scenario: Enabled symbol lacks an active mapping
+
+- **WHEN** an enabled requested symbol has no active normalized mapping
+- **THEN** the gateway responds with HTTP status `503`
+- **AND** the request-level error code is `DATABASE_UNAVAILABLE`
+- **AND** no provider quote request is made
 
 #### Scenario: Registry is unavailable
 
@@ -291,16 +297,22 @@ The gateway SHALL allow enabled WTI, SPY, and QQQ mappings through `GET /v1/quot
 
 ### Requirement: yfinance latest quotes are available through the existing endpoint
 
-The gateway SHALL allow the ten enabled seeded `YFINANCE` symbols to be requested through
-`GET /v1/quotes` using the existing provider-agnostic response contract.
+The gateway SHALL allow any enabled canonical asset whose active persisted mapping uses one of the
+23 approved `YFINANCE` provider symbols to be requested through `GET /v1/quotes` using the existing
+provider-agnostic response contract.
 
-#### Scenario: yfinance commodity symbols require refresh
+#### Scenario: Active yfinance catalog symbol requires refresh
 
-- **WHEN** `XAG/USD`, `BRENT`, `NATGAS`, `COFFEE`, `SUGAR`, `WHEAT`, or `CORN` lacks a reusable
-  cached quote
+- **WHEN** an enabled asset with an active yfinance mapping lacks a reusable cached quote
 - **THEN** the gateway requests its persisted yfinance provider symbol through the yfinance quote
   adapter
 - **AND** a successful result contains exactly `symbol`, `price`, and `receivedAt`
+
+#### Scenario: Inactive yfinance alternative is selected manually
+
+- **WHEN** an approved inactive yfinance alternative becomes the asset's active persisted mapping
+- **THEN** a subsequent quote refresh uses that yfinance provider symbol
+- **AND** it does not fall back to the previous provider
 
 #### Scenario: yfinance stock index symbols require refresh
 

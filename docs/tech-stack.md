@@ -265,6 +265,7 @@ Important constraints:
 Seeded yfinance catalog:
 
 ```text
+AUD/USD -> YFINANCE:AUDUSD=X
 XAG/USD -> YFINANCE:SI=F
 BRENT -> YFINANCE:BZ=F
 NATGAS -> YFINANCE:NG=F
@@ -275,6 +276,20 @@ CORN -> YFINANCE:ZC=F
 SPX -> YFINANCE:^GSPC
 NDX -> YFINANCE:^NDX
 DJI -> YFINANCE:^DJI
+GBP/USD -> YFINANCE:GBPUSD=X
+MSFT -> YFINANCE:MSFT
+NVDA -> YFINANCE:NVDA
+SPY -> YFINANCE:SPY
+TSLA -> YFINANCE:TSLA
+USD/JPY -> YFINANCE:JPY=X
+WTI -> YFINANCE:CL=F
+
+Inactive manual alternatives:
+AAPL -> YFINANCE:AAPL
+BTC/USD -> YFINANCE:BTC-USD
+ETH/USD -> YFINANCE:ETH-USD
+EUR/USD -> YFINANCE:EURUSD=X
+QQQ -> YFINANCE:QQQ
 ```
 
 Important constraints:
@@ -326,11 +341,17 @@ market_data_candles
 ```
 
 The normalized `symbol_provider_mappings` table stores multiple provider identities per asset and
-an `is_active` flag for the one asset-wide selection shared by quote, candle, and stream. During
-the expand-only compatibility phase, `supported_symbols` remains the runtime source of truth and
-retains its legacy `provider` columns. Alembic backfills one active mapping per registry row. There
-is no capability priority, equivalence group, or automatic fallback, and the application carries
-no hard-coded fallback registry.
+an `is_active` flag for the one asset-wide selection shared by quote, candle, stream, and backfill.
+Runtime repositories join canonical `supported_symbols` rows to that active mapping and fail closed
+when it is absent. There is no capability priority, equivalence group, automatic fallback, or
+hard-coded fallback registry.
+
+Revision `0019` reconciles the catalog to 24 active defaults plus five inactive alternatives and
+revision `0020` removes the duplicated provider columns from `supported_symbols` after validating
+one active mapping for every asset. Deploy active-mapping runtime readers on revision `0019` before
+applying `0020`; on rollback, downgrade the database before deploying legacy runtime code. Provider
+switching updates only active selection in one transaction. Candle rows keep their original
+provider identity and are not relabeled.
 
 Primary uniqueness:
 

@@ -92,7 +92,7 @@ async def test_mapping_schema_matches_active_selection_design(
     assert schema["foreign_keys"][0]["constrained_columns"] == ["supported_symbol_id"]
     assert schema["foreign_keys"][0]["referred_table"] == "supported_symbols"
     assert schema["foreign_keys"][0]["options"] == {"ondelete": "CASCADE"}
-    assert {"provider", "provider_symbol"} <= schema["legacy_columns"]
+    assert {"provider", "provider_symbol"}.isdisjoint(schema["legacy_columns"])
     assert "provider_mapping_id" not in schema["candle_columns"]
 
 
@@ -117,7 +117,7 @@ async def test_fresh_upgrade_preserves_every_legacy_mapping_as_active(
             )
         ).all()
 
-    await to_thread(command.upgrade, config, "head")
+    await to_thread(command.upgrade, config, "20260727_0018")
     async with database_engine.connect() as connection:
         mapping_rows = (
             await connection.execute(
@@ -163,18 +163,14 @@ async def test_multiple_mappings_and_active_selection_constraints(
                             INSERT INTO supported_symbols (
                                 symbol,
                                 asset_class,
-                                provider,
-                                provider_symbol,
                                 price_display_decimals
                             )
-                            VALUES (:symbol, 'TEST', :provider, :provider_symbol, 2)
+                            VALUES (:symbol, 'TEST', 2)
                             RETURNING id
                             """
                         ),
                         {
                             "symbol": f"TEST/{suffix}",
-                            "provider": f"LEGACY_{suffix}",
-                            "provider_symbol": f"LEGACY_SYMBOL_{suffix}",
                         },
                     )
                 ).scalar_one()
@@ -253,11 +249,9 @@ async def test_mapping_rows_cascade_with_supported_symbol(
                     INSERT INTO supported_symbols (
                         symbol,
                         asset_class,
-                        provider,
-                        provider_symbol,
                         price_display_decimals
                     )
-                    VALUES ('CASCADE/TEST', 'TEST', 'LEGACY', 'CASCADE_TEST', 2)
+                    VALUES ('CASCADE/TEST', 'TEST', 2)
                     RETURNING id
                     """
                 )
@@ -304,11 +298,9 @@ async def test_incremental_upgrade_and_downgrade_preserve_rows(
                     INSERT INTO supported_symbols (
                         symbol,
                         asset_class,
-                        provider,
-                        provider_symbol,
                         price_display_decimals
                     )
-                    VALUES ('PRESERVE/TEST', 'TEST', 'LEGACY', 'PRESERVE_TEST', 2)
+                    VALUES ('PRESERVE/TEST', 'TEST', 2)
                     RETURNING id
                     """
                 )
@@ -455,6 +447,8 @@ async def test_incremental_upgrade_and_downgrade_preserve_rows(
 async def test_full_downgrade_drops_only_mapping_table(
     database_engine: AsyncEngine,
 ) -> None:
+    config = Config("alembic.ini")
+    await to_thread(command.downgrade, config, "20260727_0018")
     async with database_engine.connect() as connection:
         legacy_rows_before = (
             await connection.execute(
@@ -468,7 +462,7 @@ async def test_full_downgrade_drops_only_mapping_table(
             )
         ).all()
 
-    await to_thread(command.downgrade, Config("alembic.ini"), "20260727_0016")
+    await to_thread(command.downgrade, config, "20260727_0016")
     async with database_engine.connect() as connection:
         state = await connection.run_sync(
             lambda sync_connection: {

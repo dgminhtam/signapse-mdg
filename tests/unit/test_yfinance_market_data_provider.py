@@ -113,6 +113,31 @@ def make_history_frame(
 
 
 async def test_provider_uses_get_info_regular_market_price_for_allowlist() -> None:
+    assert SUPPORTED_YFINANCE_PROVIDER_SYMBOLS == {
+        "AAPL",
+        "AUDUSD=X",
+        "BZ=F",
+        "BTC-USD",
+        "KC=F",
+        "ZC=F",
+        "^DJI",
+        "ETH-USD",
+        "EURUSD=X",
+        "GBPUSD=X",
+        "MSFT",
+        "NG=F",
+        "^NDX",
+        "NVDA",
+        "QQQ",
+        "^GSPC",
+        "SPY",
+        "SB=F",
+        "TSLA",
+        "JPY=X",
+        "ZW=F",
+        "CL=F",
+        "SI=F",
+    }
     payloads = {
         symbol: {"regularMarketPrice": str(index + 1)}
         for index, symbol in enumerate(sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS))
@@ -120,7 +145,7 @@ async def test_provider_uses_get_info_regular_market_price_for_allowlist() -> No
     provider, calls = make_provider(payloads)
 
     result = await provider.fetch_latest_prices(
-        sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS) + ["AAPL"]
+        sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS) + ["GC=F"]
     )
 
     assert calls == sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS)
@@ -128,7 +153,7 @@ async def test_provider_uses_get_info_regular_market_price_for_allowlist() -> No
         symbol: Decimal(str(index + 1))
         for index, symbol in enumerate(sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS))
     }
-    assert result.unavailable_symbols == frozenset({"AAPL"})
+    assert result.unavailable_symbols == frozenset({"GC=F"})
 
 
 @pytest.mark.parametrize(
@@ -388,7 +413,7 @@ async def test_candles_reject_unsupported_symbol_without_provider_call() -> None
 
     with pytest.raises(ProviderUnavailableError):
         await provider.fetch_candles(
-            SupportedSymbol("AAPL", "US_STOCK", "YFINANCE", "AAPL", True, 2),
+            SupportedSymbol("XAU/USD", "COMMODITY", "YFINANCE", "GC=F", True, 2),
             "1m",
             "1m",
             START,
@@ -397,6 +422,23 @@ async def test_candles_reject_unsupported_symbol_without_provider_call() -> None
         )
 
     assert calls == []
+
+
+async def test_candles_accept_every_approved_provider_symbol() -> None:
+    provider, calls = make_history_provider(pd.DataFrame())
+
+    for provider_symbol in sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS):
+        candles = await provider.fetch_candles(
+            SupportedSymbol(provider_symbol, "TEST", "YFINANCE", provider_symbol, True, 2),
+            "1m",
+            "1m",
+            START,
+            START + timedelta(minutes=1),
+            1,
+        )
+        assert candles == []
+
+    assert [call["tickers"] for call in calls] == sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS)
 
 
 async def test_candles_normalize_history_rows_and_filter_half_open_range() -> None:
