@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from alembic import command
 from app.core.config import get_settings
+from app.db.session import _build_database
 
 
 @pytest.fixture
@@ -35,6 +36,8 @@ def migrated_database_url() -> Iterator[str]:
 
 @pytest_asyncio.fixture
 async def database_engine(migrated_database_url: str) -> AsyncIterator[AsyncEngine]:
+    _build_database.cache_clear()
     engine = create_async_engine(migrated_database_url)
     yield engine
     await engine.dispose()
+    _build_database.cache_clear()

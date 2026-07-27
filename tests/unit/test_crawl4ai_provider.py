@@ -69,9 +69,7 @@ async def test_crawl_provider_returns_batch_with_anti_bot_config(
 
     result = await Crawl4AIMarkdownProvider(
         proxy_url="http://user:secret@proxy.example:8080"
-    ).crawl_fit_markdown(
-        ["https://one.example/", "https://two.example/"]
-    )
+    ).crawl_fit_markdown(["https://one.example/", "https://two.example/"])
 
     assert result == [
         CrawlMarkdownResult(url="https://two.example/", content="# Two"),

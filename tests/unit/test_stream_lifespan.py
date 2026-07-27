@@ -54,6 +54,7 @@ def test_lifespan_starts_idle_and_closes_stream_provider(
         "build_yfinance_market_data_stream_provider",
         lambda *args, **kwargs: yfinance_provider,
     )
+    monkeypatch.setattr(main_module, "build_session_factory", lambda settings: None)
     application = main_module.create_app()
 
     with TestClient(application) as client:

@@ -145,9 +145,7 @@ class PostgresEconomicCalendarRepository:
             .limit(request.limit)
         )
         if request.types:
-            statement = statement.where(
-                EconomicCalendarEventModel.calendar_type.in_(request.types)
-            )
+            statement = statement.where(EconomicCalendarEventModel.calendar_type.in_(request.types))
         if request.currencies:
             statement = statement.where(EconomicCalendarEventModel.currency.in_(request.currencies))
         if request.impact:
@@ -327,8 +325,7 @@ class PostgresEconomicCalendarRepository:
                     await session.execute(
                         update(EconomicCalendarEventModel)
                         .where(
-                            EconomicCalendarEventModel.calendar_type
-                            == enrichment.calendar_type,
+                            EconomicCalendarEventModel.calendar_type == enrichment.calendar_type,
                             EconomicCalendarEventModel.external_event_id
                             == enrichment.external_event_id,
                         )

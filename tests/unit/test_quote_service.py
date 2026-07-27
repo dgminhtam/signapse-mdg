@@ -231,9 +231,7 @@ async def test_service_coalesces_concurrent_refreshes() -> None:
 
 async def test_service_preserves_request_order_for_mixed_provider_quotes() -> None:
     binance = FakeProviderSymbolProvider({})
-    twelvedata = FakeProviderSymbolProvider(
-        {"BTC/USD": Decimal("10"), "EUR/USD": Decimal("1.10")}
-    )
+    twelvedata = FakeProviderSymbolProvider({"BTC/USD": Decimal("10"), "EUR/USD": Decimal("1.10")})
     service = build_mixed_service(
         QuoteProviderRouter({"BINANCE_SPOT": binance, "TWELVE_DATA": twelvedata})
     )

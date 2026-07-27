@@ -321,12 +321,16 @@ Initial database objects:
 
 ```text
 supported_symbols
+symbol_provider_mappings
 market_data_candles
 ```
 
-The `supported_symbols` table is the runtime source of truth for canonical-to-provider
-mapping. Alembic seeds the required BTC/USD and ETH/USD mappings; the application does not
-carry a hard-coded fallback registry.
+The normalized `symbol_provider_mappings` table stores multiple provider identities per asset and
+an `is_active` flag for the one asset-wide selection shared by quote, candle, and stream. During
+the expand-only compatibility phase, `supported_symbols` remains the runtime source of truth and
+retains its legacy `provider` columns. Alembic backfills one active mapping per registry row. There
+is no capability priority, equivalence group, or automatic fallback, and the application carries
+no hard-coded fallback registry.
 
 Primary uniqueness:
 

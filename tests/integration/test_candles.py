@@ -146,7 +146,7 @@ async def test_forex_weekend_cleanup_migration_scope(
 ) -> None:
     del migrated_database_url
     config = Config("alembic.ini")
-    command.downgrade(config, "20260622_0003")
+    await asyncio.to_thread(command.downgrade, config, "20260622_0003")
     rows = [
         ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", "1h", datetime(2026, 6, 19, 20, tzinfo=UTC)),
         ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", "1h", datetime(2026, 6, 19, 21, tzinfo=UTC)),
@@ -205,7 +205,7 @@ async def test_forex_weekend_cleanup_migration_scope(
                 },
             )
 
-    command.upgrade(config, "head")
+    await asyncio.to_thread(command.upgrade, config, "head")
 
     async with database_engine.connect() as connection:
         remaining = await connection.execute(
@@ -225,8 +225,8 @@ async def test_forex_weekend_cleanup_migration_scope(
         ("EUR/USD", "FOREX", "1h", datetime(2026, 6, 21, 21, tzinfo=UTC)),
     ]
 
-    command.downgrade(config, "20260622_0003")
-    command.upgrade(config, "head")
+    await asyncio.to_thread(command.downgrade, config, "20260622_0003")
+    await asyncio.to_thread(command.upgrade, config, "head")
 
 
 async def test_cold_repeated_and_partial_requests_use_persisted_provider_mapping(
@@ -445,6 +445,7 @@ async def test_stream_manager_persists_completed_candles_but_not_forming(
 
         await provider.events.put(StreamCandle(forming, START))
         await provider.events.put(StreamCandle(completed, START + timedelta(minutes=1)))
+        await asyncio.wait_for(provider.events.join(), timeout=1)
         await asyncio.wait_for(manager._persistence_queue.join(), timeout=1)  # noqa: SLF001
     finally:
         await manager.stop()

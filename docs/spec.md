@@ -620,6 +620,15 @@ supported_symbols
   created_at
   updated_at
 
+symbol_provider_mappings
+  id
+  supported_symbol_id
+  provider
+  provider_symbol
+  is_active
+  created_at
+  updated_at
+
 market_data_candles
   id
   symbol
@@ -644,12 +653,20 @@ Recommended uniqueness:
 ```text
 unique(symbol)
 unique(provider, provider_symbol)
+unique(supported_symbol_id, provider)
+unique(supported_symbol_id) where is_active
 unique(provider, provider_symbol, timeframe, open_time)
 ```
 
 Notes:
 
 - `GET /v1/symbols` reads enabled rows from `supported_symbols`; no hard-coded runtime fallback is used.
+- `symbol_provider_mappings` is an expand-only normalized copy. Runtime routing still reads the
+  legacy provider columns.
+- Multiple provider mappings can be configured for an asset, but at most one is active. The active
+  mapping is the single future provider selection shared by quote, candle, and stream; there is no
+  per-route selection, aggregation, or provider fallback.
+- Every legacy registry row, including a disabled asset, is backfilled as one active mapping.
 - The initial migration seeded `BTC/USD -> BINANCE_SPOT:BTCUSD` and
   `ETH/USD -> BINANCE_SPOT:ETHUSD`; a later migration moves both rows to `TWELVE_DATA`.
 - Later migrations seed Twelve Data symbols and the quote, candle, and stream-enabled `YFINANCE`

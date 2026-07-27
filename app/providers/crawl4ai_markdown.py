@@ -33,9 +33,7 @@ class Crawl4AIMarkdownProvider:
 
     async def crawl_fit_markdown(self, urls: list[str]) -> list[CrawlMarkdownResult]:
         run_config = CrawlerRunConfig(
-            markdown_generator=DefaultMarkdownGenerator(
-                content_filter=PruningContentFilter()
-            ),
+            markdown_generator=DefaultMarkdownGenerator(content_filter=PruningContentFilter()),
             magic=True,
             wait_until="load",
             delay_before_return_html=2.0,
@@ -54,9 +52,7 @@ class Crawl4AIMarkdownProvider:
 
             normalized = []
             for result in results:
-                fit_markdown = getattr(
-                    getattr(result, "markdown", None), "fit_markdown", None
-                )
+                fit_markdown = getattr(getattr(result, "markdown", None), "fit_markdown", None)
                 normalized.append(
                     CrawlMarkdownResult(
                         url=str(result.url),

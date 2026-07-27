@@ -6,6 +6,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Index,
     Numeric,
     SmallInteger,
@@ -45,6 +46,62 @@ class SupportedSymbolModel(Base):
         nullable=False,
         default=True,
         server_default=text("true"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class SymbolProviderMappingModel(Base):
+    __tablename__ = "symbol_provider_mappings"
+    __table_args__ = (
+        UniqueConstraint(
+            "supported_symbol_id",
+            "provider",
+            name="uq_symbol_provider_mappings_symbol_provider",
+        ),
+        UniqueConstraint(
+            "provider",
+            "provider_symbol",
+            name="uq_symbol_provider_mappings_provider_symbol",
+        ),
+        Index(
+            "ux_symbol_provider_mappings_active_symbol",
+            "supported_symbol_id",
+            unique=True,
+            postgresql_where=text("is_active"),
+        ),
+        CheckConstraint(
+            "btrim(provider) <> ''",
+            name="ck_symbol_provider_mappings_provider_nonempty",
+        ),
+        CheckConstraint(
+            "btrim(provider_symbol) <> ''",
+            name="ck_symbol_provider_mappings_provider_symbol_nonempty",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    supported_symbol_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("supported_symbols.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider: Mapped[str] = mapped_column(Text, nullable=False)
+    provider_symbol: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

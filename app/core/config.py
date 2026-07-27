@@ -37,9 +37,7 @@ class Settings(BaseSettings):
     def twelvedata_effective_api_keys(self) -> tuple[str, ...]:
         return tuple(
             dict.fromkeys(
-                key.strip()
-                for key in (self.twelvedata_api_keys or "").split(",")
-                if key.strip()
+                key.strip() for key in (self.twelvedata_api_keys or "").split(",") if key.strip()
             )
         )
 

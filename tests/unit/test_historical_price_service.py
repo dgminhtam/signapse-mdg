@@ -131,9 +131,7 @@ async def test_historical_price_service_returns_previous_available_candle() -> N
 
 async def test_historical_price_service_raises_not_found_for_empty_candles() -> None:
     service = HistoricalPriceService(
-        StubCandleService(
-            CandleResult("BTC/USD", "1m", START, START + timedelta(minutes=1), [], 2)
-        )  # type: ignore[arg-type]
+        StubCandleService(CandleResult("BTC/USD", "1m", START, START + timedelta(minutes=1), [], 2))  # type: ignore[arg-type]
     )
 
     with pytest.raises(HistoricalPriceNotFoundError):

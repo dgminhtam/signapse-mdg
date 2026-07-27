@@ -329,6 +329,8 @@ def build_yfinance_market_data_stream_provider(
         queue_capacity=queue_capacity,
         reconnect_delay_seconds=reconnect_delay_seconds,
     )
+
+
 def _parse_provider_time(value: object) -> tuple[datetime | None, bool]:
     if value is None:
         return None, True

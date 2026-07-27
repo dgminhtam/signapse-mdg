@@ -172,13 +172,9 @@ async def test_economic_calendar_repository_throttles_daily_enrichment_candidate
         datetime(2026, 7, 11, 1, tzinfo=UTC),
     )
 
-    assert [(item.calendar_type, item.external_event_id) for item in first] == [
-        ("FOREX", "123")
-    ]
+    assert [(item.calendar_type, item.external_event_id) for item in first] == [("FOREX", "123")]
     assert same_day == []
-    assert [(item.calendar_type, item.external_event_id) for item in next_day] == [
-        ("FOREX", "123")
-    ]
+    assert [(item.calendar_type, item.external_event_id) for item in next_day] == [("FOREX", "123")]
     request = parse_economic_calendar_request(
         "2026-07-10T00:00:00Z",
         "2026-07-11T00:00:00Z",

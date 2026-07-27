@@ -139,16 +139,12 @@ def test_economic_calendar_model_matches_table_contract() -> None:
         "created_at",
         "updated_at",
     }
-    assert {
-        constraint.name
-        for constraint in table.constraints
-    } >= {
+    assert {constraint.name for constraint in table.constraints} >= {
         "uq_economic_calendar_events_identity",
         "ck_economic_calendar_events_calendar_type",
     }
     assert {
-        index.name: tuple(column.name for column in index.columns)
-        for index in table.indexes
+        index.name: tuple(column.name for column in index.columns) for index in table.indexes
     } == {
         "ix_economic_calendar_events_scheduled_at": ("scheduled_at",),
         "ix_economic_calendar_events_type_scheduled_at": (

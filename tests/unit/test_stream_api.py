@@ -182,7 +182,7 @@ def test_stream_route_sends_exact_status_and_quote_events_and_unregisters(
             assert ws.receive_json() == {
                 "type": "quote",
                 "symbol": "BTC/USD",
-                    "price": "0.00",
+                "price": "0.00",
                 "receivedAt": "2026-06-19T10:30:00Z",
             }
 

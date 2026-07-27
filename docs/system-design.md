@@ -451,6 +451,39 @@ CREATE TABLE supported_symbols (
 );
 ```
 
+Normalized provider mappings are added expand-only:
+
+```sql
+CREATE TABLE symbol_provider_mappings (
+    id BIGSERIAL PRIMARY KEY,
+    supported_symbol_id BIGINT NOT NULL
+        REFERENCES supported_symbols(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL CHECK (btrim(provider) <> ''),
+    provider_symbol TEXT NOT NULL CHECK (btrim(provider_symbol) <> ''),
+    is_active BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (supported_symbol_id, provider),
+    UNIQUE (provider, provider_symbol)
+);
+
+CREATE UNIQUE INDEX ux_symbol_provider_mappings_active_symbol
+ON symbol_provider_mappings (supported_symbol_id)
+WHERE is_active;
+```
+
+Revision `20260727_0017` backfills the legacy provider rows, and corrective revision
+`20260727_0018` converts each asset's shared priority-zero mapping into its active mapping. Multiple
+provider mappings may be configured for one asset, but at most one can be active.
+
+This is the expand phase only. Quote, candle, and stream routing continue to read the legacy
+`supported_symbols.provider` and `supported_symbols.provider_symbol` columns until a later runtime
+change is deployed. That change will resolve the same active mapping for all three routes; it will
+not select providers per route or fall back automatically. The compatibility window permits legacy
+and normalized values to drift if edited, so registry writes must remain paused until routing moves
+to the normalized table. A later contract migration may remove the legacy columns after all
+application versions stop reading them.
+
 The initial Alembic migration seeded `BTC/USD -> BINANCE_SPOT:BTCUSD` and
 `ETH/USD -> BINANCE_SPOT:ETHUSD`; a later migration moves both rows to `TWELVE_DATA`.
 A later Forex seed migration adds
@@ -498,6 +531,10 @@ CREATE TABLE market_data_candles (
     UNIQUE (provider, provider_symbol, timeframe, open_time)
 );
 ```
+
+The candle identity remains `(provider, provider_symbol, timeframe, open_time)`.
+`market_data_candles` does not reference `symbol_provider_mappings`, so historical candles remain
+valid when active mappings change or are removed.
 
 Recommended indexes:
 

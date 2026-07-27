@@ -125,10 +125,7 @@ def _validate_range(
     max_candles: int,
 ) -> None:
     elapsed = end - start
-    if (
-        elapsed <= timedelta(0)
-        or _conservative_count(start, end, timeframe) > max_candles
-    ):
+    if elapsed <= timedelta(0) or _conservative_count(start, end, timeframe) > max_candles:
         raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
 
 

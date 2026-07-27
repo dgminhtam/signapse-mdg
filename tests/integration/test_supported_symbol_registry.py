@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.api.routes_quotes import get_quote_cache, get_quote_provider
 from app.core.config import get_settings
 from app.domain.quotes import ProviderQuoteBatch
+from app.domain.symbols import SupportedSymbol
 from app.main import app
 
 pytestmark = pytest.mark.integration
@@ -122,7 +123,7 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
     async with database_engine.connect() as connection:
         columns = await connection.run_sync(
             lambda sync_connection: {
-                column["name"]
+                column["name"]: column
                 for column in inspect(sync_connection).get_columns("supported_symbols")
             }
         )
@@ -223,8 +224,8 @@ async def test_migration_creates_schema_and_exact_seed_mappings(
         ("COFFEE", "COMMODITY", "YFINANCE", "KC=F", True),
         ("CORN", "COMMODITY", "YFINANCE", "ZC=F", True),
         ("DJI", "STOCK_INDEX", "YFINANCE", "^DJI", True),
-        ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
         ("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True),
+        ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
         ("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True),
         ("MSFT", "US_STOCK", "TWELVE_DATA", "MSFT", True),
         ("NATGAS", "COMMODITY", "YFINANCE", "NG=F", True),
@@ -272,7 +273,7 @@ async def test_inline_calendar_config_migration_has_expected_schema_and_seed_dat
     assert "market_calendars" not in table_names
     assert "market_calendar_sessions" not in table_names
     assert "calendar_code" not in columns
-    assert {"calendar_source", "calendar_name", "calendar_timezone"} <= columns
+    assert {"calendar_source", "calendar_name", "calendar_timezone"} <= columns.keys()
     assert configs == [
         ("AAPL", "pandas_market_calendars", "NYSE", "America/New_York"),
         ("AUD/USD", "pandas_market_calendars", "FOREX", "America/New_York"),
@@ -281,8 +282,8 @@ async def test_inline_calendar_config_migration_has_expected_schema_and_seed_dat
         ("COFFEE", "pandas_market_calendars", "ICEUS", "America/New_York"),
         ("CORN", "pandas_market_calendars", "CMEGlobex_Grains", "America/Chicago"),
         ("DJI", "pandas_market_calendars", "NYSE", "America/New_York"),
-        ("EUR/USD", "pandas_market_calendars", "FOREX", "America/New_York"),
         ("ETH/USD", "internal", "24/7", "UTC"),
+        ("EUR/USD", "pandas_market_calendars", "FOREX", "America/New_York"),
         ("GBP/USD", "pandas_market_calendars", "FOREX", "America/New_York"),
         ("MSFT", "pandas_market_calendars", "NYSE", "America/New_York"),
         ("NATGAS", "pandas_market_calendars", "CMEGlobex_Energy", "America/New_York"),
@@ -376,8 +377,8 @@ async def test_seed_is_idempotent_and_restores_required_mapping(
         ("COFFEE", "KC=F", True),
         ("CORN", "ZC=F", True),
         ("DJI", "^DJI", True),
-        ("EUR/USD", "EUR/USD", True),
         ("ETH/USD", "ETHUSD", True),
+        ("EUR/USD", "EUR/USD", True),
         ("GBP/USD", "GBP/USD", True),
         ("MSFT", "MSFT", True),
         ("NATGAS", "NG=F", True),
@@ -438,8 +439,8 @@ async def test_forex_seed_is_idempotent_and_preserves_crypto_mappings(
         ("COFFEE", "COMMODITY", "YFINANCE", "KC=F", True),
         ("CORN", "COMMODITY", "YFINANCE", "ZC=F", True),
         ("DJI", "STOCK_INDEX", "YFINANCE", "^DJI", True),
-        ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
         ("ETH/USD", "CRYPTO", "TWELVE_DATA", "ETH/USD", True),
+        ("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True),
         ("GBP/USD", "FOREX", "TWELVE_DATA", "GBP/USD", True),
         ("MSFT", "US_STOCK", "TWELVE_DATA", "MSFT", True),
         ("NATGAS", "COMMODITY", "YFINANCE", "NG=F", True),
@@ -718,9 +719,9 @@ async def test_registry_constraints_reject_duplicate_provider_mapping(
                             provider_symbol,
                             enabled,
                             price_display_decimals
-                        )
+                    )
                     VALUES
-                        ('XBT/USD', 'CRYPTO', 'BINANCE_SPOT', 'BTCUSD', true, 2)
+                        ('XBT/USD', 'CRYPTO', 'TWELVE_DATA', 'BTC/USD', true, 2)
                     """
                 )
             )
@@ -775,8 +776,8 @@ async def test_api_lists_seed_symbols_in_canonical_order(
         "COFFEE",
         "CORN",
         "DJI",
-        "EUR/USD",
         "ETH/USD",
+        "EUR/USD",
         "GBP/USD",
         "MSFT",
         "NATGAS",
@@ -1031,9 +1032,9 @@ async def test_quotes_use_persisted_provider_mapping(
 
         async def fetch_latest_prices(
             self,
-            provider_symbols: list[str],
+            symbols: list[SupportedSymbol],
         ) -> ProviderQuoteBatch:
-            self.requested_provider_symbols.extend(provider_symbols)
+            self.requested_provider_symbols.extend(symbol.provider_symbol for symbol in symbols)
             return ProviderQuoteBatch(
                 prices={"BTC/USD_TEST": Decimal("123.4500")},
                 unavailable_symbols=frozenset(),

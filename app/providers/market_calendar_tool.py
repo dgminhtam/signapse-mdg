@@ -242,7 +242,7 @@ def _html_text(value: object) -> str | None:
 def _order(value: object) -> int:
     try:
         return int(str(value))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 999_999
 
 

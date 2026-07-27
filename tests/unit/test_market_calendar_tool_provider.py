@@ -166,13 +166,7 @@ async def test_market_calendar_tool_provider_fetches_only_selected_details_with_
                         }
                     ],
                     "linked_threads": {
-                        "news": [
-                            {
-                                "html": (
-                                    f'<a href="/news/{self.event_id}-story/hit">Read</a>'
-                                )
-                            }
-                        ]
+                        "news": [{"html": (f'<a href="/news/{self.event_id}-story/hit">Read</a>')}]
                     },
                 }
             }
@@ -193,15 +187,13 @@ async def test_market_calendar_tool_provider_fetches_only_selected_details_with_
 
     monkeypatch.setattr(provider_module.aiohttp, "ClientSession", FakeSession)
     candidates = [
-        EconomicCalendarEnrichmentCandidate("FOREX", str(event_id))
-        for event_id in range(1, 8)
+        EconomicCalendarEnrichmentCandidate("FOREX", str(event_id)) for event_id in range(1, 8)
     ]
 
     results = await MarketCalendarToolProvider().fetch_event_details(candidates)
 
     assert urls == [
-        f"https://www.forexfactory.com/calendar/details/1-{event_id}"
-        for event_id in range(1, 8)
+        f"https://www.forexfactory.com/calendar/details/1-{event_id}" for event_id in range(1, 8)
     ]
     assert max_active == 5
     assert [result.external_event_id for result in results] == ["1", "2", "4", "5", "6", "7"]
