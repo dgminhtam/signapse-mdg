@@ -1,53 +1,92 @@
 ## Purpose
 
-Defines the historical price lookup API that returns the closest eligible completed candle price for a requested instant using each selected provider's resolution policy.
+Defines the historical price lookup API that returns the closest eligible completed candle price
+for a requested instant through one immutable Provider Selection and a fixed common resolution
+ladder.
 
 ## Requirements
 
 ### Requirement: Historical price can be requested by canonical symbol and instant
 
-The gateway SHALL expose `GET /v1/historical-price` for one canonical `symbol`, one UTC `at` timestamp, and at most one optional case-sensitive `provider` value. It SHALL NOT require or accept a public timeframe parameter for this lookup.
+The gateway SHALL expose `GET /v1/historical-price` for one canonical `symbol`, one UTC `at`
+timestamp, and at most one optional case-sensitive `provider` value. It SHALL NOT require or accept
+a public timeframe parameter for this lookup.
 
 #### Scenario: Valid historical price request uses the default
 
-- **WHEN** a client requests an enabled canonical symbol and valid UTC `at` timestamp without `provider`
+- **WHEN** a client requests an enabled canonical symbol and valid UTC `at` timestamp without
+  `provider`
 - **THEN** the gateway responds with HTTP status `200`
 - **AND** resolves the lookup through the symbol's Default Provider
 - **AND** the response represents that canonical symbol
 
 #### Scenario: Valid historical price request uses an override
 
-- **WHEN** a client requests an enabled canonical symbol, valid UTC `at`, and a configured non-default Provider Mapping
+- **WHEN** a client requests an enabled canonical symbol, valid UTC `at`, and a configured
+  non-default Provider Mapping
 - **THEN** the gateway responds with HTTP status `200`
-- **AND** uses that mapping throughout Historical Price Resolution
+- **AND** uses that mapping throughout every Historical Price Resolution attempt
 
 #### Scenario: Timeframe is not part of the public contract
 
 - **WHEN** a client requests historical price
 - **THEN** the client supplies no timeframe value
-- **AND** the gateway uses its internal provider-specific Historical Price Resolution policy
+- **AND** the gateway uses the common canonical resolution sequence `1m`, `5m`, `1h`, then `1d`
+- **AND** the successful response identifies the selected resolution
 
 ### Requirement: Historical price uses provider-specific completed-candle resolution
 
-The gateway SHALL resolve historical price through the existing historical-candle flow using the immutable Provider Selection and the provider-specific timeframe sequence owned by Historical Price Resolution. It SHALL return the close of the nearest eligible completed candle selected by that policy at or before `at`, MUST require the selected candle's close time to be at or before `at`, and MUST NOT change provider while trying another timeframe.
+The gateway SHALL resolve historical price through the existing historical-candle flow using the
+immutable Provider Selection and the fixed canonical timeframe sequence `1m`, `5m`, `1h`, then
+`1d`. It SHALL return the close of the nearest eligible completed candle selected by that policy
+at or before `at`, MUST require the selected candle's close time to be at or before `at`, and MUST
+NOT change provider while trying another timeframe. The resolver SHALL try timeframes sequentially
+and SHALL make no more than four attempts.
 
 #### Scenario: Finest eligible completed candle is available
 
-- **WHEN** the selected provider's finest attempted timeframe contains an eligible candle whose close time is at or before `at`
+- **WHEN** the selected provider's `1m` attempt contains an eligible candle whose close time is at
+  or before `at`
 - **THEN** the gateway returns that candle's close price
 - **AND** resolves `pricedAt` as that candle's open time
+- **AND** resolves `resolution` as `1m`
+- **AND** makes no `5m`, `1h`, or `1d` attempt
 
-#### Scenario: Finer timeframe is unavailable because of provider retention
+#### Scenario: Finer timeframe returns valid no-data
 
-- **WHEN** the selected provider returns no eligible data for a finer timeframe because the requested instant is outside its retained history
-- **THEN** the resolver may try the next coarser timeframe in its provider-specific policy
+- **WHEN** an attempted timeframe returns no eligible candle because of provider retention,
+  natural provider gaps, or a closed session
+- **THEN** the resolver tries the next timeframe in the fixed sequence
 - **AND** every attempt uses the same Provider Selection
+- **AND** it does not synthesize a candle from another timeframe
+
+#### Scenario: Coarser completed candle is selected
+
+- **WHEN** `1m` and `5m` return no eligible candle
+- **AND** `1h` contains an eligible candle whose close time is at or before `at`
+- **THEN** the gateway returns that candle's close price
+- **AND** resolves `pricedAt` as that candle's open time
+- **AND** resolves `resolution` as `1h`
+
+#### Scenario: Resolution attempts are bounded and sequential
+
+- **WHEN** no eligible candle is returned by an attempted timeframe
+- **THEN** the gateway attempts timeframes in the order `1m`, `5m`, `1h`, `1d`
+- **AND** it stops at the first eligible result
+- **AND** it makes no more than four attempts
 
 #### Scenario: Coarser candle would look ahead
 
 - **WHEN** a coarser candle opens at or before `at` but closes after `at`
 - **THEN** that candle is ineligible for Historical Price Resolution
 - **AND** the gateway does not use its close price
+- **AND** the gateway may continue to the next permitted timeframe
+
+#### Scenario: Forming candle is excluded
+
+- **WHEN** a returned candle is not complete at resolution time
+- **THEN** the gateway does not select that candle
+- **AND** it selects the nearest earlier eligible completed candle if one exists
 
 #### Scenario: Closed session resolves to a previous eligible candle
 
@@ -59,29 +98,38 @@ The gateway SHALL resolve historical price through the existing historical-candl
 #### Scenario: Historical candle flow is reused
 
 - **WHEN** a candidate candle is absent from persistence
-- **THEN** the gateway uses the existing historical-candle provider-fill path with the immutable Provider Selection
-- **AND** applies the existing market-session, range, normalization, persistence, and gap behavior
+- **THEN** the gateway uses the existing historical-candle provider-fill path with the immutable
+  Provider Selection
+- **AND** applies the existing market-session, range, normalization, persistence, and cache
+  behavior
 
 #### Scenario: Selected provider fails operationally
 
-- **WHEN** an attempted timeframe fails because of provider configuration, credentials, timeout, rate limit, transport, or payload validity
+- **WHEN** an attempted timeframe fails because of provider configuration, credentials, timeout,
+  rate limit, transport, or payload validity
 - **THEN** the lookup fails with `PROVIDER_UNAVAILABLE`
 - **AND** the failure is not masked by trying a coarser timeframe or another Provider Mapping
 
 ### Requirement: Historical price response is minimal and provider-agnostic
 
-A successful historical price response SHALL contain exactly `symbol`, `price`, and `pricedAt`. `price` SHALL be the selected completed candle close serialized as a decimal string, and `pricedAt` SHALL be that candle's open time serialized as an ISO-8601 UTC timestamp.
+A successful historical price response SHALL contain exactly `symbol`, `price`, `pricedAt`, and
+`resolution`. `price` SHALL be the selected completed candle close serialized as a decimal string,
+`pricedAt` SHALL be that candle's open time serialized as an ISO-8601 UTC timestamp, and
+`resolution` SHALL be the selected canonical timeframe.
 
 #### Scenario: Successful response fields are serialized
 
 - **WHEN** the gateway resolves an eligible completed candle at or before the requested instant
-- **THEN** the response contains exactly `symbol`, `price`, and `pricedAt`
-- **AND** it does not contain timeframe, OHLC fields, volume, asset class, provider identity, provider symbol, freshness, or source metadata
+- **THEN** the response contains exactly `symbol`, `price`, `pricedAt`, and `resolution`
+- **AND** `resolution` is one of `1m`, `5m`, `1h`, or `1d`
+- **AND** it does not contain OHLC fields, volume, asset class, provider identity, provider symbol,
+  freshness, fallback reason, or source metadata
 
 #### Scenario: Decimal price is serialized as a string
 
 - **WHEN** the selected candle close is returned
-- **THEN** `price` is serialized as a fixed-point decimal string without binary floating-point conversion or scientific notation
+- **THEN** `price` is serialized as a fixed-point decimal string without binary floating-point
+  conversion or scientific notation
 
 #### Scenario: Priced timestamp identifies the selected candle
 
@@ -89,9 +137,16 @@ A successful historical price response SHALL contain exactly `symbol`, `price`, 
 - **THEN** `pricedAt` equals the selected candle's open time
 - **AND** it may precede the finest-timeframe bucket containing `at`
 
+#### Scenario: Resolution identifies fallback precision
+
+- **WHEN** the gateway selects a candle coarser than `1m`
+- **THEN** `resolution` equals that candle's canonical timeframe
+- **AND** the gateway does not claim that the result is a one-minute price
+
 ### Requirement: Historical price failures use stable gateway errors
 
-The endpoint SHALL return the standard gateway error envelope and SHALL NOT expose database credentials, SQL, SDK exceptions, raw provider payloads, credentials, or stack traces.
+The endpoint SHALL return the standard gateway error envelope and SHALL NOT expose database
+credentials, SQL, SDK exceptions, raw provider payloads, credentials, or stack traces.
 
 #### Scenario: Symbol is unknown or disabled
 
@@ -120,9 +175,16 @@ The endpoint SHALL return the standard gateway error envelope and SHALL NOT expo
 - **THEN** the gateway responds with HTTP status `400`
 - **AND** the error code is `INVALID_TIME_RANGE`
 
+#### Scenario: Timestamp is in the future
+
+- **WHEN** `at` is later than the single UTC instant captured for the request
+- **THEN** the gateway responds with HTTP status `400`
+- **AND** the error code is `INVALID_TIME_RANGE`
+- **AND** it performs no persistence or provider operation
+
 #### Scenario: No historical price is available before the requested instant
 
-- **WHEN** every timeframe permitted by the selected provider's resolution policy returns no eligible completed candle
+- **WHEN** every timeframe in the fixed resolution sequence returns no eligible completed candle
 - **THEN** the gateway responds with HTTP status `404`
 - **AND** the error code is `PRICE_NOT_FOUND`
 
@@ -161,5 +223,24 @@ symbol's `price_display_decimals`.
 #### Scenario: Historical price response remains minimal
 
 - **WHEN** a historical price is returned successfully
-- **THEN** the response continues to contain exactly `symbol`, `price`, and `pricedAt`
+- **THEN** the response continues to contain exactly `symbol`, `price`, `pricedAt`, and `resolution`
 - **AND** it does not contain `priceDisplayDecimals`
+
+### Requirement: Provider adapters distinguish valid no-data from operational failure
+
+Provider adapters participating in Historical Price Resolution SHALL return an empty candle list
+for a valid requested range with no available data, including recognized retention or no-data
+responses. They SHALL raise the existing sanitized provider-unavailable boundary for operational,
+authentication, quota, transport, timeout, malformed-payload, or invalid-response failures.
+
+#### Scenario: Provider returns valid no-data
+
+- **WHEN** an attempted provider timeframe has no rows for the requested eligible range
+- **THEN** the adapter returns an empty candle list
+- **AND** Historical Price Resolution may try the next canonical timeframe
+
+#### Scenario: Provider reports an operational failure
+
+- **WHEN** an attempted provider timeframe fails because the provider cannot serve the request
+- **THEN** the adapter raises the sanitized provider-unavailable boundary
+- **AND** Historical Price Resolution does not try a coarser timeframe

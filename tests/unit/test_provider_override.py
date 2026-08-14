@@ -187,14 +187,9 @@ class StubHistoricalCandleService:
 
 async def test_history_policy_keeps_provider_and_rejects_lookahead() -> None:
     service = StubHistoricalCandleService()
-    history = HistoricalPriceService(
-        service,  # type: ignore[arg-type]
-        timeframe_policy=lambda _symbol, _at: ("1m", "5m"),
-    )
+    history = HistoricalPriceService(service, clock=lambda: NOW)  # type: ignore[arg-type]
 
-    result = await history.get_historical_price(
-        HistoricalPriceRequest("AAPL", NOW, "YFINANCE")
-    )
+    result = await history.get_historical_price(HistoricalPriceRequest("AAPL", NOW, "YFINANCE"))
 
     assert result.priced_at == NOW - timedelta(minutes=5)
     assert [request.timeframe for request in service.requests] == ["1m", "5m"]
@@ -229,9 +224,7 @@ async def test_candle_cache_and_stream_interests_include_provider_identity() -> 
 
     assert await cache.get("AAPL", "1m", "YFINANCE", "AAPL") == first
     assert await cache.get("AAPL", "1m", "TWELVE_DATA", "AAPL") == second
-    assert QuoteInterest("AAPL", "YFINANCE", "AAPL") != QuoteInterest(
-        "AAPL", "TWELVE_DATA", "AAPL"
-    )
+    assert QuoteInterest("AAPL", "YFINANCE", "AAPL") != QuoteInterest("AAPL", "TWELVE_DATA", "AAPL")
     assert CandleInterest("AAPL", "1m", "YFINANCE", "AAPL") != CandleInterest(
         "AAPL", "1m", "TWELVE_DATA", "AAPL"
     )
@@ -267,7 +260,7 @@ class StubHistoryService:
         self.request = request
         from app.services.historical_prices import HistoricalPriceResult
 
-        return HistoricalPriceResult("AAPL", Decimal("1"), NOW, 2)
+        return HistoricalPriceResult("AAPL", Decimal("1"), NOW, 2, "1m")
 
 
 async def _client() -> AsyncIterator[AsyncClient]:

@@ -14,10 +14,12 @@ candle reads, and stream interests. Identity includes canonical symbol, provider
 and timeframe/channel where applicable. Public market-data payloads remain provider-agnostic;
 `GET /v1/symbols` exposes deterministic `providerMappings` for discovery.
 
-Historical price passes this same immutable selection through the provider-specific timeframe
-resolution policy. A coarser timeframe may be tried only for no-data/retention cases, selected
-candles must be complete at the requested instant (`close_time <= at`), and operational provider
-failures remain `PROVIDER_UNAVAILABLE`.
+Historical price passes this same immutable selection through one common canonical resolution
+ladder: `1m`, `5m`, `1h`, then `1d`. A coarser timeframe may be tried only for valid no-data,
+retention, natural-gap, or closed-session results; selected candles must be complete at the
+requested instant (`close_time <= at`), and operational provider failures remain
+`PROVIDER_UNAVAILABLE`. The successful response exposes the selected `resolution` while keeping
+provider-native intervals internal.
 
 ## 1. Context
 
@@ -348,6 +350,26 @@ holidays, early closes, late opens, exceptional closures, or provider maintenanc
 open-session provider gaps remain absent. Missing or null Twelve Data volume is represented as
 decimal zero to satisfy the existing contract and does not mean measured zero activity.
 
+### Historical Price Flow
+
+```text
+Client -> GET /v1/historical-price?symbol=...&at=...[&provider=...]
+  -> API validates symbol/provider/timestamp syntax
+  -> Service captures one UTC now and rejects future at
+  -> Symbol Registry resolves one immutable Provider Selection
+  -> Service tries 1m, 5m, 1h, then 1d sequentially
+  -> Existing CandleService reads persistence/cache and fills missing ranges
+  -> Provider adapter maps canonical resolution to its native interval
+  -> Valid empty/no-data result advances to the next resolution
+  -> Operational provider/database failure stops with a stable error
+  -> Service selects only complete candles with close_time <= at
+  -> API returns symbol, decimal price, pricedAt (candle open), and resolution
+```
+
+The resolver makes at most four attempts, never changes provider, never synthesizes or resamples
+candles, and persists/cache-merges each candle under its actual timeframe. A successful fallback
+therefore remains provider-agnostic to clients while making its coarser precision explicit.
+
 ### WebSocket Stream Flow
 
 ```text
@@ -391,6 +413,7 @@ without blocking provider consumption or other clients.
 | `GET` | `/v1/symbols` | Supported canonical symbol registry. |
 | `GET` | `/v1/quotes` | Latest normalized quotes for one or more symbols. |
 | `GET` | `/v1/candles` | Historical normalized candles for one symbol and timeframe. |
+| `GET` | `/v1/historical-price` | Completed historical price with adaptive resolution. |
 
 ### WebSocket
 

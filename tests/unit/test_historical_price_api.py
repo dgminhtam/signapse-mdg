@@ -30,7 +30,13 @@ class StubHistoricalPriceService:
         self.requested = request
         if self.error is not None:
             raise self.error
-        return HistoricalPriceResult("XAU/USD", Decimal("2934.5678"), START, 2)
+        return HistoricalPriceResult(
+            "XAU/USD",
+            Decimal("2934.5678"),
+            START,
+            2,
+            "1h",
+        )
 
 
 @pytest.fixture
@@ -55,6 +61,7 @@ async def test_historical_price_serializes_minimal_contract(client: AsyncClient)
         "symbol": "XAU/USD",
         "price": "2934.57",
         "pricedAt": "2026-06-19T10:30:00Z",
+        "resolution": "1h",
     }
     assert service.requested == HistoricalPriceRequest(
         "BTC/USD",
@@ -123,7 +130,7 @@ async def test_historical_price_sanitizes_service_failures(
     assert "raw provider payload" not in response.text
 
 
-async def test_historical_price_does_not_require_public_timeframe(client: AsyncClient) -> None:
+async def test_historical_price_response_requires_resolution(client: AsyncClient) -> None:
     app.dependency_overrides[get_historical_price_service] = lambda: StubHistoricalPriceService()
 
     response = await client.get(
@@ -132,4 +139,4 @@ async def test_historical_price_does_not_require_public_timeframe(client: AsyncC
     )
 
     assert response.status_code == 200
-    assert set(response.json()) == {"symbol", "price", "pricedAt"}
+    assert set(response.json()) == {"symbol", "price", "pricedAt", "resolution"}

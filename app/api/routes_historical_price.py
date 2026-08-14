@@ -24,6 +24,7 @@ class HistoricalPriceResponse(BaseModel):
     symbol: str
     price: str
     priced_at: str
+    resolution: str
 
 
 def get_historical_price_service(
@@ -55,4 +56,5 @@ def _to_response(result: HistoricalPriceResult) -> HistoricalPriceResponse:
         symbol=result.symbol,
         price=format_price(result.price, result.price_display_decimals),
         priced_at=format_datetime(result.priced_at),
+        resolution=result.resolution,
     )

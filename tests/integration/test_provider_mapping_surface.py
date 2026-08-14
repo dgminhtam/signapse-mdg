@@ -200,11 +200,7 @@ async def test_every_registry_mapping_passes_market_data_surface_smoke_matrix(
         assert quotes.quotes[0].provider_symbol == mapping.provider_symbol
 
         for timeframe in TIMEFRAMES:
-            start = (
-                datetime(2026, 7, 1, tzinfo=UTC)
-                if timeframe == "1mo"
-                else MATRIX_START
-            )
+            start = datetime(2026, 7, 1, tzinfo=UTC) if timeframe == "1mo" else MATRIX_START
             result = await candle_service.get_candles(
                 CandleRequest(
                     symbol.symbol,
@@ -228,16 +224,17 @@ async def test_every_registry_mapping_passes_market_data_surface_smoke_matrix(
         )
         assert historical.symbol == symbol.symbol
         assert historical.priced_at <= MATRIX_AT
+        assert historical.resolution in {"1m", "5m", "1h", "1d"}
         assert any(
             candidate.provider == mapping.provider
             and candidate.provider_symbol == mapping.provider_symbol
+            and candidate.timeframe == historical.resolution
             for candidate in symbol_repository.upserted
             if candidate.symbol == symbol.symbol
         )
 
     stream_children = {
-        provider: MatrixStreamProvider()
-        for provider in {mapping.provider for _, mapping in cases}
+        provider: MatrixStreamProvider() for provider in {mapping.provider for _, mapping in cases}
     }
     stream_provider = MultiProviderStreamProvider(stream_children, queue_capacity=128)
     manager = StreamManager(

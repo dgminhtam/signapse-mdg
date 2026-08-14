@@ -38,6 +38,13 @@ Quy ước WebSocket:
 | `XAG/USD` | `YFINANCE` (`SI=F`) | ✅ | ⚠️ | ✅ |
 | `XAU/USD` | `TWELVE_DATA` | ✅ | ✅ | ✅ |
 
+Historical Price Resolution uses the same provider mapping and a common canonical ladder for every
+row: `1m`, `5m`, `1h`, then `1d`. A valid empty result (including provider retention, natural gap,
+or closed-session no-data) may advance to the next resolution. Timeout, transport, credentials,
+quota/rate-limit, and malformed-payload failures remain `PROVIDER_UNAVAILABLE`; the resolver never
+switches provider or synthesizes a candle. The response reports the selected canonical
+`resolution` and keeps `pricedAt` at the selected candle open time.
+
 ## Kết quả tổng hợp
 
 - Candle: `24/24` asset có hỗ trợ.
@@ -84,9 +91,9 @@ Current inactive alternatives requiring full-surface verification:
 - `uv run pytest`: 597 passed.
 - `uv run ruff check app tests`: passed.
 - `uv run mypy app`: passed with no issues in 61 source files.
-- Historical Price Resolution keeps one immutable Provider Selection while its policy changes
-  timeframe; the focused integration seam also rejects look-ahead candles and preserves
-  `close_time <= at`.
-- The concurrent historical-resolution change owns the exact timeframe ladder. This change only
-  supplies the selected mapping through that seam, so the two changes can land independently and
-  reconcile the policy implementation later.
+- Historical Price Resolution keeps one immutable Provider Selection while trying the fixed
+  `1m` → `5m` → `1h` → `1d` ladder; the focused integration seam rejects look-ahead candles and
+  preserves `close_time <= at`.
+- The adaptive-resolution change owns the exact ladder and response `resolution`; provider support
+  verification only confirms that each mapping can serve the canonical intervals or return a valid
+  no-data result.

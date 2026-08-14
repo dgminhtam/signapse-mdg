@@ -338,28 +338,34 @@ Response:
 {
   "symbol": "BTC/USD",
   "price": "104250.12",
-  "pricedAt": "2026-06-19T10:30:00Z"
+  "pricedAt": "2026-06-19T10:30:00Z",
+  "resolution": "1m"
 }
 ```
 
 Semantics:
 
-- A successful response contains exactly `symbol`, `price`, and `pricedAt`.
+- A successful response contains exactly `symbol`, `price`, `pricedAt`, and `resolution`.
 - `symbol` is the canonical gateway symbol; provider identity and mapping remain internal.
 - `price` is the selected completed candle close rounded with `ROUND_HALF_UP` and padded to the
   symbol's exact `priceDisplayDecimals`.
 - `pricedAt` is the selected candle open timestamp, not the original requested `at`; it can be
   earlier than the finest timeframe bucket when the requested instant falls in a closed session or
   finer history is unavailable.
-- The client supplies no public `timeframe`; the gateway uses the provider-specific historical
-  resolution policy internally. Finer no-data may try a coarser timeframe, but every attempt uses
-  the same selected provider and a candle must have `close_time <= at`.
+- `resolution` is the selected canonical historical timeframe. The gateway tries `1m`, `5m`, `1h`,
+  then `1d` sequentially and stops at the first eligible completed candle. Provider-native interval
+  names remain inside adapters.
+- The client supplies no public `timeframe`; valid no-data, retention gaps, natural gaps, and
+  closed sessions may try the next resolution, but every attempt uses the same selected provider,
+  does not synthesize or resample candles, and requires `close_time <= at`.
 - `provider` is optional and follows the same mapping validation as `/v1/candles`; operational
-  failures return `503 PROVIDER_UNAVAILABLE` and are not hidden by provider fallback.
+  failures return `503 PROVIDER_UNAVAILABLE` and are not hidden by coarser-resolution or
+  cross-provider fallback.
 - Missing, empty, invalid, or non-UTC `at` returns `400 INVALID_TIME_RANGE`.
+- A future `at` is rejected with `400 INVALID_TIME_RANGE` before persistence or provider access.
 - Unknown or disabled `symbol` returns `400 UNSUPPORTED_SYMBOL`.
-- No eligible completed candle is available in the selected provider's entire internal resolution
-  policy at or before the requested instant returns `404 PRICE_NOT_FOUND`.
+- No eligible completed candle is available after all four resolutions are attempted at or before
+  the requested instant returns `404 PRICE_NOT_FOUND`.
 
 ### Get economic calendar
 
