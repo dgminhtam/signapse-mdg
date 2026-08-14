@@ -54,3 +54,39 @@ Quy ước WebSocket:
   `30m`, `1week`, `1month` mới chỉ có ở candle REST.
 - Chạy lại WebSocket smoke test cho 11 asset ⚠️ trong giờ giao dịch phù hợp và với cửa sổ quan sát
   dài hơn trước khi đổi trạng thái.
+## Provider Override release gate
+
+Every configured mapping must pass latest quote, every public candle timeframe, historical-price
+resolution, and WebSocket quote/candle delivery before it is exposed by `providerMappings`. A
+mapping that fails verification must be fixed or removed, not hidden behind a route-specific
+allowlist. Transient upstream failure is `PROVIDER_UNAVAILABLE`, not `UNSUPPORTED_PROVIDER`.
+
+The automated release-gate matrix is
+`tests/integration/test_provider_mapping_surface.py`. It loads the PostgreSQL registry, covers
+all 24 enabled assets and 29 configured mappings, exercises all 9 REST candle timeframes,
+historical-price resolution, and both stream channels with fake upstream adapters. The matrix
+passed in the local validation run; it verifies routing, identity isolation, and response seams
+without requiring live credentials. Live upstream smoke remains an operational release step for
+the five inactive YFINANCE alternatives below.
+
+Current inactive alternatives requiring full-surface verification:
+
+| Asset | Provider mapping | Default mapping |
+| --- | --- | --- |
+| `AAPL` | `YFINANCE:AAPL` | `TWELVE_DATA:AAPL` |
+| `BTC/USD` | `YFINANCE:BTC-USD` | `TWELVE_DATA:BTC/USD` |
+| `ETH/USD` | `YFINANCE:ETH-USD` | `TWELVE_DATA:ETH/USD` |
+| `EUR/USD` | `YFINANCE:EURUSD=X` | `TWELVE_DATA:EUR/USD` |
+| `QQQ` | `YFINANCE:QQQ` | `TWELVE_DATA:QQQ` |
+
+## Automated validation evidence
+
+- `uv run pytest`: 597 passed.
+- `uv run ruff check app tests`: passed.
+- `uv run mypy app`: passed with no issues in 61 source files.
+- Historical Price Resolution keeps one immutable Provider Selection while its policy changes
+  timeframe; the focused integration seam also rejects look-ahead candles and preserves
+  `close_time <= at`.
+- The concurrent historical-resolution change owns the exact timeframe ladder. This change only
+  supplies the selected mapping through that seam, so the two changes can land independently and
+  reconcile the policy implementation later.

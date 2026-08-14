@@ -60,7 +60,7 @@ class BinanceSpotStreamProvider:
         self._connected = False
 
     async def subscribe_quote(self, symbol: SupportedSymbol) -> None:
-        interest = QuoteInterest(symbol.symbol)
+        interest = QuoteInterest(symbol.symbol, symbol.provider, symbol.provider_symbol)
         async with self._lock:
             if interest in self._handles:
                 return
@@ -81,7 +81,12 @@ class BinanceSpotStreamProvider:
         timeframe: str,
         provider_interval: str,
     ) -> None:
-        interest = CandleInterest(symbol.symbol, timeframe)
+        interest = CandleInterest(
+            symbol.symbol,
+            timeframe,
+            symbol.provider,
+            symbol.provider_symbol,
+        )
         interval = _KLINE_INTERVALS.get(provider_interval)
         if interval is None:
             raise ProviderUnavailableError

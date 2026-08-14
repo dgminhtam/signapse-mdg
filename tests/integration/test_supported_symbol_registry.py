@@ -833,6 +833,74 @@ async def test_api_lists_seed_symbols_in_canonical_order(
     ]
 
 
+async def test_api_exposes_all_mappings_in_default_first_order(
+    database_engine: AsyncEngine,
+) -> None:
+    get_settings.cache_clear()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/v1/symbols")
+
+    assert response.status_code == 200
+    aapl = next(item for item in response.json()["symbols"] if item["symbol"] == "AAPL")
+    assert aapl["provider"] == "TWELVE_DATA"
+    assert aapl["providerMappings"] == [
+        {
+            "provider": "TWELVE_DATA",
+            "providerSymbol": "AAPL",
+            "isDefault": True,
+        },
+        {
+            "provider": "YFINANCE",
+            "providerSymbol": "AAPL",
+            "isDefault": False,
+        },
+    ]
+
+
+async def test_api_fails_closed_when_enabled_asset_lacks_default_mapping(
+    database_engine: AsyncEngine,
+) -> None:
+    async with database_engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                UPDATE symbol_provider_mappings
+                SET is_active = false
+                WHERE supported_symbol_id = (
+                    SELECT id FROM supported_symbols WHERE symbol = 'AAPL'
+                )
+                """
+            )
+        )
+
+    try:
+        get_settings.cache_clear()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(
+                "/v1/quotes",
+                params={"symbols": "AAPL", "provider": "YFINANCE"},
+            )
+
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "DATABASE_UNAVAILABLE"
+    finally:
+        async with database_engine.begin() as connection:
+            await connection.execute(
+                text(
+                    """
+                    UPDATE symbol_provider_mappings
+                    SET is_active = true
+                    WHERE supported_symbol_id = (
+                        SELECT id FROM supported_symbols WHERE symbol = 'AAPL'
+                    )
+                      AND provider = 'TWELVE_DATA'
+                    """
+                )
+            )
+
+
 async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
     database_engine: AsyncEngine,
 ) -> None:
@@ -885,6 +953,17 @@ async def test_api_filters_disabled_rows_and_reflects_persisted_changes(
         "XAG/USD": 3,
         "XAU/USD": 2,
     }
+    assert all(
+        symbol["providerMappings"]
+        and symbol["providerMappings"][0]["isDefault"]
+        and all(
+            "provider" in mapping and "providerSymbol" in mapping
+            for mapping in symbol["providerMappings"]
+        )
+        for symbol in symbols
+    )
+    for symbol in symbols:
+        symbol.pop("providerMappings")
     assert {"symbols": symbols} == {
         "symbols": [
             {
@@ -1105,3 +1184,47 @@ async def test_quotes_use_persisted_provider_mapping(
     assert quote["symbol"] == "BTC/USD"
     assert quote["price"] == "123.45"
     assert quote["receivedAt"].endswith("Z")
+
+
+async def test_quotes_accept_non_default_provider_and_keep_partial_outcomes(
+    database_engine: AsyncEngine,
+) -> None:
+    class FakeProvider:
+        def __init__(self) -> None:
+            self.requested: list[SupportedSymbol] = []
+
+        async def fetch_latest_prices(
+            self,
+            symbols: list[SupportedSymbol],
+        ) -> ProviderQuoteBatch:
+            self.requested.extend(symbols)
+            return ProviderQuoteBatch(
+                prices={symbol.provider_symbol: Decimal("321.45") for symbol in symbols},
+                unavailable_symbols=frozenset(),
+            )
+
+    provider = FakeProvider()
+    app.dependency_overrides[get_quote_provider] = lambda: provider
+    get_quote_cache.cache_clear()
+    get_settings.cache_clear()
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(
+                "/v1/quotes",
+                params={"symbols": "AAPL,XAU/USD", "provider": "YFINANCE"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+        get_quote_cache.cache_clear()
+
+    assert response.status_code == 200
+    assert [symbol.provider for symbol in provider.requested] == ["YFINANCE"]
+    assert response.json()["quotes"][0]["symbol"] == "AAPL"
+    assert response.json()["errors"] == [
+        {
+            "symbol": "XAU/USD",
+            "code": "UNSUPPORTED_PROVIDER",
+            "message": "The requested provider is not supported for this symbol.",
+        }
+    ]

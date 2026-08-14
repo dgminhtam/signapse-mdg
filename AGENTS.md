@@ -62,3 +62,17 @@ Pull requests should include a summary, linked issue or task, test evidence, and
 ## Security & Configuration Tips
 
 Do not commit secrets or local `.env` files. Binance public market data does not require API keys for the MVP. Keep provider URLs, stale thresholds, cache TTLs, and database URLs configurable.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live in GitHub Issues; use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default canonical triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout with root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.

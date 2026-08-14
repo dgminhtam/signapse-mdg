@@ -203,6 +203,10 @@ quotes, historical prices, candle OHLC, and WebSocket quote/candle OHLC. Provide
 internal `Decimal` values, caches, candle aggregation, persistence, and candle volume retain raw
 precision.
 
+`providerMappings` lists every configured mapping for the enabled asset. The default mapping is
+first, followed by remaining provider identifiers in case-sensitive ascending order. Runtime
+provider health is not included in this catalog.
+
 ### Get latest quotes
 
 ```http
@@ -232,6 +236,9 @@ Semantics:
   exact `priceDisplayDecimals`.
 - `receivedAt` is the gateway receive/snapshot timestamp.
 - Asset class, provider metadata, volume, provider time, and freshness state are not exposed.
+- `provider` is optional, request-wide, and case-sensitive. It selects a mapping only for assets
+  that list that provider in `providerMappings`; quote requests keep HTTP `200` partial outcomes
+  with per-symbol `UNSUPPORTED_PROVIDER` errors for assets without the mapping.
 - Multi-symbol requests return per-symbol errors for unsupported, stale, or provider-failed symbols.
 - Request-level errors are reserved for malformed input such as missing or empty `symbols`.
 - Twelve Data cache misses for `BTC/USD`, `ETH/USD`, `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`,
@@ -291,9 +298,12 @@ Semantics:
 - Gateway should reject unsupported timeframe values.
 - Historical candle timeframes are `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`, and `1mo`.
 - Gateway enforces `MAX_CANDLES_PER_REQUEST`.
+- `provider` is optional and selects one configured mapping for the asset. Empty or repeated values
+  return `400 INVALID_PROVIDER`; an unmapped value returns `400 UNSUPPORTED_PROVIDER`.
 - Closed candles are read from PostgreSQL first; only missing contiguous ranges are fetched.
-- Missing ranges are routed through each symbol's persisted mapping. `BTC/USD`, `ETH/USD`,
-  Forex, `XAU/USD`, US stocks, `WTI`, `SPY`, and `QQQ` use `TWELVE_DATA`.
+- Missing ranges are routed through the selected Provider Mapping. When `provider` is omitted,
+  the selected mapping is the asset's persisted Default Provider; an explicit override routes
+  the same candle flow through that exact mapping.
 - Missing `YFINANCE` candle ranges for `XAG/USD`, `BRENT`, `NATGAS`, `COFFEE`, `SUGAR`,
   `WHEAT`, `CORN`, `SPX`, `NDX`, and `DJI` are routed through yfinance `download`.
 - Missing or null yfinance volume is serialized as decimal zero because the contract requires
@@ -336,19 +346,20 @@ Semantics:
 
 - A successful response contains exactly `symbol`, `price`, and `pricedAt`.
 - `symbol` is the canonical gateway symbol; provider identity and mapping remain internal.
-- `price` is the selected `1m` candle close rounded with `ROUND_HALF_UP` and padded to the symbol's
-  exact `priceDisplayDecimals`.
-- `pricedAt` is the selected `1m` candle open timestamp, not the original requested `at`; it
-  can be earlier than the containing one-minute bucket when the requested instant falls in a
-  closed session or an unavailable bucket.
-- The client supplies no public `timeframe`; the gateway always uses `1m` internally for this
-  approximation.
-- The gateway returns the nearest available eligible `1m` candle close at or before `at`, reusing
-  the historical candle flow and existing market-session rules.
+- `price` is the selected completed candle close rounded with `ROUND_HALF_UP` and padded to the
+  symbol's exact `priceDisplayDecimals`.
+- `pricedAt` is the selected candle open timestamp, not the original requested `at`; it can be
+  earlier than the finest timeframe bucket when the requested instant falls in a closed session or
+  finer history is unavailable.
+- The client supplies no public `timeframe`; the gateway uses the provider-specific historical
+  resolution policy internally. Finer no-data may try a coarser timeframe, but every attempt uses
+  the same selected provider and a candle must have `close_time <= at`.
+- `provider` is optional and follows the same mapping validation as `/v1/candles`; operational
+  failures return `503 PROVIDER_UNAVAILABLE` and are not hidden by provider fallback.
 - Missing, empty, invalid, or non-UTC `at` returns `400 INVALID_TIME_RANGE`.
 - Unknown or disabled `symbol` returns `400 UNSUPPORTED_SYMBOL`.
-- No historical one-minute candle is available at or before the requested instant returns
-  `404 PRICE_NOT_FOUND`.
+- No eligible completed candle is available in the selected provider's entire internal resolution
+  policy at or before the requested instant returns `404 PRICE_NOT_FOUND`.
 
 ### Get economic calendar
 
@@ -480,7 +491,10 @@ Invalid subscription shape closes with WebSocket code `1008` and a stable reason
 `INVALID_SYMBOLS`, `TOO_MANY_SYMBOLS`, `UNSUPPORTED_SYMBOL`, or `UNSUPPORTED_TIMEFRAME`.
 Registry or provider failures close with `1011` and a sanitized reason.
 
-Stream interests route through each enabled symbol's persisted provider mapping. Twelve Data-backed
+Stream interests route through each enabled symbol's persisted provider mapping. A single optional,
+case-sensitive `provider` applies to the complete subscription; if any symbol lacks that mapping,
+the connection closes with `1008 UNSUPPORTED_PROVIDER` before upstream access. Empty or repeated
+provider values close with `1008 INVALID_PROVIDER`. Twelve Data-backed
 crypto, Forex, stock, commodity, and ETF symbols use one shared process-local Twelve Data WebSocket
 price stream for all active interests. YFINANCE symbols use one lazy process-local yfinance
 `AsyncWebSocket` and shared provider-symbol subscriptions.

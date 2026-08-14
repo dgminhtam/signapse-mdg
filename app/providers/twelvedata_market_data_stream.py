@@ -77,7 +77,7 @@ class TwelveDataMarketDataStreamProvider:
             raise ProviderUnavailableError
         async with self._lock:
             await self._ensure_connected()
-            interest = QuoteInterest(symbol.symbol)
+            interest = QuoteInterest(symbol.symbol, symbol.provider, symbol.provider_symbol)
             if interest in self._quote_interests:
                 return
             await self._subscribe_provider_symbol(symbol)
@@ -108,7 +108,14 @@ class TwelveDataMarketDataStreamProvider:
                 self._put_signal(
                     ProviderSignal(
                         "MARKET_CLOSED",
-                        (CandleInterest(symbol.symbol, timeframe),),
+                        (
+                            CandleInterest(
+                                symbol.symbol,
+                                timeframe,
+                                symbol.provider,
+                                symbol.provider_symbol,
+                            ),
+                        ),
                         datetime.now(UTC),
                     )
                 )
@@ -231,7 +238,11 @@ class TwelveDataMarketDataStreamProvider:
         tick = self._normalize_tick(payload)
         if tick is None:
             return
-        quote_interest = QuoteInterest(tick.symbol.symbol)
+        quote_interest = QuoteInterest(
+            tick.symbol.symbol,
+            tick.symbol.provider,
+            tick.symbol.provider_symbol,
+        )
         if quote_interest in self._quote_interests:
             self._put_event(
                 StreamQuote(
@@ -279,7 +290,20 @@ class TwelveDataMarketDataStreamProvider:
     def _active_interests(self) -> tuple[StreamInterest, ...]:
         interests: list[StreamInterest] = list(self._quote_interests)
         for symbol, timeframes in self._candle_interests.items():
-            interests.extend(CandleInterest(symbol, timeframe) for timeframe in timeframes)
+            value = next(
+                (
+                    candidate
+                    for candidate in self._symbols_by_provider_symbol.values()
+                    if candidate.symbol == symbol
+                ),
+                None,
+            )
+            if value is None:
+                continue
+            interests.extend(
+                CandleInterest(symbol, timeframe, value.provider, value.provider_symbol)
+                for timeframe in timeframes
+            )
         return tuple(interests)
 
     def _require_websocket(self) -> TwelveDataWebSocket:

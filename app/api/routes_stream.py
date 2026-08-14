@@ -7,7 +7,12 @@ from app.api.serialization import format_datetime, format_decimal, format_price
 from app.core.config import get_settings
 from app.db.repositories import PostgresSymbolRepository
 from app.db.session import build_session_factory
-from app.domain.errors import DatabaseUnavailableError, ProviderUnavailableError, StreamRequestError
+from app.domain.errors import (
+    DatabaseUnavailableError,
+    ProviderSelectionError,
+    ProviderUnavailableError,
+    StreamRequestError,
+)
 from app.domain.streams import (
     DownstreamEvent,
     StatusEvent,
@@ -15,6 +20,7 @@ from app.domain.streams import (
     StreamQuote,
 )
 from app.domain.symbols import SupportedSymbol
+from app.services.provider_selection import parse_provider_values, resolve_provider_selection
 from app.services.stream_manager import ClientRegistration, StreamManager, parse_stream_request
 
 router = APIRouter(prefix="/v1", tags=["stream"])
@@ -47,10 +53,15 @@ async def stream_market_data(websocket: WebSocket) -> None:
     await websocket.accept()
     settings = get_settings()
     try:
+        provider = parse_provider_values(
+            websocket.query_params.getlist("provider"),
+            error_type=StreamRequestError,
+        )
         request = parse_stream_request(
             websocket.query_params.get("symbols"),
             websocket.query_params.get("timeframe"),
             settings.max_quote_symbols,
+            provider,
         )
     except StreamRequestError as exc:
         await websocket.close(code=1008, reason=exc.code)
@@ -65,12 +76,27 @@ async def stream_market_data(websocket: WebSocket) -> None:
     if any(symbol not in registry_by_symbol for symbol in request.symbols):
         await websocket.close(code=1008, reason="UNSUPPORTED_SYMBOL")
         return
+    selected_symbols: list[SupportedSymbol] = []
+    try:
+        for symbol_name in request.symbols:
+            selected, _selection = resolve_provider_selection(
+                registry_by_symbol[symbol_name],
+                request.provider,
+            )
+            selected_symbols.append(selected)
+    except ProviderSelectionError as exc:
+        code = exc.code
+        if code == "UNSUPPORTED_PROVIDER":
+            await websocket.close(code=1008, reason=code)
+        else:
+            await websocket.close(code=1011, reason="DATABASE_UNAVAILABLE")
+        return
 
     manager = get_stream_manager(websocket)
     try:
         registration = await manager.register(
             request,
-            [registry_by_symbol[symbol] for symbol in request.symbols],
+            selected_symbols,
         )
     except ProviderUnavailableError:
         await websocket.close(code=1011, reason="PROVIDER_UNAVAILABLE")

@@ -20,7 +20,7 @@ class PriceTick:
 class PriceTickCandleBuilder:
     def __init__(self, *, volume: Decimal = Decimal("0")) -> None:
         self._volume = volume
-        self._current: dict[tuple[str, str], Candle] = {}
+        self._current: dict[tuple[str, str, str, str], Candle] = {}
 
     def apply_tick(
         self,
@@ -34,11 +34,19 @@ class PriceTickCandleBuilder:
         bucket_start = bucket_open(source_time, model.duration)
         policy = get_market_session_policy(tick.symbol)
         if not policy.is_eligible(bucket_start, timeframe):
-            self._current.pop((tick.symbol.symbol, timeframe), None)
+            self._current.pop(
+                (tick.symbol.symbol, tick.symbol.provider, tick.symbol.provider_symbol, timeframe),
+                None,
+            )
             return []
 
         close_time = bucket_start + model.duration - timedelta(milliseconds=1)
-        key = (tick.symbol.symbol, timeframe)
+        key = (
+            tick.symbol.symbol,
+            tick.symbol.provider,
+            tick.symbol.provider_symbol,
+            timeframe,
+        )
         current = self._current.get(key)
         emitted: list[StreamCandle] = []
         if current is not None and bucket_start > current.open_time:

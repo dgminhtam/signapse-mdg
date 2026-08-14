@@ -11,11 +11,13 @@ from app.cache.quote_cache import QuoteCache
 from app.core.config import Settings, get_settings
 from app.db.repositories import PostgresSymbolRepository
 from app.db.session import get_db_session
+from app.domain.errors import ProviderSelectionError, QuoteRequestError
 from app.domain.quotes import ProviderSymbolQuoteProvider, QuoteError, QuoteProvider, QuoteResult
 from app.domain.symbols import SymbolRepository
 from app.providers.binance_spot import build_binance_spot_quote_provider
 from app.providers.twelvedata_market_data import build_twelvedata_market_data_provider
 from app.providers.yfinance_market_data import build_yfinance_quote_provider
+from app.services.provider_selection import parse_provider_values
 from app.services.quote_provider_router import QuoteProviderRouter
 from app.services.quotes import QuoteService, parse_symbols
 
@@ -120,7 +122,15 @@ async def get_latest_quotes(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> QuoteListResponse:
     symbols = parse_symbols(request.query_params.get("symbols"), settings.max_quote_symbols)
-    result = await service.get_latest_quotes(symbols)
+    try:
+        provider = parse_provider_values(request.query_params.getlist("provider"))
+    except ProviderSelectionError as exc:
+        raise QuoteRequestError(exc.code, exc.message) from exc
+    result = (
+        await service.get_latest_quotes(symbols)
+        if provider is None
+        else await service.get_latest_quotes(symbols, provider)
+    )
     return _to_response(result)
 
 

@@ -18,17 +18,48 @@ StreamState = Literal[
 ]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class QuoteInterest:
     symbol: str
+    provider: str | None = None
+    provider_symbol: str | None = None
     channel: Literal["quote"] = "quote"
 
+    def __hash__(self) -> int:
+        return hash((self.symbol, self.channel))
 
-@dataclass(frozen=True, slots=True)
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, QuoteInterest):
+            return NotImplemented
+        return (
+            self.symbol == other.symbol
+            and self.channel == other.channel
+            and _optional_equal(self.provider, other.provider)
+            and _optional_equal(self.provider_symbol, other.provider_symbol)
+        )
+
+
+@dataclass(frozen=True, slots=True, eq=False)
 class CandleInterest:
     symbol: str
     timeframe: str
+    provider: str | None = None
+    provider_symbol: str | None = None
     channel: Literal["candle"] = "candle"
+
+    def __hash__(self) -> int:
+        return hash((self.symbol, self.timeframe, self.channel))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, CandleInterest):
+            return NotImplemented
+        return (
+            self.symbol == other.symbol
+            and self.timeframe == other.timeframe
+            and self.channel == other.channel
+            and _optional_equal(self.provider, other.provider)
+            and _optional_equal(self.provider_symbol, other.provider_symbol)
+        )
 
 
 type StreamInterest = QuoteInterest | CandleInterest
@@ -40,7 +71,11 @@ class StreamQuote:
 
     @property
     def interest(self) -> QuoteInterest:
-        return QuoteInterest(self.quote.symbol)
+        return QuoteInterest(
+            self.quote.symbol,
+            self.quote.provider,
+            self.quote.provider_symbol,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +85,12 @@ class StreamCandle:
 
     @property
     def interest(self) -> CandleInterest:
-        return CandleInterest(self.candle.symbol, self.candle.timeframe)
+        return CandleInterest(
+            self.candle.symbol,
+            self.candle.timeframe,
+            self.candle.provider,
+            self.candle.provider_symbol,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +122,7 @@ type DownstreamEvent = StreamQuote | StreamCandle | StatusEvent
 class StreamRequest:
     symbols: tuple[str, ...]
     timeframe: str
+    provider: str | None = None
 
 
 class MarketStreamProvider(Protocol):
@@ -99,3 +140,7 @@ class MarketStreamProvider(Protocol):
     async def unsubscribe(self, interest: StreamInterest) -> None: ...
 
     async def close(self) -> None: ...
+
+
+def _optional_equal(left: str | None, right: str | None) -> bool:
+    return left is None or right is None or left == right

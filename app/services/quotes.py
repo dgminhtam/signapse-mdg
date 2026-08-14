@@ -2,9 +2,15 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from app.cache.quote_cache import QuoteCache
-from app.domain.errors import ProviderUnavailableError, QuoteRequestError
+from app.domain.errors import (
+    DatabaseUnavailableError,
+    ProviderSelectionError,
+    ProviderUnavailableError,
+    QuoteRequestError,
+)
 from app.domain.quotes import Quote, QuoteError, QuoteProvider, QuoteResult
 from app.domain.symbols import SupportedSymbol, SymbolRepository
+from app.services.provider_selection import resolve_provider_selection
 
 UNSUPPORTED_SYMBOL_MESSAGE = "Symbol is not supported by this gateway."
 PROVIDER_UNAVAILABLE_MESSAGE = "The quote provider is temporarily unavailable."
@@ -42,9 +48,13 @@ class QuoteService:
         self._stale_after_seconds = stale_after_seconds
         self._clock = clock or (lambda: datetime.now(UTC))
 
-    async def get_latest_quotes(self, requested_symbols: list[str]) -> QuoteResult:
+    async def get_latest_quotes(
+        self,
+        requested_symbols: list[str],
+        provider: str | None = None,
+    ) -> QuoteResult:
         registry = {symbol.symbol: symbol for symbol in await self._repository.list_enabled()}
-        supported = [registry[symbol] for symbol in requested_symbols if symbol in registry]
+        supported: list[SupportedSymbol] = []
         errors_by_symbol = {
             symbol: QuoteError(
                 symbol=symbol,
@@ -54,6 +64,23 @@ class QuoteService:
             for symbol in requested_symbols
             if symbol not in registry
         }
+
+        for requested in requested_symbols:
+            symbol = registry.get(requested)
+            if symbol is None:
+                continue
+            try:
+                selected, _selection = resolve_provider_selection(symbol, provider)
+            except ProviderSelectionError as exc:
+                if exc.code == "UNSUPPORTED_PROVIDER":
+                    errors_by_symbol[requested] = QuoteError(
+                        symbol=requested,
+                        code=exc.code,
+                        message=exc.message,
+                    )
+                    continue
+                raise DatabaseUnavailableError from exc
+            supported.append(selected)
 
         quotes_by_symbol = await self._resolve_supported(supported, errors_by_symbol)
         return QuoteResult(
@@ -83,7 +110,7 @@ class QuoteService:
             return {}
 
         now = self._clock()
-        cached = await self._cache.get_many([item.symbol for item in supported])
+        cached = await self._cache.get_many(supported)
         resolved = {
             item.symbol: cached[item.symbol]
             for item in supported
@@ -96,7 +123,7 @@ class QuoteService:
 
         async with self._cache.refresh_lock:
             now = self._clock()
-            cached = await self._cache.get_many([item.symbol for item in pending])
+            cached = await self._cache.get_many(pending)
             still_pending: list[SupportedSymbol] = []
             for item in pending:
                 quote = cached.get(item.symbol)

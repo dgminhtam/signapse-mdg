@@ -111,20 +111,35 @@ be enforced.
   `[from,to)`
 - **AND** no fixed 30-day duration is used to accept, reject, or fetch monthly candles
 ### Requirement: Candle symbols come from the enabled registry
-The gateway MUST resolve the canonical symbol through the PostgreSQL-backed enabled symbol
-registry before accessing candle persistence or the provider.
 
-#### Scenario: Enabled canonical symbol is requested
-- **WHEN** the requested symbol is enabled in the registry
-- **THEN** the gateway uses its internal asset class, provider, and provider-symbol mapping for
-  persistence and provider routing
+The gateway MUST resolve the canonical symbol through the PostgreSQL-backed enabled symbol registry and resolve one immutable Provider Selection before accessing candle persistence or a provider. Omission of `provider` MUST select the Default Provider, and an explicit value MUST select the exact configured mapping regardless of default state.
+
+#### Scenario: Enabled canonical symbol is requested without an override
+
+- **WHEN** the requested symbol is enabled and `provider` is omitted
+- **THEN** the gateway uses its Default Provider and provider symbol for persistence and provider routing
 - **AND** those internal values are not exposed in the candle response
 
+#### Scenario: Enabled canonical symbol supports the override
+
+- **WHEN** the requested symbol is enabled and has a mapping matching the Provider Override
+- **THEN** the gateway uses that Provider Selection for all persistence and provider operations
+- **AND** the response remains provider-agnostic
+
+#### Scenario: Enabled canonical symbol does not support the override
+
+- **WHEN** the requested symbol is enabled but lacks a mapping matching the Provider Override
+- **THEN** the gateway responds with HTTP status `400`
+- **AND** the error code is `UNSUPPORTED_PROVIDER`
+- **AND** sanitized error details identify the canonical symbol and requested provider
+- **AND** no candle cache, persistence, or provider call is made
+
 #### Scenario: Unknown or disabled symbol is requested
+
 - **WHEN** the requested canonical symbol is absent from the enabled registry
 - **THEN** the gateway responds with HTTP status `400`
 - **AND** the error code is `UNSUPPORTED_SYMBOL`
-- **AND** no candle provider call is made
+- **AND** no Provider Mapping validation or candle provider call is made
 
 ### Requirement: Closed candles are reused from PostgreSQL
 
@@ -232,14 +247,20 @@ SHALL perform upserts in a separate short transaction.
 
 ### Requirement: Candle failures use stable gateway errors
 
-The endpoint SHALL return the standard gateway error envelope and SHALL NOT expose database
-credentials, SQL, SDK exceptions, raw provider payloads, credentials, or stack traces.
+The endpoint SHALL return the standard gateway error envelope and SHALL NOT expose database credentials, SQL, SDK exceptions, raw provider payloads, credentials, or stack traces.
 
 #### Scenario: Request query shape is invalid
 
-- **WHEN** a required candle query parameter is missing or malformed
+- **WHEN** a required candle query parameter is missing or malformed, or `provider` is empty or repeated
 - **THEN** the gateway responds with a documented `400` gateway error
+- **AND** an invalid provider query uses code `INVALID_PROVIDER`
 - **AND** it does not return FastAPI's default `422` validation response
+
+#### Scenario: Requested provider is unsupported for the asset
+
+- **WHEN** the enabled asset has no mapping matching the requested Provider Identifier
+- **THEN** the gateway responds with HTTP status `400`
+- **AND** the error code is `UNSUPPORTED_PROVIDER`
 
 #### Scenario: Candle persistence is unavailable
 
@@ -249,20 +270,18 @@ credentials, SQL, SDK exceptions, raw provider payloads, credentials, or stack t
 
 #### Scenario: Selected candle provider fails
 
-- **WHEN** the selected provider SDK fails, provider configuration is unavailable, or its response
-  cannot be safely normalized
+- **WHEN** the selected provider SDK fails, provider configuration is unavailable, or its response cannot be safely normalized
 - **THEN** the gateway responds with HTTP status `503`
 - **AND** the error code is `PROVIDER_UNAVAILABLE`
+- **AND** the gateway does not fall back to another Provider Mapping
 
 ### Requirement: Real-time candle events maintain current in-memory state
-The gateway SHALL maintain at most one current forming candle per canonical `(symbol, timeframe)`
-from valid normalized WebSocket candle events that satisfy the symbol's market-session policy and
-SHALL make that state available to the historical candle service.
+The gateway SHALL maintain at most one current forming candle per canonical `(symbol, Provider Selection, timeframe)` from valid normalized WebSocket candle events that satisfy the symbol's market-session policy and SHALL make that state available to the historical candle service.
 
 #### Scenario: Forming candle update is received
 - **WHEN** a valid stream candle has `complete=false`
 - **AND** its open time is market-session eligible for that symbol and timeframe
-- **THEN** it replaces the current in-memory candle for the same symbol and timeframe
+- **THEN** it replaces the current in-memory candle for the same Provider Selection, symbol, and timeframe
 
 #### Scenario: Session-ineligible forming candle update is received
 - **WHEN** a stream candle has `complete=false`
@@ -281,14 +300,14 @@ SHALL make that state available to the historical candle service.
 
 ### Requirement: Completed stream candles are persisted without blocking fanout
 The gateway SHALL remove a completed candle from current in-memory state, emit it to matching
-clients, and enqueue an idempotent PostgreSQL upsert using the existing candle identity and
-repository boundary when the completed candle satisfies the symbol's market-session policy.
+clients, and enqueue an idempotent PostgreSQL upsert using the canonical symbol, Provider Selection,
+timeframe, and repository boundary when the completed candle satisfies the symbol's market-session policy.
 Persistence MUST NOT run inside the provider SDK callback or block live fanout.
 
 #### Scenario: Stream candle closes
 - **WHEN** a valid normalized stream candle has `complete=true`
 - **AND** its open time is market-session eligible for that symbol and timeframe
-- **THEN** it is removed from current forming state if it matches that series and open time
+- **THEN** it is removed from current forming state if it matches that Provider Selection, series, and open time
 - **AND** it is enqueued for idempotent persistence
 - **AND** matching downstream clients receive the completed candle without waiting for PostgreSQL
 
@@ -340,35 +359,46 @@ The gateway SHALL allow enabled `BTC/USD`, `ETH/USD`, `EUR/USD`, `GBP/USD`, `USD
 - **AND** other provider-backed candle requests remain available
 ### Requirement: Candle provider fills are routed by persisted provider mapping
 
-The gateway SHALL resolve each enabled canonical symbol through its single active normalized
-provider mapping and SHALL use that resolved `provider` and `provider_symbol` for persisted-candle
-reads and provider fills. It MUST NOT use an inactive mapping or automatic fallback.
+The gateway SHALL use the immutable Provider Selection's `provider` and `provider_symbol` for persisted-candle reads and provider fills. Persisted rows MUST remain owned by their recorded provider identity, and the gateway MUST NOT read, relabel, merge, or fall back to rows owned by another mapping.
 
-#### Scenario: Binance-backed candle range requires provider data
+#### Scenario: Default-backed candle range requires provider data
 
-- **WHEN** an enabled symbol's active `BINANCE_SPOT` mapping requires a provider fill
-- **THEN** the gateway delegates the missing range to the Binance candle adapter using the active
-  provider symbol
+- **WHEN** a candle request without a Provider Override requires a provider fill
+- **THEN** the gateway delegates the missing range to the Default Provider's candle adapter using its provider symbol
 
-#### Scenario: Twelve Data-backed candle range requires provider data
+#### Scenario: Override-backed candle range requires provider data
 
-- **WHEN** an enabled symbol's active `TWELVE_DATA` mapping requires a provider fill
-- **THEN** the gateway delegates the missing range to the Twelve Data adapter using the active
-  provider symbol
+- **WHEN** a candle request with a supported Provider Override requires a provider fill
+- **THEN** the gateway delegates the missing range to the selected provider's candle adapter using its provider symbol
 
-#### Scenario: Active provider mapping is switched
+#### Scenario: Same canonical series exists for two mappings
 
-- **WHEN** a canonical symbol is switched to another active provider mapping
-- **THEN** subsequent candle reads and fills use the newly active provider identity
+- **WHEN** persisted candle rows exist for two Provider Mappings of one canonical symbol and timeframe
+- **THEN** the request reads and merges only rows belonging to its selected mapping
+- **AND** rows owned by the other mapping are not relabeled or returned
+
+#### Scenario: Default Provider is switched
+
+- **WHEN** a canonical symbol is switched to another Default Provider
+- **THEN** subsequent default candle reads and fills use the new provider identity
 - **AND** existing candle rows retain their recorded provider and provider symbol
-- **AND** rows owned by the previously active mapping are not relabeled as the new provider's rows
 
-#### Scenario: Persisted provider is unsupported or unavailable
+#### Scenario: Selected provider is unsupported operationally
 
 - **WHEN** a candle request requires a provider fill
-- **AND** no usable candle adapter is registered for the active provider
-- **THEN** the gateway raises the sanitized provider-unavailable boundary
+- **AND** no usable candle adapter is registered for the selected Provider Mapping
+- **THEN** the gateway raises the sanitized `PROVIDER_UNAVAILABLE` boundary
 - **AND** it does not fall back to a different provider
+
+### Requirement: Forming candle cache is isolated by Provider Selection
+
+The gateway MUST identify a forming candle cache entry by canonical symbol, Provider Identifier, provider symbol, and timeframe. A request MAY reuse a forming candle only when it resolves to the same Provider Mapping.
+
+#### Scenario: Two mappings form the same canonical timeframe
+
+- **WHEN** two Provider Mappings emit forming candles for the same canonical symbol and timeframe
+- **THEN** the cache retains independent entries for the two mappings
+- **AND** neither entry can satisfy a request selecting the other mapping
 ### Requirement: Twelve Data Forex candles preserve gateway range semantics
 
 The Twelve Data adapter SHALL map supported public timeframes to Twelve Data intervals, SHALL

@@ -32,7 +32,9 @@ class MultiProviderStreamProvider:
         async with self._lock:
             self._ensure_forwarding(symbol.provider, provider)
             await provider.subscribe_quote(symbol)
-            self._interest_providers[QuoteInterest(symbol.symbol)] = symbol.provider
+            self._interest_providers[
+                QuoteInterest(symbol.symbol, symbol.provider, symbol.provider_symbol)
+            ] = symbol.provider
 
     async def subscribe_candle(
         self,
@@ -41,7 +43,7 @@ class MultiProviderStreamProvider:
         provider_interval: str,
     ) -> None:
         provider = self._provider_for(symbol)
-        interest = CandleInterest(symbol.symbol, timeframe)
+        interest = CandleInterest(symbol.symbol, timeframe, symbol.provider, symbol.provider_symbol)
         async with self._lock:
             self._ensure_forwarding(symbol.provider, provider)
             await provider.subscribe_candle(symbol, timeframe, provider_interval)

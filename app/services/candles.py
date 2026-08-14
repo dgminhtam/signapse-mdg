@@ -17,13 +17,15 @@ from app.domain.candles import (
     CandleRequest,
     CandleResult,
 )
-from app.domain.errors import CandleRequestError
+from app.domain.errors import CandleRequestError, DatabaseUnavailableError, ProviderSelectionError
 from app.domain.market_sessions import get_market_session_policy
+from app.domain.symbols import SupportedSymbol
 from app.domain.timeframes import (
     Timeframe,
     get_timeframe,
     month_opens,
 )
+from app.services.provider_selection import resolve_provider_selection
 
 UNSUPPORTED_SYMBOL_MESSAGE = "Symbol is not supported by this gateway."
 UNSUPPORTED_TIMEFRAME_MESSAGE = "Timeframe is not supported by this gateway."
@@ -36,6 +38,7 @@ def parse_candle_request(
     raw_from: str | None,
     raw_to: str | None,
     raw_limit: str | None = None,
+    raw_provider: str | None = None,
     *,
     max_candles: int,
     clock: Callable[[], datetime] = utc_now,
@@ -68,6 +71,7 @@ def parse_candle_request(
                 end=start,
                 limit=limit,
                 count_direction="forward",
+                provider=raw_provider,
             )
         end = clock().astimezone(UTC) if raw_to is None else _parse_utc(raw_to)
         return CandleRequest(
@@ -77,6 +81,7 @@ def parse_candle_request(
             end=end,
             limit=limit,
             count_direction="backward",
+            provider=raw_provider,
         )
 
     end = clock().astimezone(UTC) if raw_to is None else _parse_utc(raw_to)
@@ -87,7 +92,13 @@ def parse_candle_request(
         timeframe,
         max_candles=max_candles,
     )
-    return CandleRequest(symbol=symbol, timeframe=timeframe.value, start=start, end=end)
+    return CandleRequest(
+        symbol=symbol,
+        timeframe=timeframe.value,
+        start=start,
+        end=end,
+        provider=raw_provider,
+    )
 
 
 def _parse_utc(raw_value: str | None) -> datetime:
@@ -144,14 +155,33 @@ class CandleService:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._max_candles = max_candles
 
-    async def get_candles(self, request: CandleRequest) -> CandleResult:
-        symbol = await self._repository.get_enabled_symbol(request.symbol)
+    async def resolve_symbol(
+        self,
+        symbol_name: str,
+        provider: str | None = None,
+    ) -> SupportedSymbol:
+        symbol = await self._repository.get_enabled_symbol(symbol_name)
         if symbol is None:
             raise CandleRequestError(
                 "UNSUPPORTED_SYMBOL",
                 UNSUPPORTED_SYMBOL_MESSAGE,
-                {"symbol": request.symbol},
+                {"symbol": symbol_name},
             )
+        try:
+            symbol, _selection = resolve_provider_selection(symbol, provider)
+        except ProviderSelectionError as exc:
+            if exc.code == "DATABASE_UNAVAILABLE":
+                raise DatabaseUnavailableError from exc
+            raise CandleRequestError(exc.code, exc.message, exc.details) from exc
+        return symbol
+
+    async def get_candles(
+        self,
+        request: CandleRequest,
+        *,
+        resolved_symbol: SupportedSymbol | None = None,
+    ) -> CandleResult:
+        symbol = resolved_symbol or await self.resolve_symbol(request.symbol, request.provider)
         timeframe = get_timeframe(request.timeframe)
         if timeframe is None:
             raise CandleRequestError(
@@ -228,7 +258,12 @@ class CandleService:
         merged = {candle.open_time: candle for candle in normalized}
         merged.update({candle.open_time: candle for candle in persisted})
         if self._cache is not None:
-            current = await self._cache.get(request.symbol, request.timeframe)
+            current = await self._cache.get(
+                request.symbol,
+                request.timeframe,
+                symbol.provider,
+                symbol.provider_symbol,
+            )
             if (
                 current is not None
                 and result_start <= current.open_time < result_end

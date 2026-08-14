@@ -1,5 +1,24 @@
 # Signapse Market Data Gateway Crypto MVP - System Design
 
+## Request-scoped provider selection
+
+An asset may have multiple normalized provider mappings, with exactly one default mapping. The
+optional `provider` query value on quote, candle, historical-price, and stream operations is
+request-wide and case-sensitive. The registry resolves one immutable Provider Selection at the
+HTTP or WebSocket boundary; omitted values use the default, while an explicit value must match a
+mapping for every single-asset operation or each quote symbol independently. No registry default is
+mutated and no provider fallback is attempted.
+
+Provider-aware identity is required for quote cache entries, forming candle cache entries, persisted
+candle reads, and stream interests. Identity includes canonical symbol, provider, provider symbol,
+and timeframe/channel where applicable. Public market-data payloads remain provider-agnostic;
+`GET /v1/symbols` exposes deterministic `providerMappings` for discovery.
+
+Historical price passes this same immutable selection through the provider-specific timeframe
+resolution policy. A coarser timeframe may be tried only for no-data/retention cases, selected
+candles must be complete at the requested instant (`close_time <= at`), and operational provider
+failures remain `PROVIDER_UNAVAILABLE`.
+
 ## 1. Context
 
 Market Data Gateway is an independent service that exposes normalized market data for the supported Signapse asset universe. The crypto MVP supports only:

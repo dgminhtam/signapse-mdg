@@ -13,6 +13,14 @@ from app.services.symbols import SymbolService
 router = APIRouter(prefix="/v1", tags=["symbols"])
 
 
+class ProviderMappingResponse(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    provider: str
+    provider_symbol: str
+    is_default: bool
+
+
 class SymbolResponse(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -22,6 +30,7 @@ class SymbolResponse(BaseModel):
     provider_symbol: str
     enabled: bool
     price_display_decimals: int
+    provider_mappings: list[ProviderMappingResponse] | None = None
 
 
 class SymbolListResponse(BaseModel):
@@ -40,7 +49,11 @@ def get_symbol_service(
     return SymbolService(repository)
 
 
-@router.get("/symbols", response_model=SymbolListResponse)
+@router.get(
+    "/symbols",
+    response_model=SymbolListResponse,
+    response_model_exclude_none=True,
+)
 async def list_supported_symbols(
     service: Annotated[SymbolService, Depends(get_symbol_service)],
 ) -> SymbolListResponse:
@@ -54,6 +67,18 @@ async def list_supported_symbols(
                 provider_symbol=symbol.provider_symbol,
                 enabled=symbol.enabled,
                 price_display_decimals=symbol.price_display_decimals,
+                provider_mappings=(
+                    [
+                        ProviderMappingResponse(
+                            provider=mapping.provider,
+                            provider_symbol=mapping.provider_symbol,
+                            is_default=mapping.is_default,
+                        )
+                        for mapping in symbol.provider_mappings
+                    ]
+                    if symbol.provider_mappings
+                    else None
+                ),
             )
             for symbol in symbols
         ]

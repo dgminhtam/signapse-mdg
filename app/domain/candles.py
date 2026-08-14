@@ -31,6 +31,7 @@ class CandleRequest:
     end: datetime
     limit: int | None = None
     count_direction: Literal["forward", "backward"] | None = None
+    provider: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

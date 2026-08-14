@@ -67,7 +67,7 @@ class YFinanceMarketDataStreamProvider:
     async def subscribe_quote(self, symbol: SupportedSymbol) -> None:
         if symbol.provider_symbol not in SUPPORTED_YFINANCE_PROVIDER_SYMBOLS:
             raise ProviderUnavailableError
-        interest = QuoteInterest(symbol.symbol)
+        interest = QuoteInterest(symbol.symbol, symbol.provider, symbol.provider_symbol)
         async with self._lock:
             if interest in self._quote_interests:
                 return
@@ -247,7 +247,14 @@ class YFinanceMarketDataStreamProvider:
         tick = self._normalize_tick(payload)
         if tick is None:
             return
-        if QuoteInterest(tick.symbol.symbol) in self._quote_interests:
+        if (
+            QuoteInterest(
+                tick.symbol.symbol,
+                tick.symbol.provider,
+                tick.symbol.provider_symbol,
+            )
+            in self._quote_interests
+        ):
             self._put_event(
                 StreamQuote(
                     Quote(
@@ -297,7 +304,19 @@ class YFinanceMarketDataStreamProvider:
     def _active_interests(self) -> tuple[StreamInterest, ...]:
         interests: list[StreamInterest] = list(self._quote_interests)
         for symbol, timeframes in self._candle_interests.items():
-            interests.extend(CandleInterest(symbol, timeframe) for timeframe in timeframes)
+            value = next(
+                (
+                    candidate
+                    for candidate in self._symbols_by_provider_symbol.values()
+                    if candidate.symbol == symbol
+                ),
+                None,
+            )
+            if value is not None:
+                interests.extend(
+                    CandleInterest(symbol, timeframe, value.provider, value.provider_symbol)
+                    for timeframe in timeframes
+                )
         return tuple(interests)
 
     def _detach_resources(

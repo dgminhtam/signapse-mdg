@@ -1,0 +1,6 @@
+interface:
+  display_name: "OpenSpec Grill with Docs"
+  short_description: "Grill an OpenSpec design and write its docs"
+  default_prompt: "Use $openspec-grill-with-docs to stress-test this design and capture domain decisions."
+policy:
+  allow_implicit_invocation: false

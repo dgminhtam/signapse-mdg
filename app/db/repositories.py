@@ -20,7 +20,7 @@ from app.domain.economic_calendar import (
     EconomicCalendarRequest,
 )
 from app.domain.errors import DatabaseUnavailableError
-from app.domain.symbols import SupportedSymbol
+from app.domain.symbols import ProviderMapping, SupportedSymbol
 
 
 class PostgresSymbolRepository:
@@ -34,32 +34,43 @@ class PostgresSymbolRepository:
                 SymbolProviderMappingModel,
                 and_(
                     SymbolProviderMappingModel.supported_symbol_id == SupportedSymbolModel.id,
-                    SymbolProviderMappingModel.is_active.is_(True),
                 ),
             )
             .where(SupportedSymbolModel.enabled.is_(True))
-            .order_by(SupportedSymbolModel.symbol.asc())
+            .order_by(
+                SupportedSymbolModel.symbol.asc(),
+                SymbolProviderMappingModel.is_active.desc().nullslast(),
+                SymbolProviderMappingModel.provider.asc().nullslast(),
+            )
         )
         try:
             rows = (await self._session.execute(statement)).all()
         except SQLAlchemyError as exc:
             raise DatabaseUnavailableError from exc
 
-        return [_to_supported_symbol(symbol, mapping) for symbol, mapping in rows]
+        grouped: dict[int, tuple[SupportedSymbolModel, list[SymbolProviderMappingModel]]] = {}
+        for symbol, mapping in rows:
+            entry = grouped.setdefault(symbol.id, (symbol, []))
+            if mapping is not None:
+                entry[1].append(mapping)
+        return [_to_supported_symbol(symbol, mappings) for symbol, mappings in grouped.values()]
 
 
 class PostgresCandleRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    async def get_enabled_symbol(self, symbol: str) -> SupportedSymbol | None:
+    async def get_enabled_symbol(
+        self,
+        symbol: str,
+        provider: str | None = None,
+    ) -> SupportedSymbol | None:
         statement = (
             select(SupportedSymbolModel, SymbolProviderMappingModel)
             .outerjoin(
                 SymbolProviderMappingModel,
                 and_(
                     SymbolProviderMappingModel.supported_symbol_id == SupportedSymbolModel.id,
-                    SymbolProviderMappingModel.is_active.is_(True),
                 ),
             )
             .where(
@@ -69,12 +80,21 @@ class PostgresCandleRepository:
         )
         try:
             async with self._session_factory() as session:
-                row = (await session.execute(statement)).one_or_none()
+                rows = (await session.execute(statement)).all()
         except SQLAlchemyError as exc:
             raise DatabaseUnavailableError from exc
-        if row is None:
+        if not rows:
             return None
-        return _to_supported_symbol(*row)
+        symbol_model = rows[0][0]
+        mappings = [mapping for _, mapping in rows if mapping is not None]
+        resolved = _to_supported_symbol(symbol_model, mappings)
+        if provider is None:
+            return resolved
+        selected = next(
+            (mapping for mapping in resolved.mappings if mapping.provider == provider),
+            None,
+        )
+        return None if selected is None else resolved.with_mapping(selected)
 
     async def list_complete(
         self,
@@ -399,18 +419,33 @@ def _to_economic_calendar_event(row: EconomicCalendarEventModel) -> EconomicCale
 
 def _to_supported_symbol(
     row: SupportedSymbolModel,
-    mapping: SymbolProviderMappingModel | None,
+    mappings: list[SymbolProviderMappingModel],
 ) -> SupportedSymbol:
-    if mapping is None:
+    ordered_mappings = sorted(
+        mappings,
+        key=lambda mapping: (not mapping.is_active, mapping.provider),
+    )
+    defaults = [mapping for mapping in ordered_mappings if mapping.is_active]
+    if len(defaults) != 1:
         raise DatabaseUnavailableError
+    default = defaults[0]
+    provider_mappings = tuple(
+        ProviderMapping(
+            provider=mapping.provider,
+            provider_symbol=mapping.provider_symbol,
+            is_default=mapping.is_active,
+        )
+        for mapping in ordered_mappings
+    )
     return SupportedSymbol(
         symbol=row.symbol,
         asset_class=row.asset_class,
-        provider=mapping.provider,
-        provider_symbol=mapping.provider_symbol,
+        provider=default.provider,
+        provider_symbol=default.provider_symbol,
         enabled=row.enabled,
         price_display_decimals=row.price_display_decimals,
         calendar_source=row.calendar_source,
         calendar_name=row.calendar_name,
         calendar_timezone=row.calendar_timezone,
+        provider_mappings=provider_mappings,
     )

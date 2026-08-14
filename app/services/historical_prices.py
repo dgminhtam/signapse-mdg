@@ -1,9 +1,11 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from app.domain.candles import CandleRequest
 from app.domain.errors import CandleRequestError, HistoricalPriceNotFoundError
+from app.domain.symbols import SupportedSymbol
 from app.services.candles import (
     INVALID_TIME_RANGE_MESSAGE,
     UNSUPPORTED_SYMBOL_MESSAGE,
@@ -15,6 +17,7 @@ from app.services.candles import (
 class HistoricalPriceRequest:
     symbol: str
     at: datetime
+    provider: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +31,7 @@ class HistoricalPriceResult:
 def parse_historical_price_request(
     raw_symbol: str | None,
     raw_at: str | None,
+    raw_provider: str | None = None,
 ) -> HistoricalPriceRequest:
     symbol = (raw_symbol or "").strip()
     if not symbol:
@@ -36,7 +40,7 @@ def parse_historical_price_request(
             UNSUPPORTED_SYMBOL_MESSAGE,
             {"symbol": symbol},
         )
-    return HistoricalPriceRequest(symbol, _parse_utc(raw_at))
+    return HistoricalPriceRequest(symbol, _parse_utc(raw_at), raw_provider)
 
 
 def historical_price_window(at: datetime) -> tuple[datetime, datetime]:
@@ -45,26 +49,70 @@ def historical_price_window(at: datetime) -> tuple[datetime, datetime]:
 
 
 class HistoricalPriceService:
-    def __init__(self, candle_service: CandleService) -> None:
+    def __init__(
+        self,
+        candle_service: CandleService,
+        timeframe_policy: Callable[[SupportedSymbol, datetime], tuple[str, ...]] | None = None,
+    ) -> None:
         self._candle_service = candle_service
+        self._timeframe_policy = timeframe_policy or (lambda _symbol, _at: ("1m",))
 
     async def get_historical_price(
         self,
         request: HistoricalPriceRequest,
     ) -> HistoricalPriceResult:
-        _, end = historical_price_window(request.at)
-        result = await self._candle_service.get_candles(
-            CandleRequest(request.symbol, "1m", end, end, limit=1, count_direction="backward")
-        )
-        if not result.candles:
-            raise HistoricalPriceNotFoundError
-        candle = result.candles[-1]
-        return HistoricalPriceResult(
-            result.symbol,
-            candle.close,
-            candle.open_time,
-            result.price_display_decimals,
-        )
+        resolver = getattr(self._candle_service, "resolve_symbol", None)
+        if not callable(resolver):
+            _, end = historical_price_window(request.at)
+            result = await self._candle_service.get_candles(
+                CandleRequest(
+                    request.symbol,
+                    "1m",
+                    end,
+                    end,
+                    limit=1,
+                    count_direction="backward",
+                    provider=request.provider,
+                )
+            )
+            if not result.candles:
+                raise HistoricalPriceNotFoundError
+            candle = result.candles[-1]
+            return HistoricalPriceResult(
+                result.symbol,
+                candle.close,
+                candle.open_time,
+                result.price_display_decimals,
+            )
+
+        selected_symbol = await resolver(request.symbol, request.provider)
+        for timeframe in self._timeframe_policy(selected_symbol, request.at):
+            result = await self._candle_service.get_candles(
+                CandleRequest(
+                    request.symbol,
+                    timeframe,
+                    request.at,
+                    request.at,
+                    limit=2,
+                    count_direction="backward",
+                    provider=request.provider,
+                ),
+                resolved_symbol=selected_symbol,
+            )
+            eligible = [
+                candle
+                for candle in result.candles
+                if candle.complete and candle.close_time <= request.at
+            ]
+            if eligible:
+                candle = max(eligible, key=lambda value: value.open_time)
+                return HistoricalPriceResult(
+                    result.symbol,
+                    candle.close,
+                    candle.open_time,
+                    result.price_display_decimals,
+                )
+        raise HistoricalPriceNotFoundError
 
 
 def _parse_utc(raw_value: str | None) -> datetime:

@@ -33,6 +33,7 @@ def parse_stream_request(
     raw_symbols: str | None,
     raw_timeframe: str | None,
     max_symbols: int,
+    provider: str | None = None,
 ) -> StreamRequest:
     try:
         symbols = parse_symbols(raw_symbols, max_symbols)
@@ -47,7 +48,7 @@ def parse_stream_request(
             "UNSUPPORTED_TIMEFRAME",
             "Timeframe is not supported by this gateway.",
         )
-    return StreamRequest(tuple(symbols), timeframe)
+    return StreamRequest(tuple(symbols), timeframe, provider)
 
 
 @dataclass(slots=True)
@@ -135,7 +136,18 @@ class StreamManager:
         symbols_by_name = {symbol.symbol: symbol for symbol in symbols}
         interests: list[StreamInterest] = []
         for name in request.symbols:
-            interests.extend((QuoteInterest(name), CandleInterest(name, request.timeframe)))
+            symbol = symbols_by_name[name]
+            interests.extend(
+                (
+                    QuoteInterest(name, symbol.provider, symbol.provider_symbol),
+                    CandleInterest(
+                        name,
+                        request.timeframe,
+                        symbol.provider,
+                        symbol.provider_symbol,
+                    ),
+                )
+            )
         registration = ClientRegistration(
             id=uuid4().hex,
             request=request,
@@ -279,6 +291,8 @@ class StreamManager:
                 event.candle.symbol,
                 event.candle.timeframe,
                 open_time=event.candle.open_time,
+                provider=event.candle.provider,
+                provider_symbol=event.candle.provider_symbol,
             )
             try:
                 self._persistence_queue.put_nowait(event)

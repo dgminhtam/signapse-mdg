@@ -15,11 +15,13 @@ from app.core.time import utc_now
 from app.db.repositories import PostgresCandleRepository
 from app.db.session import get_session_factory
 from app.domain.candles import CandleProvider, CandleRepository, CandleResult
+from app.domain.errors import CandleRequestError, ProviderSelectionError
 from app.providers.binance_spot import build_binance_spot_candle_provider
 from app.providers.twelvedata_market_data import build_twelvedata_market_data_provider
 from app.providers.yfinance_market_data import build_yfinance_candle_provider
 from app.services.candle_provider_router import CandleProviderRouter
 from app.services.candles import CandleService, parse_candle_request
+from app.services.provider_selection import parse_provider_values
 
 router = APIRouter(prefix="/v1", tags=["candles"])
 
@@ -130,12 +132,17 @@ async def get_candles(
     settings: Annotated[Settings, Depends(get_settings)],
     clock: Annotated[Callable[[], datetime], Depends(get_candle_request_clock)],
 ) -> CandleListResponse:
+    try:
+        provider = parse_provider_values(request.query_params.getlist("provider"))
+    except ProviderSelectionError as exc:
+        raise CandleRequestError(exc.code, exc.message) from exc
     candle_request = parse_candle_request(
         request.query_params.get("symbol"),
         request.query_params.get("timeframe"),
         request.query_params.get("from"),
         request.query_params.get("to"),
         request.query_params.get("limit"),
+        provider,
         max_candles=settings.max_candles_per_request,
         clock=clock,
     )
