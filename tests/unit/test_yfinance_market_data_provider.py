@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import threading
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -7,6 +8,7 @@ from typing import cast
 import pandas as pd
 import pytest
 
+from app.core import observability
 from app.domain.errors import ProviderUnavailableError
 from app.domain.symbols import SupportedSymbol
 from app.providers.yfinance_market_data import (
@@ -72,7 +74,9 @@ def make_provider(
 
 
 YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
+YFINANCE_EURUSD = SupportedSymbol("EUR/USD", "FOREX", "YFINANCE", "EURUSD=X", True, 5)
 START = datetime(2026, 6, 22, 0, 0, tzinfo=UTC)
+EURUSD_REGRESSION_START = datetime(2026, 1, 21, 0, 0, tzinfo=UTC)
 
 
 def make_history_provider(
@@ -488,6 +492,207 @@ async def test_candles_normalize_history_rows_and_filter_half_open_range() -> No
     assert candle.close == Decimal("10.50")
     assert candle.volume == Decimal("123.0000")
     assert candle.complete is False
+
+
+async def test_candles_quarantine_eurusd_ohlc_row_and_log_safe_partial_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="app.providers.yfinance_market_data")
+    frame = make_history_frame(
+        [
+            {
+                "Open": "1.172608",
+                "High": "1.174260",
+                "Low": "1.169700",
+                "Close": "1.172787",
+                "Volume": "0",
+            },
+            {
+                "Open": "1.167392",
+                "High": "1.175074",
+                "Low": "1.167392",
+                "Close": "1.167297",
+                "Volume": "0",
+            },
+            {
+                "Open": "1.175392",
+                "High": "1.177565",
+                "Low": "1.172897",
+                "Close": "1.175461",
+                "Volume": "0",
+            },
+        ],
+        index=[
+            EURUSD_REGRESSION_START,
+            EURUSD_REGRESSION_START + timedelta(days=1),
+            EURUSD_REGRESSION_START + timedelta(days=2),
+        ],
+    )
+    provider, _ = make_history_provider(frame)
+
+    candles = await provider.fetch_candles(
+        YFINANCE_EURUSD,
+        "1d",
+        "1d",
+        EURUSD_REGRESSION_START,
+        EURUSD_REGRESSION_START + timedelta(days=3),
+        3,
+    )
+
+    assert [candle.open_time for candle in candles] == [
+        EURUSD_REGRESSION_START,
+        EURUSD_REGRESSION_START + timedelta(days=2),
+    ]
+    assert candles[0].close == Decimal("1.172787")
+    assert candles[1].close == Decimal("1.175461")
+
+    records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "yfinance_candle_rows_quarantined"
+    ]
+    assert len(records) == 1
+    fields = records[0].diagnostic_fields
+    assert fields["failure_reason"] == "INVALID_PAYLOAD"
+    assert fields["retryable"] is False
+    assert fields["action"] == "ROW_QUARANTINED"
+    assert fields["partial"] is True
+    assert fields["skipped_count"] == 1
+    assert fields["skipped_rows"] == [
+        {
+            "failed_row_timestamp": "2026-01-22T00:00:00+00:00",
+            "failed_row_reason": "history row violates OHLC bounds",
+            "open": "1.167392",
+            "high": "1.175074",
+            "low": "1.167392",
+            "close": "1.167297",
+        }
+    ]
+    assert "DataFrame" not in caplog.text
+
+
+async def test_candles_quarantine_warning_is_rate_limited_with_suppressed_count(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ControlledLimiter:
+        def __init__(self) -> None:
+            self.responses = [(True, 0), (False, 0), (True, 2)]
+            self.keys: list[str] = []
+
+        def allow(self, key: str) -> tuple[bool, int]:
+            self.keys.append(key)
+            return self.responses.pop(0)
+
+    limiter = ControlledLimiter()
+    monkeypatch.setattr(observability, "_warning_limiter", limiter)
+    caplog.set_level(logging.WARNING, logger="app.providers.yfinance_market_data")
+    frame = make_history_frame(
+        [
+            {
+                "Open": "1.0",
+                "High": "1.1",
+                "Low": "1.0",
+                "Close": "1.0",
+                "Volume": "0",
+            },
+            {
+                "Open": "1.0",
+                "High": "1.1",
+                "Low": "1.0",
+                "Close": "0.9",
+                "Volume": "0",
+            },
+        ],
+        index=[EURUSD_REGRESSION_START, EURUSD_REGRESSION_START + timedelta(days=1)],
+    )
+    provider, calls = make_history_provider(frame)
+
+    for _ in range(3):
+        await provider.fetch_candles(
+            YFINANCE_EURUSD,
+            "1d",
+            "1d",
+            EURUSD_REGRESSION_START,
+            EURUSD_REGRESSION_START + timedelta(days=2),
+            2,
+        )
+
+    records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "yfinance_candle_rows_quarantined"
+    ]
+    assert len(calls) == 3
+    assert len(records) == 2
+    assert (
+        limiter.keys
+        == ["YFINANCE:EURUSD=X:1d:2026-01-22 00:00:00+00:00:history row violates OHLC bounds"] * 3
+    )
+    assert records[1].diagnostic_fields["suppressed_count"] == 2
+
+
+async def test_candles_rejects_all_ohlc_bounds_invalid_rows_without_partial_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="app.providers.yfinance_market_data")
+    frame = make_history_frame(
+        [
+            {"Open": "10", "High": "11", "Low": "12", "Close": "10", "Volume": "0"},
+            {"Open": "10", "High": "9", "Low": "9", "Close": "10", "Volume": "0"},
+        ],
+        index=[START, START + timedelta(minutes=1)],
+    )
+    provider, _ = make_history_provider(frame)
+
+    with pytest.raises(ProviderUnavailableError) as exc_info:
+        await provider.fetch_candles(
+            YFINANCE_SILVER,
+            "1m",
+            "1m",
+            START,
+            START + timedelta(minutes=2),
+            2,
+        )
+
+    assert exc_info.value.failure_reason == "INVALID_PAYLOAD"
+    assert not [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "yfinance_candle_rows_quarantined"
+    ]
+
+
+async def test_candles_reject_mixed_structural_error_without_retry_or_partial_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="app.providers.yfinance_market_data")
+    frame = make_history_frame(
+        [
+            {"Open": "10", "High": "11", "Low": "9", "Close": "10", "Volume": "0"},
+            {"Open": "bad", "High": "11", "Low": "9", "Close": "10", "Volume": "0"},
+        ],
+        index=[START, START + timedelta(minutes=1)],
+    )
+    provider, calls = make_history_provider(frame)
+
+    with pytest.raises(ProviderUnavailableError) as exc_info:
+        await provider.fetch_candles(
+            YFINANCE_SILVER,
+            "1m",
+            "1m",
+            START,
+            START + timedelta(minutes=2),
+            2,
+        )
+
+    assert exc_info.value.failure_reason == "INVALID_PAYLOAD"
+    assert len(calls) == 1
+    assert not [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "yfinance_candle_rows_quarantined"
+    ]
 
 
 async def test_candles_convert_timezone_aware_index_to_utc() -> None:

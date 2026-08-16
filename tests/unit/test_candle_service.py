@@ -16,6 +16,7 @@ BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
 EUR = SupportedSymbol("EUR/USD", "FOREX", "TWELVE_DATA", "EUR/USD", True, 5)
 SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2)
 WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2)
+YFINANCE_EURUSD = SupportedSymbol("EUR/USD", "FOREX", "YFINANCE", "EURUSD=X", True, 5)
 SPY_NYSE = SupportedSymbol(
     "SPY",
     "ETF",
@@ -451,6 +452,30 @@ async def test_service_fetches_missing_forex_range_through_selected_provider() -
     assert result.candles == [repository.upserted[0]]
     assert result.candles[0].provider == "TWELVE_DATA"
     assert result.candles[0].provider_symbol == "EUR/USD"
+
+
+async def test_service_persists_valid_rows_and_keeps_quarantined_provider_gap() -> None:
+    fetched = [
+        make_candle(START, symbol=YFINANCE_EURUSD),
+        make_candle(START + timedelta(minutes=2), symbol=YFINANCE_EURUSD),
+    ]
+    repository = FakeRepository(symbol=YFINANCE_EURUSD)
+    provider = FakeProvider(fetched)
+    service = CandleService(
+        repository,
+        provider,
+        clock=lambda: START + timedelta(minutes=10),
+    )
+
+    result = await service.get_candles(
+        CandleRequest("EUR/USD", "1m", START, START + timedelta(minutes=3))
+    )
+
+    expected_times = [START, START + timedelta(minutes=2)]
+    assert [candle.open_time for candle in result.candles] == expected_times
+    assert [candle.open_time for candle in repository.upserted] == expected_times
+    assert START + timedelta(minutes=1) not in {candle.open_time for candle in result.candles}
+    assert provider.calls == [(START, START + timedelta(minutes=3), 4)]
 
 
 async def test_service_fetches_latest_limit_mode_range() -> None:

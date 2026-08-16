@@ -54,6 +54,7 @@ WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2)
 SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2)
 QQQ = SupportedSymbol("QQQ", "ETF", "TWELVE_DATA", "QQQ", True, 2)
 YFINANCE_SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
+YFINANCE_EURUSD = SupportedSymbol("EUR/USD", "FOREX", "YFINANCE", "EURUSD=X", True, 5)
 
 
 class FakeCandleRepository:
@@ -185,6 +186,79 @@ async def test_candles_serializes_minimal_provider_agnostic_contract(
     assert payload["candles"][0]["volume"] == "0.00000000"
     assert payload["candles"][0]["openTime"].endswith("Z")
     assert candle.close == Decimal("10.5678")
+
+
+async def test_candles_serializes_partial_result_without_partial_response_metadata(
+    client: AsyncClient,
+) -> None:
+    candles = [
+        Candle(
+            YFINANCE_EURUSD.symbol,
+            YFINANCE_EURUSD.asset_class,
+            YFINANCE_EURUSD.provider,
+            YFINANCE_EURUSD.provider_symbol,
+            "1d",
+            datetime(2026, 1, 21, tzinfo=UTC),
+            datetime(2026, 1, 21, 23, 59, 59, 999000, tzinfo=UTC),
+            Decimal("1.172608"),
+            Decimal("1.174260"),
+            Decimal("1.169700"),
+            Decimal("1.172787"),
+            Decimal("0"),
+            True,
+        ),
+        Candle(
+            YFINANCE_EURUSD.symbol,
+            YFINANCE_EURUSD.asset_class,
+            YFINANCE_EURUSD.provider,
+            YFINANCE_EURUSD.provider_symbol,
+            "1d",
+            datetime(2026, 1, 23, tzinfo=UTC),
+            datetime(2026, 1, 23, 23, 59, 59, 999000, tzinfo=UTC),
+            Decimal("1.175392"),
+            Decimal("1.177565"),
+            Decimal("1.172897"),
+            Decimal("1.175461"),
+            Decimal("0"),
+            True,
+        ),
+    ]
+    app.dependency_overrides[get_candle_service] = lambda: StubCandleService(
+        CandleResult(
+            "EUR/USD",
+            "1d",
+            datetime(2026, 1, 21, tzinfo=UTC),
+            datetime(2026, 1, 24, tzinfo=UTC),
+            candles,
+            5,
+        )
+    )
+
+    response = await client.get(
+        "/v1/candles",
+        params={
+            "symbol": "EUR/USD",
+            "timeframe": "1d",
+            "from": "2026-01-21T00:00:00Z",
+            "to": "2026-01-24T00:00:00Z",
+        },
+    )
+
+    payload = response.json()
+    assert response.status_code == 200
+    assert set(payload) == {"symbol", "timeframe", "from", "to", "candles"}
+    assert len(payload["candles"]) == 2
+    assert "partial" not in payload
+    assert set(payload["candles"][0]) == {
+        "openTime",
+        "closeTime",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "complete",
+    }
 
 
 async def test_candles_returns_empty_series(client: AsyncClient) -> None:

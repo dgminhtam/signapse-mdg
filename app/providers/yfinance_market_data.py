@@ -8,7 +8,12 @@ from typing import Any, Protocol, cast
 import yfinance  # type: ignore[import-untyped]
 from yfinance._http import new_session  # type: ignore[import-untyped]
 
-from app.core.observability import failure_metadata, log_event, log_failure
+from app.core.observability import (
+    failure_metadata,
+    log_event,
+    log_failure,
+    log_rate_limited_warning,
+)
 from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import ProviderQuoteBatch
@@ -57,6 +62,8 @@ _YFINANCE_INTERVALS = {
 }
 
 logger = logging.getLogger(__name__)
+_QUARANTINE_LOG_ROW_LIMIT = 10
+_OHLC_BOUNDS_FAILURE_REASON = "history row violates OHLC bounds"
 
 
 class YFinanceTicker(Protocol):
@@ -384,6 +391,7 @@ def _normalize_history(
 
     candles: list[Candle] = []
     seen: set[datetime] = set()
+    quarantined_rows: list[dict[str, object]] = []
     for raw_open_time, row in iterrows():
         open_time = _parse_history_datetime(raw_open_time)
         if open_time is None:
@@ -392,6 +400,7 @@ def _normalize_history(
             continue
         if open_time in seen:
             raise invalid("history row has a duplicate open time", raw_open_time)
+        seen.add(open_time)
 
         open_price = _parse_decimal_value(_row_value(row, "Open"), positive=True)
         high = _parse_decimal_value(_row_value(row, "High"), positive=True)
@@ -409,9 +418,18 @@ def _normalize_history(
             open_value,
             close_value,
         ):
-            raise invalid("history row violates OHLC bounds", raw_open_time)
+            quarantined_rows.append(
+                {
+                    "failed_row_timestamp": open_time,
+                    "failed_row_reason": _OHLC_BOUNDS_FAILURE_REASON,
+                    "open": open_value,
+                    "high": high_value,
+                    "low": low_value,
+                    "close": close_value,
+                }
+            )
+            continue
 
-        seen.add(open_time)
         candles.append(
             Candle(
                 symbol=symbol.symbol,
@@ -428,6 +446,35 @@ def _normalize_history(
                 volume=cast(Decimal, volume),
                 complete=False,
             )
+        )
+    if quarantined_rows:
+        if not candles:
+            first_row = quarantined_rows[0]
+            raise invalid(
+                _OHLC_BOUNDS_FAILURE_REASON,
+                first_row["failed_row_timestamp"],
+            )
+        first_row = quarantined_rows[0]
+        first_timestamp = first_row["failed_row_timestamp"]
+        first_reason = first_row["failed_row_reason"]
+        log_rate_limited_warning(
+            logger,
+            "yfinance_candle_rows_quarantined",
+            key=(f"YFINANCE:{symbol.provider_symbol}:{timeframe}:{first_timestamp}:{first_reason}"),
+            operation="normalize_candles",
+            provider="YFINANCE",
+            provider_symbol=symbol.provider_symbol,
+            symbol=symbol.symbol,
+            timeframe=timeframe,
+            failure_reason="INVALID_PAYLOAD",
+            retryable=False,
+            action="ROW_QUARANTINED",
+            partial=True,
+            failed_row_timestamp=first_timestamp,
+            failed_row_reason=first_reason,
+            skipped_count=len(quarantined_rows),
+            skipped_rows=quarantined_rows[:_QUARANTINE_LOG_ROW_LIMIT],
+            **{"from": start, "to": end},
         )
     return sorted(candles, key=lambda candle: candle.open_time)
 
