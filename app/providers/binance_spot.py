@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Protocol, cast, runtime_checkable
@@ -8,12 +9,15 @@ from binance_common.errors import Error
 from binance_sdk_spot.rest_api.models import KlinesIntervalEnum
 from binance_sdk_spot.spot import Spot
 
+from app.core.observability import failure_metadata, log_event, log_failure
 from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import ProviderQuoteBatch
 from app.domain.symbols import SupportedSymbol
 from app.domain.timeframes import Timeframe, candle_close_time, get_timeframe
 from app.providers.normalization import parse_decimal
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -69,12 +73,47 @@ class BinanceSpotQuoteProvider:
                 )
             payload = response.data().actual_instance
         except Error as exc:
-            raise ProviderUnavailableError from exc
+            log_failure(
+                logger,
+                "binance_latest_prices_failed",
+                exc,
+                operation="fetch_latest_prices",
+                provider="BINANCE_SPOT",
+                symbols=provider_symbols,
+                upstream_status=getattr(exc, "status_code", None),
+            )
+            metadata = failure_metadata(exc)
+            raise ProviderUnavailableError(
+                operation="fetch_latest_prices",
+                provider="BINANCE_SPOT",
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
         except Exception as exc:
-            raise ProviderUnavailableError from exc
+            log_failure(
+                logger,
+                "binance_latest_prices_failed",
+                exc,
+                operation="fetch_latest_prices",
+                provider="BINANCE_SPOT",
+                symbols=provider_symbols,
+            )
+            metadata = failure_metadata(exc)
+            raise ProviderUnavailableError(
+                operation="fetch_latest_prices",
+                provider="BINANCE_SPOT",
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
 
         if not isinstance(payload, list):
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="INVALID_PAYLOAD",
+                operation="fetch_latest_prices",
+                provider="BINANCE_SPOT",
+            )
+            log_failure(logger, "binance_latest_prices_invalid_payload", error)
+            raise error
 
         requested = set(provider_symbols)
         prices: dict[str, Decimal] = {}
@@ -97,6 +136,16 @@ class BinanceSpotQuoteProvider:
                 prices[symbol] = price
 
         unavailable.update(requested - prices.keys())
+        if unavailable:
+            log_event(
+                logger,
+                logging.DEBUG,
+                "binance_quote_payload_incomplete",
+                operation="fetch_latest_prices",
+                provider="BINANCE_SPOT",
+                symbols=sorted(unavailable),
+                failure_reason="INVALID_PAYLOAD",
+            )
         return ProviderQuoteBatch(
             prices=prices,
             unavailable_symbols=frozenset(unavailable),
@@ -119,7 +168,18 @@ class BinanceSpotCandleProvider:
     ) -> list[Candle]:
         interval = _KLINE_INTERVALS.get(provider_interval)
         if interval is None:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="fetch_candles",
+                provider="BINANCE_SPOT",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+            )
+            log_failure(logger, "binance_interval_not_configured", error)
+            raise error
         start_ms = _to_milliseconds(start)
         end_ms = _to_milliseconds(end) - 1
         try:
@@ -135,22 +195,114 @@ class BinanceSpotCandleProvider:
                 )
             data_method = getattr(response, "data", None)
             if not callable(data_method):
-                raise ProviderUnavailableError
+                raise ProviderUnavailableError(
+                    failure_reason="INVALID_PAYLOAD",
+                    operation="fetch_candles",
+                    provider="BINANCE_SPOT",
+                    provider_symbol=symbol.provider_symbol,
+                    symbol=symbol.symbol,
+                    timeframe=timeframe,
+                )
             payload = data_method()
         except Error as exc:
-            raise ProviderUnavailableError from exc
-        except ProviderUnavailableError:
+            log_failure(
+                logger,
+                "binance_candle_request_failed",
+                exc,
+                operation="fetch_candles",
+                provider="BINANCE_SPOT",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                upstream_status=getattr(exc, "status_code", None),
+                **{"from": start, "to": end},
+            )
+            metadata = failure_metadata(exc)
+            raise ProviderUnavailableError(
+                operation="fetch_candles",
+                provider="BINANCE_SPOT",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
+        except ProviderUnavailableError as exc:
+            log_failure(
+                logger,
+                "binance_candle_request_failed",
+                exc,
+                operation="fetch_candles",
+                provider="BINANCE_SPOT",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                **{"from": start, "to": end},
+            )
             raise
         except Exception as exc:
-            raise ProviderUnavailableError from exc
-        return _normalize_klines(
-            payload=payload,
-            symbol=symbol,
-            timeframe=timeframe,
-            start=start,
-            end=end,
-            timeframe_model=_timeframe_model(provider_interval),
-        )
+            log_failure(
+                logger,
+                "binance_candle_request_failed",
+                exc,
+                operation="fetch_candles",
+                provider="BINANCE_SPOT",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                **{"from": start, "to": end},
+            )
+            metadata = failure_metadata(exc)
+            raise ProviderUnavailableError(
+                operation="fetch_candles",
+                provider="BINANCE_SPOT",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
+        if payload == []:
+            log_event(
+                logger,
+                logging.DEBUG,
+                "binance_empty_response",
+                operation="fetch_candles",
+                provider="BINANCE_SPOT",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                failure_reason="EMPTY_RESPONSE",
+                **{"from": start, "to": end},
+            )
+            return []
+        try:
+            return _normalize_klines(
+                payload=payload,
+                symbol=symbol,
+                timeframe=timeframe,
+                start=start,
+                end=end,
+                timeframe_model=_timeframe_model(provider_interval),
+            )
+        except ProviderUnavailableError as exc:
+            log_failure(
+                logger,
+                "binance_candle_normalization_failed",
+                exc,
+                operation="normalize_candles",
+                provider="BINANCE_SPOT",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                failure_reason="INVALID_PAYLOAD",
+                **{"from": start, "to": end},
+            )
+            raise
 
 
 def build_binance_spot_quote_provider(

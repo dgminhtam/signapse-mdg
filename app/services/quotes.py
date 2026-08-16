@@ -1,7 +1,9 @@
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 
 from app.cache.quote_cache import QuoteCache
+from app.core.observability import failure_metadata, log_event
 from app.domain.errors import (
     DatabaseUnavailableError,
     ProviderSelectionError,
@@ -15,6 +17,8 @@ from app.services.provider_selection import resolve_provider_selection
 UNSUPPORTED_SYMBOL_MESSAGE = "Symbol is not supported by this gateway."
 PROVIDER_UNAVAILABLE_MESSAGE = "The quote provider is temporarily unavailable."
 DATA_STALE_MESSAGE = "The latest quote is stale."
+
+logger = logging.getLogger(__name__)
 
 
 def parse_symbols(raw_symbols: str | None, max_symbols: int) -> list[str]:
@@ -148,7 +152,19 @@ class QuoteService:
     ) -> None:
         try:
             batch = await self._provider.fetch_latest_prices(pending)
-        except ProviderUnavailableError:
+        except ProviderUnavailableError as exc:
+            metadata = failure_metadata(exc)
+            log_event(
+                logger,
+                logging.WARNING,
+                "cache_fallback_after_provider_failure",
+                operation="quotes.refresh",
+                provider="MULTI_PROVIDER",
+                symbols=[item.provider_symbol for item in pending],
+                count=len(pending),
+                failure_reason=metadata["failure_reason"],
+                retryable=metadata["retryable"],
+            )
             self._use_fallbacks(pending, cached, resolved, errors)
             return
 

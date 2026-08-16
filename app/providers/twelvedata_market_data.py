@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -9,6 +10,7 @@ from requests import Session
 from twelvedata import TDClient  # type: ignore[import-untyped]
 from twelvedata.exceptions import TwelveDataError  # type: ignore[import-untyped]
 
+from app.core.observability import failure_metadata, log_event, log_failure
 from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.market_sessions import get_market_session_policy
@@ -51,6 +53,8 @@ _TWELVEDATA_INTERVALS = {
     "1w": "1week",
     "1mo": "1month",
 }
+
+logger = logging.getLogger(__name__)
 
 
 class JsonEndpoint(Protocol):
@@ -101,12 +105,14 @@ class TwelveDataHttpClient:
         payload = response.json()
         if _is_no_data_time_series_response(relative_url, payload):
             raise TwelveDataNoDataError
-        if _is_key_related_error(getattr(response, "status_code", None), payload):
-            raise TwelveDataKeyUnavailableError
+        status_code = _to_int(getattr(response, "status_code", None))
+        payload_code = _to_int(payload.get("code")) if isinstance(payload, dict) else None
+        if _is_key_related_error(status_code, payload):
+            raise TwelveDataKeyUnavailableError(status_code=status_code or payload_code)
         if not response.ok:
             raise TwelveDataError("Twelve Data request failed.")
         if isinstance(payload, dict) and _is_key_related_error(None, payload):
-            raise TwelveDataKeyUnavailableError
+            raise TwelveDataKeyUnavailableError(status_code=payload_code)
         if isinstance(payload, dict) and payload.get("status") == "error":
             raise TwelveDataError("Twelve Data request failed.")
         return response
@@ -129,9 +135,35 @@ class TwelveDataMarketDataProvider:
             async with self._client_lock:
                 payload = await asyncio.to_thread(self._discover_supported_provider_symbols_sync)
         except TwelveDataError as exc:
-            raise ProviderUnavailableError from exc
+            log_failure(
+                logger,
+                "twelvedata_symbol_discovery_failed",
+                exc,
+                operation="discover_supported_provider_symbols",
+                provider="TWELVE_DATA",
+            )
+            metadata = failure_metadata(exc)
+            raise ProviderUnavailableError(
+                operation="discover_supported_provider_symbols",
+                provider="TWELVE_DATA",
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
         except Exception as exc:
-            raise ProviderUnavailableError from exc
+            log_failure(
+                logger,
+                "twelvedata_symbol_discovery_failed",
+                exc,
+                operation="discover_supported_provider_symbols",
+                provider="TWELVE_DATA",
+            )
+            metadata = failure_metadata(exc)
+            raise ProviderUnavailableError(
+                operation="discover_supported_provider_symbols",
+                provider="TWELVE_DATA",
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
         return payload
 
     async def fetch_latest_prices(
@@ -149,9 +181,37 @@ class TwelveDataMarketDataProvider:
                     sorted(requested - unsupported),
                 )
         except TwelveDataError as exc:
-            raise ProviderUnavailableError from exc
+            log_failure(
+                logger,
+                "twelvedata_latest_prices_failed",
+                exc,
+                operation="fetch_latest_prices",
+                provider="TWELVE_DATA",
+                symbols=provider_symbols,
+            )
+            metadata = failure_metadata(exc)
+            raise ProviderUnavailableError(
+                operation="fetch_latest_prices",
+                provider="TWELVE_DATA",
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
         except Exception as exc:
-            raise ProviderUnavailableError from exc
+            log_failure(
+                logger,
+                "twelvedata_latest_prices_failed",
+                exc,
+                operation="fetch_latest_prices",
+                provider="TWELVE_DATA",
+                symbols=provider_symbols,
+            )
+            metadata = failure_metadata(exc)
+            raise ProviderUnavailableError(
+                operation="fetch_latest_prices",
+                provider="TWELVE_DATA",
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
         unavailable = requested - prices.keys()
         return ProviderQuoteBatch(prices=prices, unavailable_symbols=frozenset(unavailable))
 
@@ -165,11 +225,33 @@ class TwelveDataMarketDataProvider:
         limit: int,
     ) -> list[Candle]:
         if symbol.provider_symbol not in SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="fetch_candles",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+            )
+            log_failure(logger, "twelvedata_provider_not_configured", error)
+            raise error
         interval = _TWELVEDATA_INTERVALS.get(provider_interval)
         timeframe_model = get_timeframe(provider_interval)
         if interval is None or timeframe_model is None:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="fetch_candles",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+            )
+            log_failure(logger, "twelvedata_interval_not_configured", error)
+            raise error
         try:
             async with self._client_lock:
                 payload = await asyncio.to_thread(
@@ -181,19 +263,90 @@ class TwelveDataMarketDataProvider:
                     limit,
                 )
         except TwelveDataNoDataError:
+            log_event(
+                logger,
+                logging.DEBUG,
+                "twelvedata_empty_response",
+                operation="fetch_candles",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                failure_reason="EMPTY_RESPONSE",
+                **{"from": start, "to": end},
+            )
             return []
         except TwelveDataError as exc:
-            raise ProviderUnavailableError from exc
+            log_failure(
+                logger,
+                "twelvedata_candle_request_failed",
+                exc,
+                operation="fetch_candles",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                **{"from": start, "to": end},
+            )
+            metadata = failure_metadata(exc)
+            raise ProviderUnavailableError(
+                operation="fetch_candles",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
         except Exception as exc:
-            raise ProviderUnavailableError from exc
-        return _normalize_time_series(
-            payload=payload,
-            symbol=symbol,
-            timeframe=timeframe,
-            start=start,
-            end=end,
-            timeframe_model=timeframe_model,
-        )
+            log_failure(
+                logger,
+                "twelvedata_candle_request_failed",
+                exc,
+                operation="fetch_candles",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                **{"from": start, "to": end},
+            )
+            metadata = failure_metadata(exc)
+            raise ProviderUnavailableError(
+                operation="fetch_candles",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
+        try:
+            return _normalize_time_series(
+                payload=payload,
+                symbol=symbol,
+                timeframe=timeframe,
+                start=start,
+                end=end,
+                timeframe_model=timeframe_model,
+            )
+        except ProviderUnavailableError as exc:
+            log_failure(
+                logger,
+                "twelvedata_candle_normalization_failed",
+                exc,
+                operation="normalize_candles",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                failure_reason="INVALID_PAYLOAD",
+                **{"from": start, "to": end},
+            )
+            raise
 
     def _get_client(self, key: str | None = None) -> TwelveDataClient:
         if self._key_pool is None:
@@ -201,7 +354,11 @@ class TwelveDataMarketDataProvider:
                 self._client = self._client_factory()
             return self._client
         if key is None:
-            raise ProviderUnavailableError
+            raise ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="get_client",
+                provider="TWELVE_DATA",
+            )
         client = self._clients.get(key)
         if client is None:
             client = self._client_factory(key)
@@ -236,6 +393,16 @@ class TwelveDataMarketDataProvider:
                 price = _normalize_price_payload(payload)
                 if price is not None:
                     prices[provider_symbol] = price
+                else:
+                    log_event(
+                        logger,
+                        logging.DEBUG,
+                        "twelvedata_quote_payload_rejected",
+                        operation="fetch_latest_price",
+                        provider="TWELVE_DATA",
+                        provider_symbol=provider_symbol,
+                        failure_reason="INVALID_PAYLOAD",
+                    )
             return prices
 
         return cast(dict[str, Decimal], self._with_key_retry(operation))
@@ -268,7 +435,13 @@ def build_twelvedata_market_data_provider(
 ) -> TwelveDataMarketDataProvider:
     effective_keys = _normalize_api_keys(api_keys)
     if not effective_keys:
-        raise ProviderUnavailableError
+        error = ProviderUnavailableError(
+            failure_reason="PROVIDER_NOT_CONFIGURED",
+            operation="build_provider",
+            provider="TWELVE_DATA",
+        )
+        log_failure(logger, "twelvedata_provider_not_configured", error)
+        raise error
 
     normalized_base_url = base_url.rstrip("/")
     timeout = max(timeout_seconds, 0.001)

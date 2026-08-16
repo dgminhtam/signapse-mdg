@@ -9,6 +9,7 @@ from binance_common.configuration import ConfigurationWebSocketStreams
 from binance_sdk_spot.spot import Spot
 from binance_sdk_spot.websocket_streams.models import KlineIntervalEnum
 
+from app.core.observability import failure_metadata, log_failure, log_rate_limited_warning
 from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import Quote
@@ -71,7 +72,24 @@ class BinanceSpotStreamProvider:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                raise ProviderUnavailableError from exc
+                metadata = failure_metadata(exc)
+                log_failure(
+                    logger,
+                    "binance_stream_quote_subscribe_failed",
+                    exc,
+                    operation="stream.subscribe_quote",
+                    provider="BINANCE_SPOT",
+                    provider_symbol=symbol.provider_symbol,
+                    symbol=symbol.symbol,
+                )
+                raise ProviderUnavailableError(
+                    operation="stream.subscribe_quote",
+                    provider="BINANCE_SPOT",
+                    provider_symbol=symbol.provider_symbol,
+                    symbol=symbol.symbol,
+                    failure_reason=str(metadata["failure_reason"]),
+                    retryable=bool(metadata["retryable"]),
+                ) from exc
             self._symbols[symbol.provider_symbol] = symbol
             self._handles[interest] = handle
 
@@ -89,7 +107,16 @@ class BinanceSpotStreamProvider:
         )
         interval = _KLINE_INTERVALS.get(provider_interval)
         if interval is None:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="stream.subscribe_candle",
+                provider="BINANCE_SPOT",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+            )
+            log_failure(logger, "binance_stream_timeframe_not_configured", error)
+            raise error
         async with self._lock:
             if interest in self._handles:
                 return
@@ -103,7 +130,26 @@ class BinanceSpotStreamProvider:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                raise ProviderUnavailableError from exc
+                metadata = failure_metadata(exc)
+                log_failure(
+                    logger,
+                    "binance_stream_candle_subscribe_failed",
+                    exc,
+                    operation="stream.subscribe_candle",
+                    provider="BINANCE_SPOT",
+                    provider_symbol=symbol.provider_symbol,
+                    symbol=symbol.symbol,
+                    timeframe=timeframe,
+                )
+                raise ProviderUnavailableError(
+                    operation="stream.subscribe_candle",
+                    provider="BINANCE_SPOT",
+                    provider_symbol=symbol.provider_symbol,
+                    symbol=symbol.symbol,
+                    timeframe=timeframe,
+                    failure_reason=str(metadata["failure_reason"]),
+                    retryable=bool(metadata["retryable"]),
+                ) from exc
             self._symbols[symbol.provider_symbol] = symbol
             self._handles[interest] = handle
 
@@ -114,8 +160,14 @@ class BinanceSpotStreamProvider:
                 return
             try:
                 await handle.unsubscribe()
-            except Exception:
-                logger.warning("binance_stream_unsubscribe_failed", exc_info=True)
+            except Exception as exc:
+                log_failure(
+                    logger,
+                    "binance_stream_unsubscribe_failed",
+                    exc,
+                    operation="stream.unsubscribe",
+                    provider="BINANCE_SPOT",
+                )
             if not self._handles:
                 await self._close_connection()
 
@@ -126,8 +178,14 @@ class BinanceSpotStreamProvider:
             for handle in handles:
                 try:
                     await handle.unsubscribe()
-                except Exception:
-                    logger.warning("binance_stream_unsubscribe_failed", exc_info=True)
+                except Exception as exc:
+                    log_failure(
+                        logger,
+                        "binance_stream_unsubscribe_failed",
+                        exc,
+                        operation="stream.unsubscribe",
+                        provider="BINANCE_SPOT",
+                    )
             await self._close_connection()
 
     async def _ensure_connected(self) -> None:
@@ -138,9 +196,28 @@ class BinanceSpotStreamProvider:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            raise ProviderUnavailableError from exc
+            metadata = failure_metadata(exc)
+            log_failure(
+                logger,
+                "binance_stream_connect_failed",
+                exc,
+                operation="stream.connect",
+                provider="BINANCE_SPOT",
+            )
+            raise ProviderUnavailableError(
+                operation="stream.connect",
+                provider="BINANCE_SPOT",
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
         if not self._streams.connections:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="EMPTY_RESPONSE",
+                operation="stream.connect",
+                provider="BINANCE_SPOT",
+            )
+            log_failure(logger, "binance_stream_no_connection", error)
+            raise error
         self._connected = True
 
     async def _close_connection(self) -> None:
@@ -148,8 +225,14 @@ class BinanceSpotStreamProvider:
             return
         try:
             await self._streams.close_connection()
-        except Exception:
-            logger.warning("binance_stream_close_failed", exc_info=True)
+        except Exception as exc:
+            log_failure(
+                logger,
+                "binance_stream_close_failed",
+                exc,
+                operation="stream.close",
+                provider="BINANCE_SPOT",
+            )
         finally:
             self._connected = False
 
@@ -176,9 +259,12 @@ class BinanceSpotStreamProvider:
                 )
                 self.events.put_nowait(event)
             except ValueError, asyncio.QueueFull:
-                logger.warning(
+                log_rate_limited_warning(
+                    logger,
                     "binance_stream_ticker_rejected",
-                    extra={"symbol": symbol.symbol},
+                    key=f"BINANCE_SPOT:ticker_rejected:{symbol.symbol}",
+                    provider="BINANCE_SPOT",
+                    symbol=symbol.symbol,
                 )
 
         return callback
@@ -253,9 +339,13 @@ class BinanceSpotStreamProvider:
                     )
                 )
             except ValueError, asyncio.QueueFull:
-                logger.warning(
+                log_rate_limited_warning(
+                    logger,
                     "binance_stream_kline_rejected",
-                    extra={"symbol": symbol.symbol, "timeframe": timeframe},
+                    key=f"BINANCE_SPOT:kline_rejected:{symbol.symbol}:{timeframe}",
+                    provider="BINANCE_SPOT",
+                    symbol=symbol.symbol,
+                    timeframe=timeframe,
                 )
 
         return callback
@@ -274,7 +364,12 @@ class BinanceSpotStreamProvider:
         try:
             self.events.put_nowait(signal)
         except asyncio.QueueFull:
-            logger.warning("binance_stream_signal_dropped")
+            log_rate_limited_warning(
+                logger,
+                "binance_stream_signal_dropped",
+                key="BINANCE_SPOT:signal_dropped",
+                provider="BINANCE_SPOT",
+            )
 
 
 def build_binance_spot_stream_provider(

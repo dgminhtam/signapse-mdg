@@ -10,6 +10,7 @@ from app.api.errors import (
     historical_price_not_found_handler,
     provider_unavailable_handler,
     quote_request_error_handler,
+    unexpected_error_handler,
 )
 from app.api.routes_candles import get_candle_cache
 from app.api.routes_candles import router as candles_router
@@ -23,6 +24,7 @@ from app.api.routes_stream import router as stream_router
 from app.api.routes_symbols import router as symbols_router
 from app.core.config import get_settings
 from app.core.cronjob import CronjobManager
+from app.core.observability import DiagnosticContextMiddleware, configure_logging
 from app.db.repositories import PostgresCandleRepository, PostgresEconomicCalendarRepository
 from app.db.session import build_session_factory
 from app.domain.errors import (
@@ -113,11 +115,15 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    settings = get_settings()
+    configure_logging(settings.log_level)
     application = FastAPI(
         title="Signapse Market Data Gateway",
         version="0.1.0",
         lifespan=lifespan,
     )
+    application.add_middleware(DiagnosticContextMiddleware)
+    application.add_exception_handler(Exception, unexpected_error_handler)
     application.add_exception_handler(
         DatabaseUnavailableError,
         database_unavailable_handler,

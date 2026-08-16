@@ -3,6 +3,16 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import uuid4
+
+from app.core.observability import (
+    bind_context,
+    failure_metadata,
+    log_event,
+    log_failure,
+    reset_context,
+)
+from app.domain.errors import DatabaseUnavailableError, ProviderUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +127,13 @@ class CronjobManager:
                 await asyncio.sleep(state.job.interval_seconds)
                 await self._run_once(state)
         except asyncio.CancelledError:
-            logger.info("cronjob_cancelled", extra={"job": name})
+            log_event(
+                logger,
+                logging.INFO,
+                "cronjob_cancelled",
+                operation="cronjob",
+                job_id=uuid4().hex,
+            )
             raise
 
     async def _run_once(self, state: _CronjobState) -> None:
@@ -126,6 +142,8 @@ class CronjobManager:
                 return
             state.status.running = True
             state.status.last_started_at = self._clock()
+        job_id = uuid4().hex
+        token = bind_context(job_id=job_id)
         try:
             await state.job.run_once()
         except asyncio.CancelledError:
@@ -138,7 +156,24 @@ class CronjobManager:
                 state.status.last_error = str(exc)
                 state.status.run_count += 1
                 state.status.failure_count += 1
-            logger.exception("cronjob_failed", extra={"job": state.job.name})
+            if isinstance(exc, (DatabaseUnavailableError, ProviderUnavailableError)):
+                metadata = failure_metadata(exc)
+                log_event(
+                    logger,
+                    logging.ERROR,
+                    "cronjob_failed",
+                    operation="cronjob",
+                    job_id=job_id,
+                    **metadata,
+                )
+            else:
+                log_failure(
+                    logger,
+                    "cronjob_failed",
+                    exc,
+                    operation="cronjob",
+                    job_id=job_id,
+                )
         else:
             now = self._clock()
             async with self._lock:
@@ -149,6 +184,7 @@ class CronjobManager:
         finally:
             async with self._lock:
                 state.status.running = False
+            reset_context(token)
 
 
 __all__ = ["Cronjob", "CronjobManager", "CronjobStatus"]

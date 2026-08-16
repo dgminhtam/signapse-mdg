@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 
 from crawl4ai import (  # type: ignore[import-untyped]
@@ -15,6 +16,10 @@ from crawl4ai.content_filter_strategy import (  # type: ignore[import-untyped]
 from crawl4ai.markdown_generation_strategy import (  # type: ignore[import-untyped]
     DefaultMarkdownGenerator,
 )
+
+from app.core.observability import log_failure
+
+logger = logging.getLogger(__name__)
 
 
 class Crawl4AIError(Exception):
@@ -63,6 +68,13 @@ class Crawl4AIMarkdownProvider:
                 )
             return normalized
         except Exception as exc:
+            log_failure(
+                logger,
+                "crawl_provider_failed",
+                exc,
+                operation="crawl.fit_markdown",
+                count=len(urls),
+            )
             raise Crawl4AIError from exc
 
 

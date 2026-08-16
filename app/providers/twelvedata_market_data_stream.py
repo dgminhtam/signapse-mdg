@@ -6,6 +6,11 @@ from typing import Protocol, cast
 
 from twelvedata import TDClient  # type: ignore[import-untyped]
 
+from app.core.observability import (
+    failure_metadata,
+    log_failure,
+    log_rate_limited_warning,
+)
 from app.domain.errors import ProviderUnavailableError
 from app.domain.market_sessions import get_market_session_policy
 from app.domain.quotes import Quote
@@ -55,11 +60,13 @@ class TwelveDataMarketDataStreamProvider:
         queue_capacity: int,
         heartbeat_seconds: float,
         key_pool: TwelveDataApiKeyPool | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self.events: asyncio.Queue[ProviderStreamEvent] = asyncio.Queue(queue_capacity)
         self._client_factory = client_factory
         self._key_pool = key_pool
         self._heartbeat_seconds = heartbeat_seconds
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._client: TwelveDataStreamClient | None = None
         self._websocket: TwelveDataWebSocket | None = None
         self._connected = False
@@ -74,7 +81,15 @@ class TwelveDataMarketDataStreamProvider:
 
     async def subscribe_quote(self, symbol: SupportedSymbol) -> None:
         if symbol.provider_symbol not in SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="stream.subscribe_quote",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+            )
+            log_failure(logger, "twelvedata_stream_provider_not_configured", error)
+            raise error
         async with self._lock:
             await self._ensure_connected()
             interest = QuoteInterest(symbol.symbol, symbol.provider, symbol.provider_symbol)
@@ -91,9 +106,27 @@ class TwelveDataMarketDataStreamProvider:
     ) -> None:
         del provider_interval
         if symbol.provider_symbol not in SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="stream.subscribe_candle",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+            )
+            log_failure(logger, "twelvedata_stream_provider_not_configured", error)
+            raise error
         if get_timeframe(timeframe) is None:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="stream.subscribe_candle",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+            )
+            log_failure(logger, "twelvedata_stream_timeframe_not_configured", error)
+            raise error
         async with self._lock:
             await self._ensure_connected()
             timeframes = self._candle_interests.setdefault(symbol.symbol, set())
@@ -101,8 +134,9 @@ class TwelveDataMarketDataStreamProvider:
                 return
             await self._subscribe_provider_symbol(symbol)
             timeframes.add(timeframe)
+            now = self._clock()
             if not get_market_session_policy(symbol).is_eligible(
-                bucket_open(datetime.now(UTC), get_timeframe(timeframe).duration),  # type: ignore[union-attr]
+                bucket_open(now, get_timeframe(timeframe).duration),  # type: ignore[union-attr]
                 timeframe,
             ):
                 self._put_signal(
@@ -116,7 +150,7 @@ class TwelveDataMarketDataStreamProvider:
                                 symbol.provider_symbol,
                             ),
                         ),
-                        datetime.now(UTC),
+                        now,
                     )
                 )
 
@@ -159,7 +193,20 @@ class TwelveDataMarketDataStreamProvider:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            raise ProviderUnavailableError from exc
+            metadata = failure_metadata(exc)
+            log_failure(
+                logger,
+                "twelvedata_stream_connect_failed",
+                exc,
+                operation="stream.connect",
+                provider="TWELVE_DATA",
+            )
+            raise ProviderUnavailableError(
+                operation="stream.connect",
+                provider="TWELVE_DATA",
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
         self._connected = True
         self._heartbeat_task = asyncio.create_task(
             self._heartbeat_loop(),
@@ -179,7 +226,24 @@ class TwelveDataMarketDataStreamProvider:
             raise
         except Exception as exc:
             self._provider_symbol_refs.pop(symbol.provider_symbol, None)
-            raise ProviderUnavailableError from exc
+            metadata = failure_metadata(exc)
+            log_failure(
+                logger,
+                "twelvedata_stream_subscribe_failed",
+                exc,
+                operation="stream.subscribe",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+            )
+            raise ProviderUnavailableError(
+                operation="stream.subscribe",
+                provider="TWELVE_DATA",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
 
     async def _unsubscribe_provider_symbol(self, symbol: SupportedSymbol) -> None:
         refs = self._provider_symbol_refs.get(symbol.provider_symbol, 0)
@@ -190,8 +254,16 @@ class TwelveDataMarketDataStreamProvider:
             if websocket is not None:
                 try:
                     await asyncio.to_thread(websocket.unsubscribe, symbol.provider_symbol)
-                except Exception:
-                    logger.warning("twelvedata_stream_unsubscribe_failed", exc_info=True)
+                except Exception as exc:
+                    log_failure(
+                        logger,
+                        "twelvedata_stream_unsubscribe_failed",
+                        exc,
+                        operation="stream.unsubscribe",
+                        provider="TWELVE_DATA",
+                        provider_symbol=symbol.provider_symbol,
+                        symbol=symbol.symbol,
+                    )
         else:
             self._provider_symbol_refs[symbol.provider_symbol] = refs - 1
 
@@ -208,8 +280,14 @@ class TwelveDataMarketDataStreamProvider:
         if websocket is not None:
             try:
                 await asyncio.to_thread(websocket.disconnect)
-            except Exception:
-                logger.warning("twelvedata_stream_disconnect_failed", exc_info=True)
+            except Exception as exc:
+                log_failure(
+                    logger,
+                    "twelvedata_stream_disconnect_failed",
+                    exc,
+                    operation="stream.disconnect",
+                    provider="TWELVE_DATA",
+                )
 
     async def _heartbeat_loop(self) -> None:
         while True:
@@ -219,7 +297,14 @@ class TwelveDataMarketDataStreamProvider:
                 return
             try:
                 await asyncio.to_thread(websocket.heartbeat)
-            except Exception:
+            except Exception as exc:
+                log_failure(
+                    logger,
+                    "twelvedata_stream_heartbeat_failed",
+                    exc,
+                    operation="stream.heartbeat",
+                    provider="TWELVE_DATA",
+                )
                 self._put_signal(
                     ProviderSignal(
                         "RECONNECTING",
@@ -237,6 +322,12 @@ class TwelveDataMarketDataStreamProvider:
     def _handle_payload_on_loop(self, payload: object) -> None:
         tick = self._normalize_tick(payload)
         if tick is None:
+            log_rate_limited_warning(
+                logger,
+                "twelvedata_stream_event_rejected",
+                key="TWELVE_DATA:stream_event_rejected",
+                provider="TWELVE_DATA",
+            )
             return
         quote_interest = QuoteInterest(
             tick.symbol.symbol,
@@ -308,14 +399,27 @@ class TwelveDataMarketDataStreamProvider:
 
     def _require_websocket(self) -> TwelveDataWebSocket:
         if self._websocket is None:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="stream.websocket",
+                provider="TWELVE_DATA",
+            )
+            log_failure(logger, "twelvedata_stream_not_connected", error)
+            raise error
         return self._websocket
 
     def _put_event(self, event: ProviderStreamEvent) -> None:
         try:
             self.events.put_nowait(event)
         except asyncio.QueueFull:
-            logger.warning("twelvedata_stream_event_dropped")
+            interest = getattr(event, "interest", None)
+            log_rate_limited_warning(
+                logger,
+                "twelvedata_stream_event_dropped",
+                key="TWELVE_DATA:stream_event_dropped",
+                provider="TWELVE_DATA",
+                symbol=getattr(interest, "symbol", None),
+            )
 
     def _put_signal(self, signal: ProviderSignal) -> None:
         self._put_event(signal)

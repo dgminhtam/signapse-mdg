@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Sequence
 
-from app.core.observability import record_provider_selection
+from app.core.observability import log_event, record_provider_selection
 from app.domain.errors import ProviderSelectionError
 from app.domain.symbols import ProviderSelection, SelectionMode, SupportedSymbol
 
@@ -53,14 +53,15 @@ def resolve_provider_selection(
 
     mode: SelectionMode = "DEFAULT" if provider is None else "OVERRIDE"
     selected_symbol = symbol.with_mapping(selected)
-    logger.info(
+    log_event(
+        logger,
+        logging.INFO,
         "provider_selected",
-        extra={
-            "symbol": symbol.symbol,
-            "provider": selected.provider,
-            "provider_symbol": selected.provider_symbol,
-            "selection_mode": mode,
-        },
+        operation="provider_selection",
+        symbol=symbol.symbol,
+        provider=selected.provider,
+        provider_symbol=selected.provider_symbol,
+        mode=mode,
     )
     record_provider_selection(selected.provider, mode)
     return selected_symbol, ProviderSelection(

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -7,6 +8,7 @@ from typing import Any, Protocol, cast
 import yfinance  # type: ignore[import-untyped]
 from yfinance._http import new_session  # type: ignore[import-untyped]
 
+from app.core.observability import failure_metadata, log_event, log_failure
 from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import ProviderQuoteBatch
@@ -53,6 +55,8 @@ _YFINANCE_INTERVALS = {
     "1w": "1wk",
     "1mo": "1mo",
 }
+
+logger = logging.getLogger(__name__)
 
 
 class YFinanceTicker(Protocol):
@@ -102,10 +106,32 @@ class YFinanceQuoteProvider:
                     self._fetch_latest_prices_sync,
                     supported,
                 )
-        except ProviderUnavailableError:
+        except ProviderUnavailableError as exc:
+            log_failure(
+                logger,
+                "yfinance_latest_prices_failed",
+                exc,
+                operation="fetch_latest_prices",
+                provider="YFINANCE",
+                symbols=provider_symbols,
+            )
             raise
         except Exception as exc:
-            raise ProviderUnavailableError from exc
+            metadata = failure_metadata(exc)
+            log_failure(
+                logger,
+                "yfinance_latest_prices_failed",
+                exc,
+                operation="fetch_latest_prices",
+                provider="YFINANCE",
+                symbols=provider_symbols,
+            )
+            raise ProviderUnavailableError(
+                operation="fetch_latest_prices",
+                provider="YFINANCE",
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
 
         unavailable.update(failed)
         return ProviderQuoteBatch(
@@ -124,11 +150,33 @@ class YFinanceQuoteProvider:
     ) -> list[Candle]:
         del limit
         if symbol.provider_symbol not in SUPPORTED_YFINANCE_PROVIDER_SYMBOLS:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="fetch_candles",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+            )
+            log_failure(logger, "yfinance_provider_not_configured", error)
+            raise error
         interval = _YFINANCE_INTERVALS.get(provider_interval)
         timeframe_model = get_timeframe(provider_interval)
         if interval is None or timeframe_model is None:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="fetch_candles",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+            )
+            log_failure(logger, "yfinance_interval_not_configured", error)
+            raise error
         try:
             async with self._client_lock:
                 payload = await asyncio.to_thread(
@@ -138,18 +186,82 @@ class YFinanceQuoteProvider:
                     start,
                     end,
                 )
-        except ProviderUnavailableError:
+        except ProviderUnavailableError as exc:
+            log_failure(
+                logger,
+                "yfinance_candle_request_failed",
+                exc,
+                operation="fetch_candles",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                **{"from": start, "to": end},
+            )
             raise
         except Exception as exc:
-            raise ProviderUnavailableError from exc
-        return _normalize_history(
-            payload=payload,
-            symbol=symbol,
-            timeframe=timeframe,
-            start=start,
-            end=end,
-            timeframe_model=timeframe_model,
-        )
+            metadata = failure_metadata(exc)
+            log_failure(
+                logger,
+                "yfinance_candle_request_failed",
+                exc,
+                operation="fetch_candles",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                **{"from": start, "to": end},
+            )
+            raise ProviderUnavailableError(
+                operation="fetch_candles",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
+        if bool(getattr(payload, "empty", False)):
+            log_event(
+                logger,
+                logging.DEBUG,
+                "yfinance_empty_response",
+                operation="fetch_candles",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                failure_reason="EMPTY_RESPONSE",
+                **{"from": start, "to": end},
+            )
+            return []
+        try:
+            return _normalize_history(
+                payload=payload,
+                symbol=symbol,
+                timeframe=timeframe,
+                start=start,
+                end=end,
+                timeframe_model=timeframe_model,
+            )
+        except ProviderUnavailableError as exc:
+            log_failure(
+                logger,
+                "yfinance_candle_normalization_failed",
+                exc,
+                operation="normalize_candles",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                shape=getattr(payload, "shape", None),
+                columns=[str(column) for column in getattr(payload, "columns", [])],
+                failure_reason="INVALID_PAYLOAD",
+                **{"from": start, "to": end},
+            )
+            raise
 
     def _fetch_latest_prices_sync(
         self,
@@ -162,7 +274,15 @@ class YFinanceQuoteProvider:
             try:
                 payload = self._ticker_factory(provider_symbol, session).get_info()
                 price = _parse_decimal_value(payload.get("regularMarketPrice"), positive=True)
-            except Exception:
+            except Exception as exc:
+                log_failure(
+                    logger,
+                    "yfinance_quote_symbol_failed",
+                    exc,
+                    operation="fetch_latest_price",
+                    provider="YFINANCE",
+                    provider_symbol=provider_symbol,
+                )
                 unavailable.add(provider_symbol)
                 continue
             if price is None:
@@ -241,22 +361,37 @@ def _normalize_history(
     end: datetime,
     timeframe_model: Timeframe,
 ) -> list[Candle]:
+    def invalid(reason: str, raw_open_time: object | None = None) -> ProviderUnavailableError:
+        return ProviderUnavailableError(
+            failure_reason="INVALID_PAYLOAD",
+            operation="normalize_candles",
+            provider="YFINANCE",
+            provider_symbol=symbol.provider_symbol,
+            symbol=symbol.symbol,
+            timeframe=timeframe,
+            request_from=start,
+            request_to=end,
+            message=reason,
+            failed_row_timestamp=_history_timestamp_for_log(raw_open_time),
+            failed_row_reason=reason,
+        )
+
     if bool(getattr(payload, "empty", False)):
         return []
     iterrows = getattr(payload, "iterrows", None)
     if not callable(iterrows):
-        raise ProviderUnavailableError
+        raise invalid("history payload has no row iterator")
 
     candles: list[Candle] = []
     seen: set[datetime] = set()
     for raw_open_time, row in iterrows():
         open_time = _parse_history_datetime(raw_open_time)
         if open_time is None:
-            raise ProviderUnavailableError
+            raise invalid("history row has an invalid open time", raw_open_time)
         if open_time < start or open_time >= end:
             continue
         if open_time in seen:
-            raise ProviderUnavailableError
+            raise invalid("history row has a duplicate open time", raw_open_time)
 
         open_price = _parse_decimal_value(_row_value(row, "Open"), positive=True)
         high = _parse_decimal_value(_row_value(row, "High"), positive=True)
@@ -264,7 +399,7 @@ def _normalize_history(
         close = _parse_decimal_value(_row_value(row, "Close"), positive=True)
         volume = _parse_volume(_row_value(row, "Volume"))
         if None in (open_price, high, low, close, volume):
-            raise ProviderUnavailableError
+            raise invalid("history row has an invalid OHLCV value", raw_open_time)
 
         open_value = cast(Decimal, open_price)
         high_value = cast(Decimal, high)
@@ -274,7 +409,7 @@ def _normalize_history(
             open_value,
             close_value,
         ):
-            raise ProviderUnavailableError
+            raise invalid("history row violates OHLC bounds", raw_open_time)
 
         seen.add(open_time)
         candles.append(
@@ -320,6 +455,21 @@ def _parse_history_datetime(value: object) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
+
+
+def _history_timestamp_for_log(value: object | None) -> str | None:
+    if isinstance(value, datetime):
+        return value.astimezone(UTC).isoformat() if value.tzinfo else value.isoformat()
+    to_pydatetime = getattr(value, "to_pydatetime", None)
+    if callable(to_pydatetime):
+        converted = to_pydatetime()
+        if isinstance(converted, datetime):
+            return (
+                converted.astimezone(UTC).isoformat()
+                if converted.tzinfo
+                else converted.isoformat()
+            )
+    return None
 
 
 def _parse_volume(value: object) -> Decimal | None:

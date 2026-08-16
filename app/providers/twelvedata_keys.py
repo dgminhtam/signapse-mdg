@@ -5,7 +5,9 @@ from app.domain.errors import ProviderUnavailableError
 
 
 class TwelveDataKeyUnavailableError(Exception):
-    pass
+    def __init__(self, *, status_code: int | None = None) -> None:
+        super().__init__()
+        self.status_code = status_code
 
 
 class TwelveDataApiKeyPool:

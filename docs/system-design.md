@@ -154,8 +154,10 @@ by quote, candle, and stream; no route-specific selection or fallback exists.
 ### FastAPI Application
 
 - Owns process startup, shutdown, dependency wiring, and route registration.
-- Currently exposes `/health`, `/v1/symbols`, `/v1/quotes`, `/v1/candles`, and `/v1/stream`.
+- Exposes `/health`, `/ready`, `/v1/symbols`, `/v1/quotes`, `/v1/candles`, and `/v1/stream`.
 - Converts validation and service exceptions into stable error responses.
+- Adds bounded `X-Request-ID` correlation to REST responses and WebSocket handshakes; cron and
+  backfill executions use `job_id`.
 - Wires shared dependencies; provider streams are opened lazily when clients subscribe.
 
 ### Symbol Registry
@@ -410,6 +412,7 @@ without blocking provider consumption or other clients.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Process health and current gateway time. |
+| `GET` | `/ready` | Configuration/PostgreSQL readiness without provider calls. |
 | `GET` | `/v1/symbols` | Supported canonical symbol registry. |
 | `GET` | `/v1/quotes` | Latest normalized quotes for one or more symbols. |
 | `GET` | `/v1/candles` | Historical normalized candles for one symbol and timeframe. |
@@ -648,6 +651,11 @@ Multi-symbol quote responses use a per-symbol error list:
 | `DATA_STALE` | `503` | Operation requires fresh data but only stale data exists. |
 | `INTERNAL_ERROR` | `500` | Unexpected server failure. |
 
+Provider and database boundaries log the full chained traceback once with safe context; downstream
+API translation logs only a summary and keeps the public body sanitized. Unexpected exceptions are
+translated to `500 INTERNAL_ERROR`. Every REST response carries `X-Request-ID`; standalone cron and
+backfill runs carry a `job_id` instead.
+
 ## 12. Freshness and Cache Rules
 
 - Internal `received_at` is set by the gateway when it receives or creates a normalized quote.
@@ -674,7 +682,20 @@ Multi-symbol quote responses use a per-symbol error list:
 
 ## 14. Observability
 
-Minimum metrics:
+The runtime uses standard-library JSON logging to stdout; `LOG_LEVEL` defaults to `INFO`. Minimum
+diagnostic fields are:
+
+- stable `event` name and severity
+- `request_id` or `job_id`
+- operation, provider, provider symbol, canonical symbol, timeframe, and request range when relevant
+- public error code, internal failure reason, retryability, exception type, upstream status/code,
+  and latency when available
+
+Credentials, DSNs, raw provider payloads/DataFrames, and unrestricted exception text are redacted or
+excluded. Queue drops, rejected stream events, and equivalent high-volume warnings are rate-limited
+per event key to one emission per 60 seconds, with `suppressed_count` on the next emitted event.
+
+Minimum metrics (future instrumentation):
 
 - Provider REST request count, latency, and error count.
 - Provider WebSocket reconnect count.

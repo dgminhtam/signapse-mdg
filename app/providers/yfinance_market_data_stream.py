@@ -6,6 +6,7 @@ from typing import Protocol, cast
 
 import yfinance  # type: ignore[import-untyped]
 
+from app.core.observability import failure_metadata, log_failure, log_rate_limited_warning
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import Quote
 from app.domain.streams import (
@@ -66,7 +67,15 @@ class YFinanceMarketDataStreamProvider:
 
     async def subscribe_quote(self, symbol: SupportedSymbol) -> None:
         if symbol.provider_symbol not in SUPPORTED_YFINANCE_PROVIDER_SYMBOLS:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="stream.subscribe_quote",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+            )
+            log_failure(logger, "yfinance_stream_provider_not_configured", error)
+            raise error
         interest = QuoteInterest(symbol.symbol, symbol.provider, symbol.provider_symbol)
         async with self._lock:
             if interest in self._quote_interests:
@@ -83,9 +92,27 @@ class YFinanceMarketDataStreamProvider:
     ) -> None:
         del provider_interval
         if symbol.provider_symbol not in SUPPORTED_YFINANCE_PROVIDER_SYMBOLS:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="stream.subscribe_candle",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+            )
+            log_failure(logger, "yfinance_stream_provider_not_configured", error)
+            raise error
         if get_timeframe(timeframe) is None:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="stream.subscribe_candle",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+            )
+            log_failure(logger, "yfinance_stream_timeframe_not_configured", error)
+            raise error
         async with self._lock:
             timeframes = self._candle_interests.setdefault(symbol.symbol, set())
             if timeframe in timeframes:
@@ -153,7 +180,24 @@ class YFinanceMarketDataStreamProvider:
         except Exception as exc:
             self._rollback_provider_symbol(symbol, refs)
             await _close_client(candidate)
-            raise ProviderUnavailableError from exc
+            metadata = failure_metadata(exc)
+            log_failure(
+                logger,
+                "yfinance_stream_subscribe_failed",
+                exc,
+                operation="stream.subscribe",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+            )
+            raise ProviderUnavailableError(
+                operation="stream.subscribe",
+                provider="YFINANCE",
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
+            ) from exc
 
     async def _remove_provider_symbol(self, symbol: SupportedSymbol) -> None:
         refs = self._provider_symbol_refs.get(symbol.provider_symbol, 0)
@@ -168,10 +212,15 @@ class YFinanceMarketDataStreamProvider:
                 await client.unsubscribe(symbol.provider_symbol)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.warning(
+            except Exception as exc:
+                log_failure(
+                    logger,
                     "yfinance_stream_unsubscribe_failed",
-                    extra={"symbol": symbol.symbol},
+                    exc,
+                    operation="stream.unsubscribe",
+                    provider="YFINANCE",
+                    provider_symbol=symbol.provider_symbol,
+                    symbol=symbol.symbol,
                 )
 
     def _rollback_provider_symbol(self, symbol: SupportedSymbol, previous_refs: int) -> None:
@@ -203,8 +252,14 @@ class YFinanceMarketDataStreamProvider:
                 await client.listen(self._handle_payload)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.warning("yfinance_stream_listener_failed", exc_info=True)
+            except Exception as exc:
+                log_failure(
+                    logger,
+                    "yfinance_stream_listener_failed",
+                    exc,
+                    operation="stream.listen",
+                    provider="YFINANCE",
+                )
 
             async with self._lock:
                 if self._closing or not self._provider_symbol_refs:
@@ -234,8 +289,15 @@ class YFinanceMarketDataStreamProvider:
                 except asyncio.CancelledError:
                     await _close_client(client)
                     raise
-                except Exception:
-                    logger.warning("yfinance_stream_reconnect_failed", exc_info=True)
+                except Exception as exc:
+                    log_failure(
+                        logger,
+                        "yfinance_stream_reconnect_failed",
+                        exc,
+                        operation="stream.reconnect",
+                        provider="YFINANCE",
+                        symbols=symbols,
+                    )
                 else:
                     self._client = client
                     return True
@@ -246,6 +308,12 @@ class YFinanceMarketDataStreamProvider:
     def _handle_payload(self, payload: dict[str, object]) -> None:
         tick = self._normalize_tick(payload)
         if tick is None:
+            log_rate_limited_warning(
+                logger,
+                "yfinance_stream_event_rejected",
+                key="YFINANCE:stream_event_rejected",
+                provider="YFINANCE",
+            )
             return
         if (
             QuoteInterest(
@@ -332,7 +400,14 @@ class YFinanceMarketDataStreamProvider:
         try:
             self.events.put_nowait(event)
         except asyncio.QueueFull:
-            logger.warning("yfinance_stream_event_dropped")
+            interest = getattr(event, "interest", None)
+            log_rate_limited_warning(
+                logger,
+                "yfinance_stream_event_dropped",
+                key="YFINANCE:stream_event_dropped",
+                provider="YFINANCE",
+                symbol=getattr(interest, "symbol", None),
+            )
 
 
 def build_yfinance_market_data_stream_provider(
@@ -383,5 +458,11 @@ async def _close_client(client: YFinanceAsyncWebSocket | None) -> None:
         await client.close()
     except asyncio.CancelledError:
         raise
-    except Exception:
-        logger.warning("yfinance_stream_close_failed", exc_info=True)
+    except Exception as exc:
+        log_failure(
+            logger,
+            "yfinance_stream_close_failed",
+            exc,
+            operation="stream.close",
+            provider="YFINANCE",
+        )

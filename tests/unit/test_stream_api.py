@@ -205,6 +205,21 @@ def test_stream_route_accepts_valid_mixed_provider_symbols(
     assert manager.registered[0][1] == [BTC, EUR]
 
 
+def test_stream_handshake_echoes_request_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = FakeManager()
+    patch_registry(monkeypatch, [BTC])
+    patch_manager(monkeypatch, manager)
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/v1/stream?symbols=BTC/USD&timeframe=1m",
+            headers={"X-Request-ID": "ws-trace-123"},
+        ) as ws:
+            assert (b"x-request-id", b"ws-trace-123") in (ws.extra_headers or [])
+
+
 def test_stream_route_accepts_yfinance_and_three_provider_symbols(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

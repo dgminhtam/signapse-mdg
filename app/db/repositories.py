@@ -1,10 +1,13 @@
+import logging
 from datetime import UTC, datetime
+from typing import NoReturn
 
 from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.observability import failure_metadata, log_failure
 from app.db.models import (
     EconomicCalendarEventModel,
     MarketDataCandleModel,
@@ -21,6 +24,32 @@ from app.domain.economic_calendar import (
 )
 from app.domain.errors import DatabaseUnavailableError
 from app.domain.symbols import ProviderMapping, SupportedSymbol
+
+logger = logging.getLogger(__name__)
+
+
+def _raise_database_failure(
+    exc: SQLAlchemyError,
+    *,
+    operation: str,
+    write: bool,
+    **fields: object,
+) -> NoReturn:
+    metadata = failure_metadata(exc)
+    reason = "DATABASE_WRITE_FAILED" if write else "DATABASE_QUERY_FAILED"
+    log_failure(
+        logger,
+        "database_operation_failed",
+        exc,
+        operation=operation,
+        failure_reason=reason,
+        **fields,
+    )
+    raise DatabaseUnavailableError(
+        operation=operation,
+        failure_reason=reason,
+        retryable=bool(metadata["retryable"]),
+    ) from exc
 
 
 class PostgresSymbolRepository:
@@ -46,7 +75,7 @@ class PostgresSymbolRepository:
         try:
             rows = (await self._session.execute(statement)).all()
         except SQLAlchemyError as exc:
-            raise DatabaseUnavailableError from exc
+            _raise_database_failure(exc, operation="symbols.list_enabled", write=False)
 
         grouped: dict[int, tuple[SupportedSymbolModel, list[SymbolProviderMappingModel]]] = {}
         for symbol, mapping in rows:
@@ -82,7 +111,13 @@ class PostgresCandleRepository:
             async with self._session_factory() as session:
                 rows = (await session.execute(statement)).all()
         except SQLAlchemyError as exc:
-            raise DatabaseUnavailableError from exc
+            _raise_database_failure(
+                exc,
+                operation="candles.get_enabled_symbol",
+                write=False,
+                symbol=symbol,
+                provider=provider,
+            )
         if not rows:
             return None
         symbol_model = rows[0][0]
@@ -119,7 +154,16 @@ class PostgresCandleRepository:
             async with self._session_factory() as session:
                 rows = (await session.scalars(statement)).all()
         except SQLAlchemyError as exc:
-            raise DatabaseUnavailableError from exc
+            _raise_database_failure(
+                exc,
+                operation="candles.list_complete",
+                write=False,
+                provider=symbol.provider,
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                **{"from": start, "to": end},
+            )
         return [_to_candle(row) for row in rows]
 
     async def upsert_complete(self, candles: list[Candle]) -> None:
@@ -162,7 +206,12 @@ class PostgresCandleRepository:
                         )
                     )
         except SQLAlchemyError as exc:
-            raise DatabaseUnavailableError from exc
+            _raise_database_failure(
+                exc,
+                operation="candles.upsert_complete",
+                write=True,
+                count=len(complete),
+            )
 
 
 class PostgresEconomicCalendarRepository:
@@ -196,7 +245,12 @@ class PostgresEconomicCalendarRepository:
             async with self._session_factory() as session:
                 rows = (await session.scalars(statement)).all()
         except SQLAlchemyError as exc:
-            raise DatabaseUnavailableError from exc
+            _raise_database_failure(
+                exc,
+                operation="economic_calendar.list_events",
+                write=False,
+                **{"from": request.start, "to": request.end},
+            )
         return [_to_economic_calendar_event(row) for row in rows]
 
     async def upsert_events(self, events: list[EconomicCalendarFetchedEvent]) -> None:
@@ -276,7 +330,12 @@ class PostgresEconomicCalendarRepository:
                         )
                     )
         except SQLAlchemyError as exc:
-            raise DatabaseUnavailableError from exc
+            _raise_database_failure(
+                exc,
+                operation="economic_calendar.upsert_events",
+                write=True,
+                count=len(events),
+            )
 
     async def claim_enrichment_candidates(
         self,
@@ -324,7 +383,12 @@ class PostgresEconomicCalendarRepository:
                 for row in rows:
                     row.enrichment_attempted_at = attempted_at
         except SQLAlchemyError as exc:
-            raise DatabaseUnavailableError from exc
+            _raise_database_failure(
+                exc,
+                operation="economic_calendar.claim_enrichment_candidates",
+                write=True,
+                **{"from": start, "to": end},
+            )
         return candidates
 
     async def update_enrichments(
@@ -374,7 +438,12 @@ class PostgresEconomicCalendarRepository:
                         .values(**values)
                     )
         except SQLAlchemyError as exc:
-            raise DatabaseUnavailableError from exc
+            _raise_database_failure(
+                exc,
+                operation="economic_calendar.update_enrichments",
+                write=True,
+                count=len(usable),
+            )
 
 
 def _to_candle(row: MarketDataCandleModel) -> Candle:

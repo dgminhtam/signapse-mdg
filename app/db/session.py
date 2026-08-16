@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from functools import lru_cache
 from typing import Annotated
@@ -11,7 +12,10 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import Settings, get_settings
+from app.core.observability import log_failure
 from app.domain.errors import DatabaseUnavailableError
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache
@@ -35,7 +39,12 @@ async def get_db_session(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AsyncIterator[AsyncSession]:
     if settings.database_url is None:
-        raise DatabaseUnavailableError
+        error = DatabaseUnavailableError(
+            operation="database.get_session",
+            failure_reason="DATABASE_QUERY_FAILED",
+        )
+        log_failure(logger, "database_not_configured", error)
+        raise error
 
     _, session_factory = _build_database(
         settings.database_url,
@@ -51,7 +60,9 @@ def get_session_factory(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> async_sessionmaker[AsyncSession]:
     if settings.database_url is None:
-        raise DatabaseUnavailableError
+        error = DatabaseUnavailableError(operation="database.get_session_factory")
+        log_failure(logger, "database_not_configured", error)
+        raise error
     _, session_factory = _build_database(
         settings.database_url,
         settings.database_pool_size,

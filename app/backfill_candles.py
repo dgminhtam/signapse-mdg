@@ -1,16 +1,25 @@
 import argparse
 import asyncio
+import logging
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol, TextIO
+from uuid import uuid4
 
 from app.core.config import Settings, get_settings
+from app.core.observability import (
+    bind_context,
+    failure_metadata,
+    log_event,
+    log_failure,
+    reset_context,
+)
 from app.db.repositories import PostgresCandleRepository, PostgresSymbolRepository
 from app.db.session import build_session_factory
 from app.domain.candles import CandleProvider, CandleRequest, CandleResult
-from app.domain.errors import DatabaseUnavailableError
+from app.domain.errors import DatabaseUnavailableError, ProviderUnavailableError
 from app.domain.symbols import SupportedSymbol
 from app.domain.timeframes import TIMEFRAMES, add_month, get_timeframe
 from app.providers.binance_spot import build_binance_spot_candle_provider
@@ -18,6 +27,8 @@ from app.providers.twelvedata_market_data import build_twelvedata_market_data_pr
 from app.providers.yfinance_market_data import build_yfinance_candle_provider
 from app.services.candle_provider_router import CandleProviderRouter
 from app.services.candles import CandleService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,33 +127,64 @@ async def process_backfill(
     stderr: TextIO = sys.stderr,
 ) -> int:
     failed = False
-    for symbol in symbols:
-        for timeframe in options.timeframes:
-            for chunk in iter_chunks(symbol, timeframe, options.start, options.end, max_candles):
-                try:
-                    result = await service.get_candles(
-                        CandleRequest(
-                            symbol=chunk.symbol.symbol,
-                            timeframe=chunk.timeframe,
-                            start=chunk.start,
-                            end=chunk.end,
+    job_id = uuid4().hex
+    token = bind_context(job_id=job_id, operation="backfill")
+    try:
+        for symbol in symbols:
+            for timeframe in options.timeframes:
+                for chunk in iter_chunks(
+                    symbol,
+                    timeframe,
+                    options.start,
+                    options.end,
+                    max_candles,
+                ):
+                    try:
+                        result = await service.get_candles(
+                            CandleRequest(
+                                symbol=chunk.symbol.symbol,
+                                timeframe=chunk.timeframe,
+                                start=chunk.start,
+                                end=chunk.end,
+                            )
                         )
-                    )
-                except Exception as exc:
-                    failed = True
+                    except Exception as exc:
+                        failed = True
+                        fields = {
+                            "operation": "backfill.get_candles",
+                            "job_id": job_id,
+                            "provider": chunk.symbol.provider,
+                            "provider_symbol": chunk.symbol.provider_symbol,
+                            "symbol": chunk.symbol.symbol,
+                            "timeframe": chunk.timeframe,
+                            "from": chunk.start,
+                            "to": chunk.end,
+                        }
+                        if isinstance(exc, (DatabaseUnavailableError, ProviderUnavailableError)):
+                            log_event(
+                                logger,
+                                logging.ERROR,
+                                "backfill_chunk_failed",
+                                **failure_metadata(exc),
+                                **fields,
+                            )
+                        else:
+                            log_failure(logger, "backfill_chunk_failed", exc, **fields)
+                        print(
+                            _format_failure(chunk, exc),
+                            file=stderr,
+                        )
+                        continue
                     print(
-                        _format_failure(chunk, exc),
-                        file=stderr,
+                        (
+                            f"ok symbol={chunk.symbol.symbol} timeframe={chunk.timeframe} "
+                            f"from={chunk.start.isoformat()} to={chunk.end.isoformat()} "
+                            f"candles={len(result.candles)}"
+                        ),
+                        file=stdout,
                     )
-                    continue
-                print(
-                    (
-                        f"ok symbol={chunk.symbol.symbol} timeframe={chunk.timeframe} "
-                        f"from={chunk.start.isoformat()} to={chunk.end.isoformat()} "
-                        f"candles={len(result.candles)}"
-                    ),
-                    file=stdout,
-                )
+    finally:
+        reset_context(token)
     return 1 if failed else 0
 
 

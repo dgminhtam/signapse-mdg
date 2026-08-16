@@ -22,7 +22,7 @@ This document records the recommended technology stack for the crypto MVP descri
 | ORM/query layer | SQLAlchemy 2.0.51 | Mature Core/ORM APIs with asyncio-compatible engine/session support. |
 | Migration | Alembic 1.18.4 | SQLAlchemy-native database migration tool. |
 | In-memory cache | Process-local Python cache | Enough for two-symbol MVP; Redis deferred. |
-| Logging | structlog 26.1.0 + stdlib logging | Structured logs with context fields for provider, symbol, timeframe, request IDs. |
+| Logging | Python stdlib logging + repository JSON formatter | JSON stdout logs with context fields, redaction, and no new runtime dependency. |
 | Metrics | prometheus-client 0.25.0 | Simple counters, gauges, histograms exposed through HTTP. |
 | Test runner | pytest 9.1.0 | Readable unit/integration tests and strong plugin ecosystem. |
 | Async test support | pytest-asyncio 1.4.0 | Async pytest support. |
@@ -55,7 +55,6 @@ These versions are locked as the project baseline from 2026-06-19. Use latest st
 | asyncpg | `0.31.0` |
 | SQLAlchemy | `2.0.51` |
 | Alembic | `1.18.4` |
-| structlog | `26.1.0` |
 | prometheus-client | `0.25.0` |
 | pytest | `9.1.0` |
 | pytest-asyncio | `1.4.0` |
@@ -87,6 +86,7 @@ FastAPI is the right API framework for this MVP because the gateway contract is 
 Use it for:
 
 - `/health`
+- `/ready`
 - `/v1/symbols`
 - `/v1/quotes`
 - `/v1/candles`
@@ -416,7 +416,9 @@ Do not add Redis in the first MVP unless any of these become true:
 
 ### Logging
 
-Use stdlib logging configured for JSON output through structlog.
+Use Python stdlib logging configured by the application for JSON output to stdout. The implementation
+uses `contextvars` for request/job correlation and a bounded safe-field formatter; structlog is not a
+runtime dependency.
 
 Required fields:
 
@@ -428,7 +430,15 @@ Required fields:
 - `from`
 - `to`
 - `error_code`
-- `upstream_latency_ms`
+- `failure_reason`
+- `retryable`
+- `exception_type`
+- `upstream_status`
+- `upstream_code`
+- `latency_ms`
+
+REST responses echo a bounded `X-Request-ID`; cron and backfill logs use `job_id`. `/health` remains
+liveness-only, while `/ready` checks required configuration and PostgreSQL without calling providers.
 
 ### Metrics
 
@@ -615,7 +625,6 @@ crawl4ai==0.9.1
 sqlalchemy[asyncio]==2.0.51
 asyncpg==0.31.0
 alembic==1.18.4
-structlog==26.1.0
 prometheus-client==0.25.0
 
 [dependency-groups.dev]
@@ -680,6 +689,5 @@ mypy==2.1.0
 - mypy documentation: https://mypy.readthedocs.io/en/stable/
 - pytest documentation: https://docs.pytest.org/en/stable/
 - coverage.py documentation: https://coverage.readthedocs.io/en/latest/
-- structlog documentation: https://www.structlog.org/en/stable/
 - Prometheus Python client: https://prometheus.github.io/client_python/
 

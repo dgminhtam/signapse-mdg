@@ -35,3 +35,19 @@ _Avoid_: Provider support, configured mapping
 **Historical Price Resolution**:
 The provider-specific policy for selecting the nearest eligible completed candle price at or before a requested instant. The policy may use a coarser timeframe when finer historical data is unavailable, without using later market data or changing the selected Provider Mapping.
 _Avoid_: One-minute historical price, cross-provider fallback
+
+**Request ID**:
+A bounded correlation identifier assigned to one REST request or WebSocket handshake. A valid inbound `X-Request-ID` is preserved; missing or unsafe values are replaced with a generated UUID and echoed in the response header.
+_Avoid_: Job ID, provider request ID
+
+**Job ID**:
+A generated correlation identifier for a standalone cron or backfill execution that has no HTTP request. It is scoped to that background run and is never presented as a REST request ID.
+_Avoid_: Request ID, run number
+
+**Failure Reason**:
+The internal stable diagnostic classification for an operational failure, such as `TIMEOUT`, `RATE_LIMITED`, `AUTH_FAILED`, `INVALID_PAYLOAD`, or `DATABASE_QUERY_FAILED`. It is not exposed in public error bodies.
+_Avoid_: Public error code, raw provider message
+
+**Diagnostic Event**:
+A structured JSON log record with a stable event name and safe contextual fields used to investigate runtime behavior. It may contain provider and request/job context but never raw provider payloads, credentials, DSNs, or unrestricted exception text.
+_Avoid_: API response, audit record

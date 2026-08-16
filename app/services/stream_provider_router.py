@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from app.core.observability import log_failure, log_rate_limited_warning
 from app.domain.errors import ProviderUnavailableError
 from app.domain.streams import (
     CandleInterest,
@@ -73,7 +74,15 @@ class MultiProviderStreamProvider:
     def _provider_for(self, symbol: SupportedSymbol) -> MarketStreamProvider:
         provider = self._providers.get(symbol.provider)
         if provider is None:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="stream.provider_lookup",
+                provider=symbol.provider,
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+            )
+            log_failure(logger, "stream_provider_not_configured", error)
+            raise error
         return provider
 
     def _ensure_forwarding(self, name: str, provider: MarketStreamProvider) -> None:
@@ -92,6 +101,11 @@ class MultiProviderStreamProvider:
                 try:
                     self.events.put_nowait(event)
                 except asyncio.QueueFull:
-                    logger.warning("stream_router_event_dropped", extra={"provider": name})
+                    log_rate_limited_warning(
+                        logger,
+                        "stream_router_event_dropped",
+                        key=f"{name}:stream_router_event_dropped",
+                        provider=name,
+                    )
             finally:
                 provider.events.task_done()

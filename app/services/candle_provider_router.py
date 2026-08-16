@@ -1,8 +1,12 @@
+import logging
 from datetime import datetime
 
+from app.core.observability import log_failure
 from app.domain.candles import Candle, CandleProvider
 from app.domain.errors import ProviderUnavailableError
 from app.domain.symbols import SupportedSymbol
+
+logger = logging.getLogger(__name__)
 
 
 class CandleProviderRouter:
@@ -20,7 +24,18 @@ class CandleProviderRouter:
     ) -> list[Candle]:
         provider = self._providers.get(symbol.provider)
         if provider is None:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="candles.fetch_candles",
+                provider=symbol.provider,
+                provider_symbol=symbol.provider_symbol,
+                symbol=symbol.symbol,
+                timeframe=timeframe,
+                request_from=start,
+                request_to=end,
+            )
+            log_failure(logger, "provider_not_configured", error)
+            raise error
         return await provider.fetch_candles(
             symbol=symbol,
             timeframe=timeframe,

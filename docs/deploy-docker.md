@@ -162,6 +162,16 @@ Health check:
 curl http://127.0.0.1:8000/health
 ```
 
+Readiness check (requires configured PostgreSQL):
+
+```bash
+curl --fail-with-body http://127.0.0.1:8000/ready
+```
+
+`/health` returning `200` only proves the process is alive. `/ready` returns `200 READY` after the
+database probe succeeds, or `503 NOT_READY` when required database configuration/connectivity is
+unavailable. It never calls market-data providers.
+
 Supported symbols:
 
 ```bash
@@ -193,6 +203,9 @@ View logs:
 ```bash
 docker compose logs -f gateway
 ```
+
+Application diagnostics are JSON lines on stdout. Use the returned `X-Request-ID` header to correlate
+REST failures with provider/database events; cron and manual backfill failures use `job_id`.
 
 Restart the app:
 

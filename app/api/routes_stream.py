@@ -1,10 +1,12 @@
 import asyncio
+import logging
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.serialization import format_datetime, format_decimal, format_price
 from app.core.config import get_settings
+from app.core.observability import failure_metadata, log_event, log_failure
 from app.db.repositories import PostgresSymbolRepository
 from app.db.session import build_session_factory
 from app.domain.errors import (
@@ -22,6 +24,8 @@ from app.domain.streams import (
 from app.domain.symbols import SupportedSymbol
 from app.services.provider_selection import parse_provider_values, resolve_provider_selection
 from app.services.stream_manager import ClientRegistration, StreamManager, parse_stream_request
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["stream"])
 
@@ -42,10 +46,30 @@ async def resolve_stream_symbols(websocket: WebSocket) -> list[SupportedSymbol]:
     try:
         async with session_factory() as session:
             return await PostgresSymbolRepository(session).list_enabled()
-    except DatabaseUnavailableError:
+    except DatabaseUnavailableError as exc:
+        log_event(
+            logger,
+            logging.ERROR,
+            "websocket_database_unavailable",
+            operation="stream.resolve_symbols",
+            error_code="DATABASE_UNAVAILABLE",
+            failure_reason=exc.failure_reason,
+            retryable=exc.retryable,
+        )
         raise
     except Exception as exc:
-        raise DatabaseUnavailableError from exc
+        metadata = failure_metadata(exc)
+        log_failure(
+            logger,
+            "websocket_symbol_resolution_failed",
+            exc,
+            operation="stream.resolve_symbols",
+        )
+        raise DatabaseUnavailableError(
+            operation="stream.resolve_symbols",
+            failure_reason="DATABASE_QUERY_FAILED",
+            retryable=bool(metadata["retryable"]),
+        ) from exc
 
 
 @router.websocket("/stream")
@@ -64,12 +88,28 @@ async def stream_market_data(websocket: WebSocket) -> None:
             provider,
         )
     except StreamRequestError as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "websocket_request_rejected",
+            operation="stream.request",
+            error_code=exc.code,
+        )
         await websocket.close(code=1008, reason=exc.code)
         return
 
     try:
         registry = await resolve_stream_symbols(websocket)
-    except DatabaseUnavailableError:
+    except DatabaseUnavailableError as exc:
+        log_event(
+            logger,
+            logging.ERROR,
+            "websocket_database_unavailable",
+            operation="stream.request",
+            error_code="DATABASE_UNAVAILABLE",
+            failure_reason=exc.failure_reason,
+            retryable=exc.retryable,
+        )
         await websocket.close(code=1011, reason="DATABASE_UNAVAILABLE")
         return
     registry_by_symbol = {item.symbol: item for item in registry}
@@ -85,6 +125,13 @@ async def stream_market_data(websocket: WebSocket) -> None:
             )
             selected_symbols.append(selected)
     except ProviderSelectionError as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "websocket_provider_selection_rejected",
+            operation="stream.provider_selection",
+            error_code=exc.code,
+        )
         code = exc.code
         if code == "UNSUPPORTED_PROVIDER":
             await websocket.close(code=1008, reason=code)
@@ -98,7 +145,16 @@ async def stream_market_data(websocket: WebSocket) -> None:
             request,
             selected_symbols,
         )
-    except ProviderUnavailableError:
+    except ProviderUnavailableError as exc:
+        log_event(
+            logger,
+            logging.ERROR,
+            "websocket_provider_unavailable",
+            operation="stream.register",
+            error_code="PROVIDER_UNAVAILABLE",
+            failure_reason=exc.failure_reason,
+            retryable=exc.retryable,
+        )
         await websocket.close(code=1011, reason="PROVIDER_UNAVAILABLE")
         return
 

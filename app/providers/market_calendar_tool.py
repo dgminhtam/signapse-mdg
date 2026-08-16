@@ -10,6 +10,7 @@ from urllib.parse import urljoin, urlparse
 import aiohttp
 from bs4 import BeautifulSoup
 
+from app.core.observability import log_failure
 from app.domain.economic_calendar import (
     EconomicCalendarEnrichment,
     EconomicCalendarEnrichmentCandidate,
@@ -45,9 +46,21 @@ class MarketCalendarToolProvider:
             raise ValueError(f"Unsupported economic calendar type: {calendar_type}")
         try:
             result = await asyncio.to_thread(self._scrape, calendar_type, start, end)
+            return _normalize_events(calendar_type, result)
         except Exception as exc:
-            raise ProviderUnavailableError("Economic calendar provider is unavailable.") from exc
-        return _normalize_events(calendar_type, result)
+            log_failure(
+                logger,
+                "economic_calendar_provider_failed",
+                exc,
+                operation="economic_calendar.fetch_events",
+                provider="MARKET_CALENDAR",
+                **{"from": start, "to": end},
+            )
+            raise ProviderUnavailableError(
+                "Economic calendar provider is unavailable.",
+                operation="economic_calendar.fetch_events",
+                provider="MARKET_CALENDAR",
+            ) from exc
 
     async def fetch_event_details(
         self,
@@ -92,14 +105,14 @@ class MarketCalendarToolProvider:
                     response.raise_for_status()
                     payload = await response.json()
             return _normalize_detail(candidate, payload)
-        except Exception:
-            logger.warning(
+        except Exception as exc:
+            log_failure(
+                logger,
                 "economic_calendar_detail_failed",
-                extra={
-                    "calendar_type": candidate.calendar_type,
-                    "external_event_id": candidate.external_event_id,
-                },
-                exc_info=True,
+                exc,
+                level=logging.WARNING,
+                operation="economic_calendar.fetch_event_details",
+                provider="MARKET_CALENDAR",
             )
             return None
 

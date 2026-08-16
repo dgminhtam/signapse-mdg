@@ -166,6 +166,32 @@ Response:
 }
 ```
 
+`/health` is an upstream-independent liveness check. It does not require PostgreSQL or any market
+data provider.
+
+### Readiness
+
+```http
+GET /ready
+```
+
+Ready response:
+
+```json
+{
+  "status": "READY",
+  "time": "2026-06-19T10:30:00Z"
+}
+```
+
+When required database configuration is absent or the PostgreSQL connectivity probe fails, the
+endpoint returns `503` with the same shape and `status: "NOT_READY"`. It never calls a market-data
+provider and does not expose connection strings, credentials, or exception details.
+
+REST responses include an `X-Request-ID` header. A valid bounded inbound value is preserved; a
+missing or unsafe value is replaced with a generated UUID. The identifier is not added to response
+bodies.
+
 ### List supported symbols
 
 ```http
@@ -811,12 +837,21 @@ Minimum useful metrics/logs:
 
 Logs should include:
 
+- stable event name and severity
+- `request_id` for REST/WebSocket work or `job_id` for standalone cron/backfill work
 - provider
 - provider symbol
 - canonical symbol
 - timeframe
 - request range when relevant
-- error code
+- public error code when relevant
+- internal `failure_reason`, `retryable`, exception type, upstream status/code, and latency when available
+
+Logs are JSON records written to stdout through the standard-library logging system. `LOG_LEVEL`
+defaults to `INFO`. Raw provider payloads, DataFrames, API keys, DSNs, and unrestricted exception
+messages are not part of the diagnostic field contract. High-volume queue-drop and rejected-event
+warnings are limited to one event key per 60 seconds and report `suppressed_count` on the next
+emitted warning.
 
 ## Security Boundary
 

@@ -774,8 +774,11 @@ def test_http_client_classifies_key_related_errors(payload: object) -> None:
         FakeHttpSession(FakeHttpResponse(payload, ok=False)),
     )
 
-    with pytest.raises(TwelveDataKeyUnavailableError):
+    with pytest.raises(TwelveDataKeyUnavailableError) as error_info:
         client.get("/time_series")
+
+    if isinstance(payload, dict) and payload.get("code") == 429:
+        assert error_info.value.status_code == 429
 
 
 def test_http_client_keeps_other_errors_unavailable() -> None:

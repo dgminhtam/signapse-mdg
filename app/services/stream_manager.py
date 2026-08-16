@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from app.cache.candle_cache import CandleCache
 from app.cache.quote_cache import QuoteCache
+from app.core.observability import log_event, log_failure, log_rate_limited_warning
 from app.domain.candles import CandleRepository
 from app.domain.errors import ProviderUnavailableError, StreamRequestError
 from app.domain.market_sessions import get_market_session_policy
@@ -131,7 +132,13 @@ class StreamManager:
         symbols: list[SupportedSymbol],
     ) -> ClientRegistration:
         if self._stopping:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="REQUEST_FAILED",
+                retryable=True,
+                operation="stream.register",
+            )
+            log_failure(logger, "stream_register_unavailable", error)
+            raise error
         await self.start()
         symbols_by_name = {symbol.symbol: symbol for symbol in symbols}
         interests: list[StreamInterest] = []
@@ -180,9 +187,13 @@ class StreamManager:
                 raise
         self._enqueue_status(registration, "CONNECTING")
         self._update_market_session_states(self._clock())
-        logger.info(
+        log_event(
+            logger,
+            logging.INFO,
             "stream_client_registered",
-            extra={"client_id": registration.id, "symbols": request.symbols},
+            operation="stream.register",
+            client_id=registration.id,
+            symbols=request.symbols,
         )
         return registration
 
@@ -202,7 +213,13 @@ class StreamManager:
                         self._cleanup_interest(interest),
                         name=f"stream-idle-cleanup-{client_id}",
                     )
-        logger.info("stream_client_unregistered", extra={"client_id": client_id})
+        log_event(
+            logger,
+            logging.INFO,
+            "stream_client_unregistered",
+            operation="stream.unregister",
+            client_id=client_id,
+        )
 
     async def stop(self) -> None:
         if self._stopping:
@@ -239,7 +256,16 @@ class StreamManager:
             return
         timeframe = get_timeframe(interest.timeframe)
         if timeframe is None:
-            raise ProviderUnavailableError
+            error = ProviderUnavailableError(
+                failure_reason="PROVIDER_NOT_CONFIGURED",
+                operation="stream.subscribe_candle",
+                provider=interest.provider,
+                provider_symbol=interest.provider_symbol,
+                symbol=interest.symbol,
+                timeframe=interest.timeframe,
+            )
+            log_failure(logger, "stream_timeframe_not_configured", error)
+            raise error
         await self._provider.subscribe_candle(
             symbol,
             interest.timeframe,
@@ -297,9 +323,13 @@ class StreamManager:
             try:
                 self._persistence_queue.put_nowait(event)
             except asyncio.QueueFull:
-                logger.error(
+                log_rate_limited_warning(
+                    logger,
                     "stream_candle_persistence_queue_full",
-                    extra={"symbol": event.candle.symbol},
+                    key=f"persistence:{event.candle.symbol}:{event.candle.timeframe}",
+                    provider=event.candle.provider,
+                    symbol=event.candle.symbol,
+                    timeframe=event.candle.timeframe,
                 )
         else:
             await self._candle_cache.put(event.candle)
@@ -441,10 +471,16 @@ class StreamManager:
             try:
                 if self._candle_repository is not None:
                     await self._candle_repository.upsert_complete([event.candle])
-            except Exception:
-                logger.error(
+            except Exception as exc:
+                log_failure(
+                    logger,
                     "stream_candle_persistence_failed",
-                    extra={"symbol": event.candle.symbol},
+                    exc,
+                    operation="stream.persist_candle",
+                    provider=event.candle.provider,
+                    provider_symbol=event.candle.provider_symbol,
+                    symbol=event.candle.symbol,
+                    timeframe=event.candle.timeframe,
                 )
             finally:
                 self._persistence_queue.task_done()
@@ -492,9 +528,11 @@ class StreamManager:
             registration.close_code = 1013
             registration.close_reason = "CLIENT_TOO_SLOW"
             registration.closed.set()
-            logger.warning(
+            log_rate_limited_warning(
+                logger,
                 "stream_client_queue_full",
-                extra={"client_id": registration.id},
+                key=f"client:{registration.id}:queue_full",
+                client_id=registration.id,
             )
 
 

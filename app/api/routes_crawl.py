@@ -1,12 +1,15 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from app.core.config import Settings, get_settings
+from app.core.observability import log_event
 from app.providers.crawl4ai_markdown import Crawl4AIError, Crawl4AIMarkdownProvider
 
 router = APIRouter(tags=["crawl"])
+logger = logging.getLogger(__name__)
 
 
 class CrawlRequest(BaseModel):
@@ -43,6 +46,13 @@ async def crawl(
     try:
         results = await provider.crawl_fit_markdown([str(url) for url in request.urls])
     except Crawl4AIError:
+        log_event(
+            logger,
+            logging.ERROR,
+            "crawl_request_failed",
+            operation="crawl.fit_markdown",
+            count=len(request.urls),
+        )
         raise HTTPException(status_code=502, detail="Crawl failed.") from None
     return CrawlResponse(
         results=[

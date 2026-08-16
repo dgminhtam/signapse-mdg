@@ -135,6 +135,7 @@ async def test_provider_bridges_valid_price_payload_to_quote_and_candle_events()
         lambda _: client,
         queue_capacity=10,
         heartbeat_seconds=60,
+        clock=lambda: START,
     )
     await provider.subscribe_quote(EUR)
     await provider.subscribe_candle(EUR, "1m", "1m")
