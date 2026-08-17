@@ -773,7 +773,7 @@ Recommended stack:
 | DTO validation | Pydantic 2.13.4 | Typed models, JSON serialization, validation. |
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation; synchronous REST calls are offloaded from the event loop. |
-| yfinance provider dependency | yfinance 1.4.1 | Open-source Yahoo Finance wrapper used for latest quotes, historical candles, and asynchronous price streaming on planned commodities and indexes. |
+| yfinance provider dependency | yfinance 1.6.0 | Open-source Yahoo Finance wrapper used for latest quotes, historical candles, and asynchronous price streaming on planned commodities and indexes. |
 | Economic calendar dependency | market-calendar-tool 0.2.2 | Scrapes ForexFactory, MetalsMine, EnergyExch, and CryptoCraft calendar rows for persistence. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration testing only. |
 | Database | PostgreSQL 18.4 | Reuse relational persistence for candle cache. |

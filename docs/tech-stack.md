@@ -15,7 +15,7 @@ This document records the recommended technology stack for the crypto MVP descri
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation and generated models/errors. |
 | Twelve Data provider SDK | twelvedata 1.4.0 | Official SDK foundation for multi-asset REST, time series, and price streaming. |
-| yfinance provider dependency | yfinance 1.4.1 | Open-source Yahoo Finance wrapper for latest planned-asset quotes, historical candles, and asynchronous price streaming. |
+| yfinance provider dependency | yfinance 1.6.0 | Open-source Yahoo Finance wrapper for latest planned-asset quotes, historical candles, and asynchronous price streaming. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration tests; not used for production Binance transport. |
 | Database | PostgreSQL 18.4 | Reliable relational store for candle cache and future asset metadata. |
 | DB driver | asyncpg 0.31.0 | PostgreSQL driver designed for Python asyncio. |
@@ -49,7 +49,7 @@ These versions are locked as the project baseline from 2026-06-19. Use latest st
 | pydantic-settings | `2.14.1` |
 | binance-sdk-spot | `9.2.0` |
 | twelvedata | `1.4.0` |
-| yfinance | `1.4.1` |
+| yfinance | `1.6.0` |
 | Crawl4AI | `0.9.1` |
 | HTTPX (dev) | `0.28.1` |
 | asyncpg | `0.31.0` |
@@ -620,7 +620,7 @@ pydantic==2.13.4
 pydantic-settings==2.14.1
 binance-sdk-spot==9.2.0
 twelvedata==1.4.0
-yfinance==1.4.1
+yfinance==1.6.0
 crawl4ai==0.9.1
 sqlalchemy[asyncio]==2.0.51
 asyncpg==0.31.0
