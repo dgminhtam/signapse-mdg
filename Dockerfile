@@ -10,8 +10,7 @@ WORKDIR /app
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 COPY pyproject.toml uv.lock ./
-RUN uv sync --locked --no-dev \
-    && .venv/bin/python -m playwright install --with-deps chromium
+RUN uv sync --locked --no-dev
 
 COPY alembic ./alembic
 COPY app ./app

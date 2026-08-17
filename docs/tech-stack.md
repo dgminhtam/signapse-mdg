@@ -50,7 +50,6 @@ These versions are locked as the project baseline from 2026-06-19. Use latest st
 | binance-sdk-spot | `9.2.0` |
 | twelvedata | `1.4.0` |
 | yfinance | `1.6.0` |
-| Crawl4AI | `0.9.1` |
 | HTTPX (dev) | `0.28.1` |
 | asyncpg | `0.31.0` |
 | SQLAlchemy | `2.0.51` |
@@ -526,20 +525,6 @@ uv run ruff format .
 uv run mypy app
 ```
 
-### Crawl4AI Runtime
-
-Crawl4AI is a locked gateway runtime dependency:
-
-```text
-uv sync
-uv run python -m playwright install chromium
-uv run crawl4ai-doctor
-```
-
-The gateway always registers `/crawl`. The dev gateway image includes Crawl4AI and Playwright
-Chromium; local development must provision Chromium once. FastAPI does not initialize a browser
-during startup.
-
 ### Ruff
 
 Use Ruff for linting and formatting.
@@ -624,7 +609,6 @@ pydantic-settings==2.14.1
 binance-sdk-spot==9.2.0
 twelvedata==1.4.0
 yfinance==1.6.0
-crawl4ai==0.9.1
 sqlalchemy[asyncio]==2.0.51
 asyncpg==0.31.0
 alembic==1.18.4
@@ -659,7 +643,6 @@ mypy==2.1.0
 - PostgreSQL + SQLAlchemy async + Alembic for candle cache.
 - Process-local cache for MVP.
 - uv + Ruff + mypy + pytest for developer workflow.
-- Crawl4AI 0.9.1 as a required runtime packaged with Playwright Chromium in the dev gateway image.
 - Docker Compose deployment on the existing server.
 
 ### Deferred

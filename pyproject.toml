@@ -7,7 +7,6 @@ dependencies = [
     "alembic==1.18.4",
     "asyncpg==0.31.0",
     "binance-sdk-spot==9.2.0",
-    "crawl4ai==0.9.1",
     "fastapi[standard-no-fastapi-cloud-cli]==0.137.2",
     "market-calendar-tool==0.2.2",
     "pandas-market-calendars==5.4.0",
