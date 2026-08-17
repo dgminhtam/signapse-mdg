@@ -51,3 +51,11 @@ _Avoid_: Public error code, raw provider message
 **Diagnostic Event**:
 A structured JSON log record with a stable event name and safe contextual fields used to investigate runtime behavior. It may contain provider and request/job context but never raw provider payloads, credentials, DSNs, or unrestricted exception text.
 _Avoid_: API response, audit record
+
+**Quote Stream**:
+A real-time subscription that delivers normalized price observations for canonical assets. It represents live quote updates and does not itself define an OHLC aggregation interval.
+_Avoid_: Candle stream, timeframe stream
+
+**Candle Snapshot**:
+The OHLC state returned for a canonical asset and requested timeframe at one point in time. A snapshot may represent either a forming candle or a completed candle.
+_Avoid_: Live price, quote tick

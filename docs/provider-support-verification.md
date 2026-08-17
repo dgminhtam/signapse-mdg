@@ -64,14 +64,14 @@ switches provider or synthesizes a candle. The response reports the selected can
 ## Provider Override release gate
 
 Every configured mapping must pass latest quote, every public candle timeframe, historical-price
-resolution, and WebSocket quote/candle delivery before it is exposed by `providerMappings`. A
+resolution, and quote-only WebSocket delivery before it is exposed by `providerMappings`. A
 mapping that fails verification must be fixed or removed, not hidden behind a route-specific
 allowlist. Transient upstream failure is `PROVIDER_UNAVAILABLE`, not `UNSUPPORTED_PROVIDER`.
 
 The automated release-gate matrix is
 `tests/integration/test_provider_mapping_surface.py`. It loads the PostgreSQL registry, covers
 all 24 enabled assets and 29 configured mappings, exercises all 9 REST candle timeframes,
-historical-price resolution, and both stream channels with fake upstream adapters. The matrix
+historical-price resolution, and the quote-only stream with fake upstream adapters. The matrix
 passed in the local validation run; it verifies routing, identity isolation, and response seams
 without requiring live credentials. Live upstream smoke remains an operational release step for
 the five inactive YFINANCE alternatives below.

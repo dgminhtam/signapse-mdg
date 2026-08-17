@@ -103,8 +103,14 @@ def get_candle_repository(
 
 
 @lru_cache
-def get_candle_cache() -> CandleCache:
-    return CandleCache()
+def _build_candle_cache(ttl_seconds: float) -> CandleCache:
+    return CandleCache(ttl_seconds=ttl_seconds)
+
+
+def get_candle_cache(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> CandleCache:
+    return _build_candle_cache(settings.candle_forming_cache_ttl_seconds)
 
 
 def get_candle_service(

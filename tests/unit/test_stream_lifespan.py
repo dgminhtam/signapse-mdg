@@ -17,15 +17,6 @@ class LifespanProvider:
         del symbol
         self.subscribe_calls += 1
 
-    async def subscribe_candle(
-        self,
-        symbol: object,
-        timeframe: str,
-        provider_interval: str,
-    ) -> None:
-        del symbol, timeframe, provider_interval
-        self.subscribe_calls += 1
-
     async def unsubscribe(self, interest: object) -> None:
         del interest
 

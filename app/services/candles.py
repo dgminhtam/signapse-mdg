@@ -189,6 +189,22 @@ class CandleService:
                 UNSUPPORTED_TIMEFRAME_MESSAGE,
                 {"timeframe": request.timeframe},
             )
+        if self._cache is None:
+            return await self._get_candles(request, symbol, timeframe)
+        async with self._cache.single_flight(
+            request.symbol,
+            request.timeframe,
+            symbol.provider,
+            symbol.provider_symbol,
+        ):
+            return await self._get_candles(request, symbol, timeframe)
+
+    async def _get_candles(
+        self,
+        request: CandleRequest,
+        symbol: SupportedSymbol,
+        timeframe: Timeframe,
+    ) -> CandleResult:
         policy = get_market_session_policy(symbol)
         schedule = get_candle_schedule(symbol, timeframe)
         if request.limit is None:
@@ -231,51 +247,144 @@ class CandleService:
             for candle in persisted
             if policy.is_eligible(candle.open_time, request.timeframe)
         ]
-        gaps = _find_gaps(
-            persisted,
-            expected_opens,
-            schedule,
-        )
-        fetched: list[Candle] = []
-        for gap in gaps:
-            fetched.extend(
-                await self._provider.fetch_candles(
-                    symbol=symbol,
-                    timeframe=request.timeframe,
-                    provider_interval=timeframe.provider_interval,
-                    start=gap.start,
-                    end=gap.end,
-                    limit=gap.expected_count + 1,
-                )
-            )
         now = self._clock()
-        normalized = [
-            replace(candle, complete=candle.close_time < now)
-            for candle in fetched
-            if policy.is_eligible(candle.open_time, request.timeframe)
-        ]
-        await self._repository.upsert_complete([candle for candle in normalized if candle.complete])
-        merged = {candle.open_time: candle for candle in normalized}
-        merged.update({candle.open_time: candle for candle in persisted})
-        if self._cache is not None:
-            current = await self._cache.get(
+
+        async def fetch_normalized(
+            sections: tuple[ProviderFetchSection, ...],
+        ) -> list[Candle]:
+            fetched: list[Candle] = []
+            for section in sections:
+                fetched.extend(
+                    await self._provider.fetch_candles(
+                        symbol=symbol,
+                        timeframe=request.timeframe,
+                        provider_interval=timeframe.provider_interval,
+                        start=section.start,
+                        end=section.end,
+                        limit=section.expected_count + 1,
+                    )
+                )
+            return [
+                replace(candle, complete=candle.close_time <= now)
+                for candle in fetched
+                if policy.is_eligible(candle.open_time, request.timeframe)
+            ]
+
+        async def store_normalized(candles: list[Candle]) -> None:
+            await self._repository.upsert_complete(
+                [candle for candle in candles if candle.complete]
+            )
+            if self._cache is not None:
+                for candle in candles:
+                    if not candle.complete:
+                        await self._cache.put(candle, stored_at=now)
+
+        current = (
+            await self._cache.get(
                 request.symbol,
                 request.timeframe,
                 symbol.provider,
                 symbol.provider_symbol,
+                now=now,
             )
-            if (
-                current is not None
-                and result_start <= current.open_time < result_end
-                and policy.is_eligible(current.open_time, request.timeframe)
-            ):
-                merged.setdefault(current.open_time, current)
+            if self._cache is not None
+            else None
+        )
+        cached_opens = (
+            {current.open_time}
+            if current is not None
+            and current.open_time in expected_opens
+            and policy.is_eligible(current.open_time, request.timeframe)
+            else set()
+        )
+        gaps = _find_gaps(
+            persisted,
+            expected_opens,
+            schedule,
+            available_opens=cached_opens,
+        )
+        normalized = await fetch_normalized(gaps)
+        await store_normalized(normalized)
+        merged = {candle.open_time: candle for candle in normalized}
+        merged.update({candle.open_time: candle for candle in persisted})
+        if (
+            current is not None
+            and result_start <= current.open_time < result_end
+            and policy.is_eligible(current.open_time, request.timeframe)
+        ):
+            merged.setdefault(current.open_time, current)
+
+        response_opens = set(expected_opens)
+        if (
+            request.limit == 1
+            and request.count_direction != "forward"
+            and expected_opens
+            and expected_opens[-1] not in merged
+        ):
+            fallback_opens = schedule.latest_opens(
+                expected_opens[0],
+                1,
+                policy,
+                request.timeframe,
+            )
+            if fallback_opens:
+                fallback_open = fallback_opens[-1]
+                fallback_end = schedule.end_after(fallback_open)
+                fallback_persisted = await self._repository.list_complete(
+                    symbol,
+                    request.timeframe,
+                    fallback_open,
+                    fallback_end,
+                )
+                fallback_persisted = [
+                    candle
+                    for candle in fallback_persisted
+                    if policy.is_eligible(candle.open_time, request.timeframe)
+                ]
+                fallback_cached_opens = (
+                    {fallback_open}
+                    if current is not None
+                    and current.open_time == fallback_open
+                    and policy.is_eligible(current.open_time, request.timeframe)
+                    else set()
+                )
+                fallback_gaps = _find_gaps(
+                    fallback_persisted,
+                    fallback_opens,
+                    schedule,
+                    available_opens=fallback_cached_opens,
+                )
+                fallback_normalized = await fetch_normalized(fallback_gaps)
+                await store_normalized(fallback_normalized)
+                fallback_merged = {
+                    candle.open_time: candle for candle in fallback_normalized
+                }
+                fallback_merged.update(
+                    {candle.open_time: candle for candle in fallback_persisted}
+                )
+                if (
+                    current is not None
+                    and current.open_time == fallback_open
+                    and policy.is_eligible(current.open_time, request.timeframe)
+                ):
+                    fallback_merged.setdefault(current.open_time, current)
+                merged.update(fallback_merged)
+                if fallback_open in merged:
+                    response_opens = {fallback_open}
+
         return CandleResult(
             symbol=request.symbol,
             timeframe=request.timeframe,
             start=result_start,
             end=result_end,
-            candles=sorted(merged.values(), key=lambda candle: candle.open_time),
+            candles=sorted(
+                (
+                    candle
+                    for open_time, candle in merged.items()
+                    if open_time in response_opens
+                ),
+                key=lambda candle: candle.open_time,
+            ),
             price_display_decimals=symbol.price_display_decimals,
         )
 
@@ -284,12 +393,16 @@ def _find_gaps(
     persisted: list[Candle],
     expected_opens: tuple[datetime, ...],
     schedule: CandleSchedule,
+    *,
+    available_opens: set[datetime] | None = None,
 ) -> tuple[ProviderFetchSection, ...]:
     available = {
         candle.open_time
         for candle in persisted
         if candle.complete and candle.open_time in expected_opens
     }
+    if available_opens is not None:
+        available.update(available_opens.intersection(expected_opens))
     return schedule.missing_sections(expected_opens, available)
 
 

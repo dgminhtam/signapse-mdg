@@ -3,17 +3,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol
 
-from app.domain.candles import Candle
 from app.domain.quotes import Quote
 from app.domain.symbols import SupportedSymbol
 
-StreamChannel = Literal["quote", "candle"]
+StreamChannel = Literal["quote"]
 StreamState = Literal[
     "CONNECTING",
     "SUBSCRIBED",
     "STALE",
     "RECONNECTING",
-    "MARKET_CLOSED",
     "ERROR",
 ]
 
@@ -39,30 +37,7 @@ class QuoteInterest:
         )
 
 
-@dataclass(frozen=True, slots=True, eq=False)
-class CandleInterest:
-    symbol: str
-    timeframe: str
-    provider: str | None = None
-    provider_symbol: str | None = None
-    channel: Literal["candle"] = "candle"
-
-    def __hash__(self) -> int:
-        return hash((self.symbol, self.timeframe, self.channel))
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, CandleInterest):
-            return NotImplemented
-        return (
-            self.symbol == other.symbol
-            and self.timeframe == other.timeframe
-            and self.channel == other.channel
-            and _optional_equal(self.provider, other.provider)
-            and _optional_equal(self.provider_symbol, other.provider_symbol)
-        )
-
-
-type StreamInterest = QuoteInterest | CandleInterest
+type StreamInterest = QuoteInterest
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,30 +54,15 @@ class StreamQuote:
 
 
 @dataclass(frozen=True, slots=True)
-class StreamCandle:
-    candle: Candle
-    received_at: datetime
-
-    @property
-    def interest(self) -> CandleInterest:
-        return CandleInterest(
-            self.candle.symbol,
-            self.candle.timeframe,
-            self.candle.provider,
-            self.candle.provider_symbol,
-        )
-
-
-@dataclass(frozen=True, slots=True)
 class ProviderSignal:
-    state: Literal["RECONNECTING", "MARKET_CLOSED", "CONNECTING", "ERROR"]
+    state: Literal["RECONNECTING", "ERROR"]
     interests: tuple[StreamInterest, ...]
     observed_at: datetime
     code: str = "PROVIDER_UNAVAILABLE"
     message: str = "The market data provider is temporarily unavailable."
 
 
-type ProviderStreamEvent = StreamQuote | StreamCandle | ProviderSignal
+type ProviderStreamEvent = StreamQuote | ProviderSignal
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,13 +75,12 @@ class StatusEvent:
     message: str | None = None
 
 
-type DownstreamEvent = StreamQuote | StreamCandle | StatusEvent
+type DownstreamEvent = StreamQuote | StatusEvent
 
 
 @dataclass(frozen=True, slots=True)
 class StreamRequest:
     symbols: tuple[str, ...]
-    timeframe: str
     provider: str | None = None
 
 
@@ -129,13 +88,6 @@ class MarketStreamProvider(Protocol):
     events: asyncio.Queue[ProviderStreamEvent]
 
     async def subscribe_quote(self, symbol: SupportedSymbol) -> None: ...
-
-    async def subscribe_candle(
-        self,
-        symbol: SupportedSymbol,
-        timeframe: str,
-        provider_interval: str,
-    ) -> None: ...
 
     async def unsubscribe(self, interest: StreamInterest) -> None: ...
 

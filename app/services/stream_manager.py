@@ -2,29 +2,23 @@ import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import uuid4
 
-from app.cache.candle_cache import CandleCache
 from app.cache.quote_cache import QuoteCache
 from app.core.observability import log_event, log_failure, log_rate_limited_warning
-from app.domain.candles import CandleRepository
 from app.domain.errors import ProviderUnavailableError, StreamRequestError
-from app.domain.market_sessions import get_market_session_policy
 from app.domain.streams import (
-    CandleInterest,
     DownstreamEvent,
     MarketStreamProvider,
     ProviderSignal,
     QuoteInterest,
     StatusEvent,
-    StreamCandle,
     StreamInterest,
     StreamQuote,
     StreamRequest,
 )
 from app.domain.symbols import SupportedSymbol
-from app.domain.timeframes import EPOCH, get_timeframe
 from app.services.quotes import parse_symbols
 
 logger = logging.getLogger(__name__)
@@ -36,20 +30,18 @@ def parse_stream_request(
     max_symbols: int,
     provider: str | None = None,
 ) -> StreamRequest:
+    if raw_timeframe is not None:
+        raise StreamRequestError(
+            "TIMEFRAME_NOT_ALLOWED",
+            "The timeframe query parameter is not allowed on the quote stream.",
+        )
     try:
         symbols = parse_symbols(raw_symbols, max_symbols)
     except Exception as exc:
         code = getattr(exc, "code", "INVALID_SYMBOLS")
         message = getattr(exc, "message", "The symbols query parameter is invalid.")
         raise StreamRequestError(code, message) from exc
-    timeframe = (raw_timeframe or "").strip()
-    timeframe_model = get_timeframe(timeframe)
-    if timeframe_model is None or not _is_stream_timeframe(timeframe_model.value):
-        raise StreamRequestError(
-            "UNSUPPORTED_TIMEFRAME",
-            "Timeframe is not supported by this gateway.",
-        )
-    return StreamRequest(tuple(symbols), timeframe, provider)
+    return StreamRequest(tuple(symbols), provider)
 
 
 @dataclass(slots=True)
@@ -63,6 +55,7 @@ class ClientRegistration:
     close_code: int = 1000
     close_reason: str = ""
     state: str = "CONNECTING"
+    last_event_at: datetime | None = None
 
 
 @dataclass(slots=True)
@@ -71,7 +64,6 @@ class InterestState:
     subscribers: set[str] = field(default_factory=set)
     last_event_at: datetime | None = None
     cleanup_task: asyncio.Task[None] | None = None
-    market_closed: bool = False
 
 
 class StreamManager:
@@ -80,10 +72,7 @@ class StreamManager:
         *,
         provider: MarketStreamProvider,
         quote_cache: QuoteCache,
-        candle_cache: CandleCache,
-        candle_repository: CandleRepository | None,
         client_queue_capacity: int,
-        persistence_queue_capacity: int,
         idle_grace_seconds: float,
         stale_after_seconds: float,
         freshness_check_seconds: float,
@@ -91,8 +80,6 @@ class StreamManager:
     ) -> None:
         self._provider = provider
         self._quote_cache = quote_cache
-        self._candle_cache = candle_cache
-        self._candle_repository = candle_repository
         self._client_queue_capacity = client_queue_capacity
         self._idle_grace_seconds = idle_grace_seconds
         self._stale_after_seconds = stale_after_seconds
@@ -100,9 +87,6 @@ class StreamManager:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._clients: dict[str, ClientRegistration] = {}
         self._interests: dict[StreamInterest, InterestState] = {}
-        self._persistence_queue: asyncio.Queue[StreamCandle] = asyncio.Queue(
-            persistence_queue_capacity
-        )
         self._tasks: list[asyncio.Task[None]] = []
         self._lock = asyncio.Lock()
         self._started = False
@@ -122,7 +106,6 @@ class StreamManager:
         self._started = True
         self._tasks = [
             asyncio.create_task(self._consume_provider(), name="stream-provider-consumer"),
-            asyncio.create_task(self._persist_candles(), name="stream-candle-persistence"),
             asyncio.create_task(self._monitor_freshness(), name="stream-freshness-monitor"),
         ]
 
@@ -141,24 +124,18 @@ class StreamManager:
             raise error
         await self.start()
         symbols_by_name = {symbol.symbol: symbol for symbol in symbols}
-        interests: list[StreamInterest] = []
-        for name in request.symbols:
-            symbol = symbols_by_name[name]
-            interests.extend(
-                (
-                    QuoteInterest(name, symbol.provider, symbol.provider_symbol),
-                    CandleInterest(
-                        name,
-                        request.timeframe,
-                        symbol.provider,
-                        symbol.provider_symbol,
-                    ),
-                )
+        interests = tuple(
+            QuoteInterest(
+                name,
+                symbols_by_name[name].provider,
+                symbols_by_name[name].provider_symbol,
             )
+            for name in request.symbols
+        )
         registration = ClientRegistration(
             id=uuid4().hex,
             request=request,
-            interests=tuple(interests),
+            interests=interests,
             price_display_decimals={
                 name: symbols_by_name[name].price_display_decimals for name in request.symbols
             },
@@ -173,7 +150,7 @@ class StreamManager:
                     if state is None:
                         state = InterestState(symbol)
                         self._interests[interest] = state
-                        await self._open_interest(interest, symbol)
+                        await self._open_interest(symbol)
                         opened.append(interest)
                     if state.cleanup_task is not None:
                         state.cleanup_task.cancel()
@@ -186,7 +163,6 @@ class StreamManager:
                     await self._provider.unsubscribe(interest)
                 raise
         self._enqueue_status(registration, "CONNECTING")
-        self._update_market_session_states(self._clock())
         log_event(
             logger,
             logging.INFO,
@@ -246,31 +222,8 @@ class StreamManager:
         self._tasks.clear()
         await self._provider.close()
 
-    async def _open_interest(
-        self,
-        interest: StreamInterest,
-        symbol: SupportedSymbol,
-    ) -> None:
-        if isinstance(interest, QuoteInterest):
-            await self._provider.subscribe_quote(symbol)
-            return
-        timeframe = get_timeframe(interest.timeframe)
-        if timeframe is None:
-            error = ProviderUnavailableError(
-                failure_reason="PROVIDER_NOT_CONFIGURED",
-                operation="stream.subscribe_candle",
-                provider=interest.provider,
-                provider_symbol=interest.provider_symbol,
-                symbol=interest.symbol,
-                timeframe=interest.timeframe,
-            )
-            log_failure(logger, "stream_timeframe_not_configured", error)
-            raise error
-        await self._provider.subscribe_candle(
-            symbol,
-            interest.timeframe,
-            timeframe.provider_interval,
-        )
+    async def _open_interest(self, symbol: SupportedSymbol) -> None:
+        await self._provider.subscribe_quote(symbol)
 
     async def _cleanup_interest(self, interest: StreamInterest) -> None:
         try:
@@ -293,8 +246,6 @@ class StreamManager:
             try:
                 if isinstance(event, StreamQuote):
                     await self._handle_quote(event)
-                elif isinstance(event, StreamCandle):
-                    await self._handle_candle(event)
                 elif isinstance(event, ProviderSignal):
                     await self._handle_signal(event)
             finally:
@@ -302,37 +253,6 @@ class StreamManager:
 
     async def _handle_quote(self, event: StreamQuote) -> None:
         await self._quote_cache.put_many([event.quote])
-        await self._mark_fresh_and_fanout(event.interest, event)
-
-    async def _handle_candle(self, event: StreamCandle) -> None:
-        state = self._interests.get(event.interest)
-        symbol = state.symbol if state is not None else None
-        if symbol is not None and not get_market_session_policy(symbol).is_eligible(
-            event.candle.open_time,
-            event.candle.timeframe,
-        ):
-            return
-        if event.candle.complete:
-            await self._candle_cache.remove(
-                event.candle.symbol,
-                event.candle.timeframe,
-                open_time=event.candle.open_time,
-                provider=event.candle.provider,
-                provider_symbol=event.candle.provider_symbol,
-            )
-            try:
-                self._persistence_queue.put_nowait(event)
-            except asyncio.QueueFull:
-                log_rate_limited_warning(
-                    logger,
-                    "stream_candle_persistence_queue_full",
-                    key=f"persistence:{event.candle.symbol}:{event.candle.timeframe}",
-                    provider=event.candle.provider,
-                    symbol=event.candle.symbol,
-                    timeframe=event.candle.timeframe,
-                )
-        else:
-            await self._candle_cache.put(event.candle)
         await self._mark_fresh_and_fanout(event.interest, event)
 
     async def _mark_fresh_and_fanout(
@@ -345,15 +265,18 @@ class StreamManager:
             state = self._interests.get(interest)
             if state is None:
                 return
-            state.market_closed = False
             state.last_event_at = now
             client_ids = tuple(state.subscribers)
             registrations = [
                 self._clients[client_id] for client_id in client_ids if client_id in self._clients
             ]
+            for registration in registrations:
+                registration.last_event_at = now
         for registration in registrations:
             self._enqueue(registration, event)
-            self._update_registration_state(registration, now)
+            if registration.state != "SUBSCRIBED":
+                registration.state = "SUBSCRIBED"
+                self._enqueue_status(registration, "SUBSCRIBED")
 
     async def _handle_signal(self, signal: ProviderSignal) -> None:
         async with self._lock:
@@ -368,52 +291,28 @@ class StreamManager:
             ]
         for registration in registrations:
             if signal.state == "RECONNECTING":
+                registration.state = "RECONNECTING"
                 self._enqueue_status(registration, "RECONNECTING", affected=list(signal.interests))
-            elif signal.state in {"MARKET_CLOSED", "CONNECTING"}:
-                self._apply_signal_session_state(signal)
-                self._enqueue_status(
-                    registration,
-                    signal.state,
-                    affected=list(signal.interests),
-                )
-            else:
-                self._enqueue_status(
-                    registration,
-                    "ERROR",
-                    affected=list(signal.interests),
-                    code=signal.code,
-                    message=signal.message,
-                )
-                registration.close_code = 1011
-                registration.close_reason = signal.code
-                registration.closed.set()
+                continue
+            registration.state = "ERROR"
+            self._enqueue_status(
+                registration,
+                "ERROR",
+                affected=list(signal.interests),
+                code=signal.code,
+                message=signal.message,
+            )
+            registration.close_code = 1011
+            registration.close_reason = signal.code
+            registration.closed.set()
 
-    def _update_registration_state(
-        self,
-        registration: ClientRegistration,
-        now: datetime,
-    ) -> None:
-        states = [self._interests.get(interest) for interest in registration.interests]
-        required = [
-            (interest, state)
-            for interest, state in zip(registration.interests, states, strict=True)
-            if state is not None and not state.market_closed
-        ]
-        if not required:
+    def _update_registration_state(self, registration: ClientRegistration, now: datetime) -> None:
+        if registration.last_event_at is None:
             return
-        if any(state is None or state.last_event_at is None for _, state in required):
-            return
-        stale = [
-            interest
-            for interest, state in required
-            if state is not None
-            and state.last_event_at is not None
-            and (now - state.last_event_at).total_seconds() > self._stale_after_seconds
-        ]
-        target = "STALE" if stale else "SUBSCRIBED"
-        if registration.state != target:
-            registration.state = target
-            self._enqueue_status(registration, target, affected=stale or None)
+        age = (now - registration.last_event_at).total_seconds()
+        if age > self._stale_after_seconds and registration.state != "STALE":
+            registration.state = "STALE"
+            self._enqueue_status(registration, "STALE")
 
     async def _monitor_freshness(self) -> None:
         while True:
@@ -421,69 +320,8 @@ class StreamManager:
             now = self._clock()
             async with self._lock:
                 registrations = list(self._clients.values())
-            self._update_market_session_states(now)
             for registration in registrations:
                 self._update_registration_state(registration, now)
-
-    def _apply_signal_session_state(self, signal: ProviderSignal) -> None:
-        for interest in signal.interests:
-            state = self._interests.get(interest)
-            if state is None or not isinstance(interest, CandleInterest):
-                continue
-            if signal.state == "MARKET_CLOSED":
-                state.market_closed = True
-            elif signal.state == "CONNECTING":
-                state.market_closed = False
-                state.last_event_at = None
-
-    def _update_market_session_states(self, now: datetime) -> None:
-        for interest, state in list(self._interests.items()):
-            if not isinstance(interest, CandleInterest):
-                continue
-            timeframe = get_timeframe(interest.timeframe)
-            if timeframe is None:
-                continue
-            bucket_open = _bucket_open(now, timeframe.duration)
-            eligible = get_market_session_policy(state.symbol).is_eligible(
-                bucket_open,
-                interest.timeframe,
-            )
-            if eligible and state.market_closed:
-                state.market_closed = False
-                state.last_event_at = None
-                self._emit_interest_status(interest, "CONNECTING")
-            elif not eligible and not state.market_closed:
-                state.market_closed = True
-                self._emit_interest_status(interest, "MARKET_CLOSED")
-
-    def _emit_interest_status(self, interest: StreamInterest, state: str) -> None:
-        interest_state = self._interests.get(interest)
-        if interest_state is None:
-            return
-        for client_id in tuple(interest_state.subscribers):
-            registration = self._clients.get(client_id)
-            if registration is not None:
-                self._enqueue_status(registration, state, affected=[interest])
-
-    async def _persist_candles(self) -> None:
-        while True:
-            event = await self._persistence_queue.get()
-            try:
-                if self._candle_repository is not None:
-                    await self._candle_repository.upsert_complete([event.candle])
-            except Exception as exc:
-                log_failure(
-                    logger,
-                    "stream_candle_persistence_failed",
-                    exc,
-                    operation="stream.persist_candle",
-                    provider=event.candle.provider,
-                    provider_symbol=event.candle.provider_symbol,
-                    symbol=event.candle.symbol,
-                    timeframe=event.candle.timeframe,
-                )
-            finally:
-                self._persistence_queue.task_done()
 
     def _enqueue_status(
         self,
@@ -494,32 +332,26 @@ class StreamManager:
         code: str | None = None,
         message: str | None = None,
     ) -> None:
-        interests = affected or list(registration.interests)
-        requested_order = registration.request.symbols
-        affected_symbols = {interest.symbol for interest in interests}
-        symbols = tuple(symbol for symbol in requested_order if symbol in affected_symbols)
-        channels = tuple(
-            channel
-            for channel in ("quote", "candle")
-            if any(interest.channel == channel for interest in interests)
-        )
+        if affected:
+            affected_symbols = {interest.symbol for interest in affected}
+            symbols = tuple(
+                symbol for symbol in registration.request.symbols if symbol in affected_symbols
+            )
+        else:
+            symbols = registration.request.symbols
         self._enqueue(
             registration,
             StatusEvent(
                 state=state,  # type: ignore[arg-type]
                 symbols=symbols,
-                channels=channels,  # type: ignore[arg-type]
+                channels=("quote",),
                 observed_at=self._clock(),
                 code=code,
                 message=message,
             ),
         )
 
-    def _enqueue(
-        self,
-        registration: ClientRegistration,
-        event: DownstreamEvent,
-    ) -> None:
+    def _enqueue(self, registration: ClientRegistration, event: DownstreamEvent) -> None:
         if registration.closed.is_set():
             return
         try:
@@ -534,13 +366,3 @@ class StreamManager:
                 key=f"client:{registration.id}:queue_full",
                 client_id=registration.id,
             )
-
-
-def _bucket_open(value: datetime, duration: timedelta) -> datetime:
-    utc_value = value.astimezone(UTC)
-    elapsed = utc_value - EPOCH
-    return EPOCH + (elapsed // duration) * duration
-
-
-def _is_stream_timeframe(timeframe: str) -> bool:
-    return timeframe in {"1m", "5m", "15m", "1h", "4h", "1d"}

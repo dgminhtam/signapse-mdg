@@ -13,7 +13,7 @@ from app.cache.quote_cache import QuoteCache
 from app.domain.candles import Candle, CandleRequest, CandleResult
 from app.domain.errors import ProviderSelectionError
 from app.domain.quotes import ProviderQuoteBatch, QuoteResult
-from app.domain.streams import CandleInterest, QuoteInterest
+from app.domain.streams import QuoteInterest
 from app.domain.symbols import ProviderMapping, ProviderSelection, SupportedSymbol
 from app.main import app
 from app.services.historical_prices import HistoricalPriceRequest, HistoricalPriceService
@@ -196,8 +196,8 @@ async def test_history_policy_keeps_provider_and_rejects_lookahead() -> None:
     assert all(request.provider == "YFINANCE" for request in service.requests)
 
 
-async def test_candle_cache_and_stream_interests_include_provider_identity() -> None:
-    cache = CandleCache()
+async def test_candle_cache_and_quote_interests_include_provider_identity() -> None:
+    cache = CandleCache(clock=lambda: NOW)
     first = make_candle(
         "1m",
         NOW.replace(second=0),
@@ -225,9 +225,6 @@ async def test_candle_cache_and_stream_interests_include_provider_identity() -> 
     assert await cache.get("AAPL", "1m", "YFINANCE", "AAPL") == first
     assert await cache.get("AAPL", "1m", "TWELVE_DATA", "AAPL") == second
     assert QuoteInterest("AAPL", "YFINANCE", "AAPL") != QuoteInterest("AAPL", "TWELVE_DATA", "AAPL")
-    assert CandleInterest("AAPL", "1m", "YFINANCE", "AAPL") != CandleInterest(
-        "AAPL", "1m", "TWELVE_DATA", "AAPL"
-    )
 
 
 class StubQuoteService:
