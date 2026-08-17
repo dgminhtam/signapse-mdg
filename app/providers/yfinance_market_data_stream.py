@@ -10,7 +10,6 @@ from app.core.observability import failure_metadata, log_failure, log_rate_limit
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import Quote
 from app.domain.streams import (
-    CandleInterest,
     ProviderSignal,
     ProviderStreamEvent,
     QuoteInterest,
@@ -18,9 +17,8 @@ from app.domain.streams import (
     StreamQuote,
 )
 from app.domain.symbols import SupportedSymbol
-from app.domain.timeframes import get_timeframe
 from app.providers.normalization import parse_decimal
-from app.providers.price_tick_stream import PriceTick, PriceTickCandleBuilder
+from app.providers.price_tick_stream import PriceTick
 from app.providers.yfinance_market_data import SUPPORTED_YFINANCE_PROVIDER_SYMBOLS
 
 logger = logging.getLogger(__name__)
@@ -60,8 +58,6 @@ class YFinanceMarketDataStreamProvider:
         self._symbols_by_provider_symbol: dict[str, SupportedSymbol] = {}
         self._provider_symbol_refs: dict[str, int] = {}
         self._quote_interests: set[QuoteInterest] = set()
-        self._candle_interests: dict[str, set[str]] = {}
-        self._builder = PriceTickCandleBuilder()
         self._lock = asyncio.Lock()
         self._closing = False
 
@@ -84,66 +80,16 @@ class YFinanceMarketDataStreamProvider:
             self._quote_interests.add(interest)
             self._ensure_listener()
 
-    async def subscribe_candle(
-        self,
-        symbol: SupportedSymbol,
-        timeframe: str,
-        provider_interval: str,
-    ) -> None:
-        del provider_interval
-        if symbol.provider_symbol not in SUPPORTED_YFINANCE_PROVIDER_SYMBOLS:
-            error = ProviderUnavailableError(
-                failure_reason="PROVIDER_NOT_CONFIGURED",
-                operation="stream.subscribe_candle",
-                provider="YFINANCE",
-                provider_symbol=symbol.provider_symbol,
-                symbol=symbol.symbol,
-                timeframe=timeframe,
-            )
-            log_failure(logger, "yfinance_stream_provider_not_configured", error)
-            raise error
-        if get_timeframe(timeframe) is None:
-            error = ProviderUnavailableError(
-                failure_reason="PROVIDER_NOT_CONFIGURED",
-                operation="stream.subscribe_candle",
-                provider="YFINANCE",
-                provider_symbol=symbol.provider_symbol,
-                symbol=symbol.symbol,
-                timeframe=timeframe,
-            )
-            log_failure(logger, "yfinance_stream_timeframe_not_configured", error)
-            raise error
-        async with self._lock:
-            timeframes = self._candle_interests.setdefault(symbol.symbol, set())
-            if timeframe in timeframes:
-                return
-            try:
-                await self._add_provider_symbol(symbol)
-            except BaseException:
-                if not timeframes:
-                    self._candle_interests.pop(symbol.symbol, None)
-                raise
-            timeframes.add(timeframe)
-            self._ensure_listener()
-
     async def unsubscribe(self, interest: StreamInterest) -> None:
         task: asyncio.Task[None] | None = None
         client_to_close: YFinanceAsyncWebSocket | None = None
         async with self._lock:
+            if interest not in self._quote_interests:
+                return
             symbol = self._symbol_for_interest(interest)
             if symbol is None:
                 return
-            if isinstance(interest, QuoteInterest):
-                if interest not in self._quote_interests:
-                    return
-                self._quote_interests.remove(interest)
-            else:
-                timeframes = self._candle_interests.get(interest.symbol)
-                if timeframes is None or interest.timeframe not in timeframes:
-                    return
-                timeframes.remove(interest.timeframe)
-                if not timeframes:
-                    self._candle_interests.pop(interest.symbol, None)
+            self._quote_interests.remove(interest)
             await self._remove_provider_symbol(symbol)
             if not self._provider_symbol_refs:
                 task, client_to_close = self._detach_resources()
@@ -154,7 +100,6 @@ class YFinanceMarketDataStreamProvider:
         async with self._lock:
             self._closing = True
             self._quote_interests.clear()
-            self._candle_interests.clear()
             self._provider_symbol_refs.clear()
             self._symbols_by_provider_symbol.clear()
             task, client = self._detach_resources()
@@ -337,10 +282,6 @@ class YFinanceMarketDataStreamProvider:
                     )
                 )
             )
-        for timeframe in self._candle_interests.get(tick.symbol.symbol, set()):
-            for event in self._builder.apply_tick(tick, timeframe):
-                self._put_event(event)
-
     def _normalize_tick(self, payload: object) -> PriceTick | None:
         if not isinstance(payload, Mapping):
             return None
@@ -370,22 +311,7 @@ class YFinanceMarketDataStreamProvider:
         return None
 
     def _active_interests(self) -> tuple[StreamInterest, ...]:
-        interests: list[StreamInterest] = list(self._quote_interests)
-        for symbol, timeframes in self._candle_interests.items():
-            value = next(
-                (
-                    candidate
-                    for candidate in self._symbols_by_provider_symbol.values()
-                    if candidate.symbol == symbol
-                ),
-                None,
-            )
-            if value is not None:
-                interests.extend(
-                    CandleInterest(symbol, timeframe, value.provider, value.provider_symbol)
-                    for timeframe in timeframes
-                )
-        return tuple(interests)
+        return tuple(self._quote_interests)
 
     def _detach_resources(
         self,

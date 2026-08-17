@@ -225,9 +225,8 @@ Response:
 
 `priceDisplayDecimals` is required per persisted symbol and controls public price serialization.
 MDG rounds with decimal `ROUND_HALF_UP` and pads to exactly that many fractional digits for latest
-quotes, historical prices, candle OHLC, and WebSocket quote/candle OHLC. Provider normalization,
-internal `Decimal` values, caches, candle aggregation, persistence, and candle volume retain raw
-precision.
+quotes, historical prices, candle OHLC, and WebSocket quote prices. Provider normalization,
+internal `Decimal` values, caches, persistence, and candle volume retain raw precision.
 
 `providerMappings` lists every configured mapping for the enabled asset. The default mapping is
 first, followed by remaining provider identifiers in case-sensitive ascending order. Runtime
@@ -315,8 +314,17 @@ Semantics:
 - Asset class, provider identity, and provider symbol remain internal to the gateway.
 - Candle `open`, `high`, `low`, and `close` are rounded with `ROUND_HALF_UP` and padded to the
   symbol's exact `priceDisplayDecimals`; `volume` retains its raw fixed-point decimal string.
-- Closed candles should be cacheable.
+- Closed candles are persisted and reused through PostgreSQL.
 - Current forming candle may be returned with `complete = false`.
+- Forming snapshots are owned by the REST candle service and are independent of WebSocket activity.
+- Forming snapshots use a process-local five-second default TTL configured by
+  `CANDLE_FORMING_CACHE_TTL_SECONDS`; the key includes canonical symbol, Provider Selection/provider
+  symbol, and timeframe. Concurrent misses for the same key are single-flight.
+- A forming snapshot is evicted at TTL expiry or when its `closeTime` is reached. It is never
+  relabeled as complete in cache. If refresh after expiry fails, the response is
+  `503 PROVIDER_UNAVAILABLE`; the expired snapshot is not returned and polling is not rate-limited.
+- For `limit=1`, a fresh forming candle wins over a completed candle; if no eligible data exists,
+  the successful response contains `candles: []`.
 - Candle windows use exact UTC half-open ranges: `from` is inclusive and resolved `to` is
   exclusive. Public boundaries do not need to align to timeframe boundaries.
 - `to` is optional; when omitted, the gateway captures request-time UTC once and always returns
@@ -513,23 +521,27 @@ Semantics:
 ### Subscribe
 
 ```text
-WS /v1/stream?symbols=BTC/USD,ETH/USD&timeframe=1m
-WS /v1/stream?symbols=BTC/USD,EUR/USD&timeframe=1m
-WS /v1/stream?symbols=BTC/USD,EUR/USD,XAG/USD&timeframe=1m
+WS /v1/stream?symbols=BTC/USD,ETH/USD
+WS /v1/stream?symbols=BTC/USD,EUR/USD&provider=TWELVE_DATA
+WS /v1/stream?symbols=BTC/USD,EUR/USD,XAG/USD
 ```
 
-On connect, gateway should validate all requested symbols and timeframe before subscribing upstream.
-Invalid subscription shape closes with WebSocket code `1008` and a stable reason such as
-`INVALID_SYMBOLS`, `TOO_MANY_SYMBOLS`, `UNSUPPORTED_SYMBOL`, or `UNSUPPORTED_TIMEFRAME`.
+The quote stream requires `symbols` and accepts at most one optional, case-sensitive, request-wide
+`provider`. It has no `timeframe` query parameter. The gateway validates the complete symbol list,
+Provider Override, registry rows, and Provider Mapping before opening an upstream subscription.
+Invalid shape closes with WebSocket `1008` and a stable reason such as `INVALID_SYMBOLS`,
+`TOO_MANY_SYMBOLS`, `UNSUPPORTED_SYMBOL`, `INVALID_PROVIDER`, or `UNSUPPORTED_PROVIDER`.
 Registry or provider failures close with `1011` and a sanitized reason.
 
-Stream interests route through each enabled symbol's persisted provider mapping. A single optional,
-case-sensitive `provider` applies to the complete subscription; if any symbol lacks that mapping,
-the connection closes with `1008 UNSUPPORTED_PROVIDER` before upstream access. Empty or repeated
-provider values close with `1008 INVALID_PROVIDER`. Twelve Data-backed
-crypto, Forex, stock, commodity, and ETF symbols use one shared process-local Twelve Data WebSocket
-price stream for all active interests. YFINANCE symbols use one lazy process-local yfinance
-`AsyncWebSocket` and shared provider-symbol subscriptions.
+Any presence of `timeframe`, including `?timeframe=`, `1m`, or `1w`, is rejected before registry or
+provider access with `1008 TIMEFRAME_NOT_ALLOWED`. This explicit rejection prevents candle polling
+intent from being silently ignored by a quote-only connection. Candle snapshots use
+`GET /v1/candles` with an explicit timeframe.
+
+Stream interests route through each enabled symbol's persisted Provider Mapping. Twelve Data-backed
+symbols use one shared process-local price stream for active interests. YFINANCE symbols use one
+lazy process-local `AsyncWebSocket` and shared provider-symbol subscriptions. The gateway sends no
+initial quote snapshot; clients needing an initial value use `GET /v1/quotes`.
 
 ### Quote event
 
@@ -542,25 +554,6 @@ price stream for all active interests. YFINANCE symbols use one lazy process-loc
 }
 ```
 
-### Candle event
-
-```json
-{
-  "type": "candle",
-  "symbol": "BTC/USD",
-  "timeframe": "1m",
-  "openTime": "2026-06-19T10:30:00Z",
-  "closeTime": "2026-06-19T10:30:59.999Z",
-  "open": "104000.00",
-  "high": "104300.00",
-  "low": "103900.00",
-  "close": "104250.12",
-  "volume": "12.345",
-  "complete": false,
-  "receivedAt": "2026-06-19T10:30:01Z"
-}
-```
-
 ### Status event
 
 ```json
@@ -568,47 +561,44 @@ price stream for all active interests. YFINANCE symbols use one lazy process-loc
   "type": "status",
   "state": "SUBSCRIBED",
   "symbols": ["BTC/USD", "ETH/USD"],
-  "channels": ["quote", "candle"],
+  "channels": ["quote"],
   "observedAt": "2026-06-19T10:30:01Z"
 }
 ```
 
-`ERROR` status events additionally include stable `code` and sanitized `message` fields.
-
-When a Forex candle channel is outside the Signapse weekly quote session, the stream emits
-`MARKET_CLOSED` with the same status shape. The connection stays open; the candle channel is not
-reported as stale and returns to `CONNECTING` when the weekly session reopens.
-
-Allowed stream states:
+Status events always use `channels: ["quote"]`. `ERROR` status events additionally include stable
+`code` and sanitized `message` fields. Allowed states are:
 
 | State | Meaning |
 | --- | --- |
-| `CONNECTING` | Gateway is connecting to upstream provider. |
-| `SUBSCRIBED` | Gateway is receiving data for requested symbols. |
-| `STALE` | Gateway has not received fresh provider data within threshold. |
-| `RECONNECTING` | Gateway is reconnecting upstream and may send stale snapshots. |
-| `MARKET_CLOSED` | Requested candle channel is outside the configured market session. |
-| `ERROR` | Gateway cannot serve the stream. |
+| `CONNECTING` | Subscription accepted while the upstream quote provider is being opened. |
+| `SUBSCRIBED` | At least one valid normalized quote has been received. |
+| `STALE` | No valid quote has arrived within the configured freshness threshold. |
+| `RECONNECTING` | The upstream quote connection is being recreated. |
+| `ERROR` | The gateway cannot serve the quote stream; it closes with `1011`. |
 
-Twelve Data WebSocket events are price ticks, not upstream OHLC candles. The gateway derives
-stream candles locally by bucketizing price ticks into `1m`, `5m`, `15m`, `1h`, `4h`, and `1d`
-timeframes with tick price as OHLC and decimal zero volume. It does not synthesize skipped buckets;
-REST historical candles remain authoritative for backfill. Forex stream candles use the same weekly
-session filter as `/v1/candles`; holidays, early closes, late opens, exceptional closures, and
-provider maintenance windows remain out of scope.
+Every valid normalized quote updates the process-local quote cache before fanout. A fresh quote
+returns a stale registration to `SUBSCRIBED`; upstream reconnects emit `RECONNECTING`. The quote
+stream has no candle events, candle interests, tick-to-candle aggregation, candle-session state,
+or candle persistence handoff.
 
-YFINANCE WebSocket events are also price ticks. The gateway applies the same UTC bucketing and
-zero-volume derived-candle behavior. Yahoo day volume is not interval volume and is ignored.
-Successful subscriptions that have not emitted a valid first tick remain `CONNECTING`; the gateway
-does not poll, remap provider symbols, fabricate events, or fall back to another provider.
+### Candle snapshots are REST-only
 
-WebSocket quote `price` and candle `open`, `high`, `low`, and `close` use the same
-`ROUND_HALF_UP`/exact-padding policy as HTTP responses. Stream candle `volume` retains raw
-fixed-point precision, and no `priceDisplayDecimals` field is repeated in market-data events.
+```http
+GET /v1/candles?symbol=BTC/USD&timeframe=1m&limit=1
+```
 
-SPY and QQQ candle slots use the regular US ETF session, Monday-Friday 09:30-16:00 New York time.
-WTI uses Sunday 18:00-Friday 17:00 New York time with the Monday-Thursday 17:00-18:00 maintenance
-window excluded. Quote events remain independent from candle-session closure.
+The candle response shape is unchanged. `limit=1` returns the latest eligible forming candle with
+`complete=false` when available, otherwise the latest completed candle, or `candles: []` when no
+eligible data exists. The service works without an active WebSocket. A process-local forming
+snapshot cache uses `CANDLE_FORMING_CACHE_TTL_SECONDS` (default five seconds), is isolated by
+canonical symbol, Provider Selection/provider symbol, and timeframe, and uses per-key single-flight
+refreshes. A snapshot is evicted at its close time or TTL expiry; an expired snapshot is never
+served as complete. If refresh then fails, the endpoint returns `503 PROVIDER_UNAVAILABLE`, with no
+stale forming response and no polling `429`.
+
+WebSocket quote prices and candle HTTP OHLC values use the same `ROUND_HALF_UP`/exact-padding
+policy. Candle volume remains a raw fixed-point decimal string.
 
 ## Error Contract
 
@@ -640,7 +630,8 @@ Recommended error codes:
 | `INVALID_IMPACT` | `400` | Economic calendar `impact` is malformed. |
 | `INVALID_LIMIT` | `400` | Economic calendar `limit` is malformed or out of range. |
 | `PRICE_NOT_FOUND` | `404` | No historical price is available for the requested instant. |
-| `PROVIDER_UNAVAILABLE` | `503` | Provider request or stream is unavailable. |
+| `PROVIDER_UNAVAILABLE` | `503` | Provider request or stream is unavailable, including failed forming-snapshot refresh. |
+| `TIMEFRAME_NOT_ALLOWED` | WebSocket `1008` | A `timeframe` query is present on `/v1/stream`. |
 | `DATA_STALE` | `503` or event status | Data is too stale for the requested operation. |
 | `DATABASE_UNAVAILABLE` | `503` | A database-backed capability cannot query PostgreSQL. |
 | `INTERNAL_ERROR` | `500` | Unexpected gateway failure. |
@@ -650,7 +641,7 @@ Recommended error codes:
 | Data | Storage | MVP policy |
 | --- | --- | --- |
 | Latest quote | In-memory cache | TTL 5-30 seconds |
-| Current candle | In-memory cache | Updated from stream; not authoritative until closed |
+| Forming candle snapshot | Process-local cache | REST-owned, five-second TTL, evicted at close time |
 | Closed candle | PostgreSQL | Persist and reuse |
 | Raw tick | Not stored | Out of scope |
 
@@ -658,7 +649,8 @@ MVP can start with in-memory cache because only 2 symbols are supported. Redis s
 
 ## Persistence Model
 
-MVP uses PostgreSQL for the supported-symbol registry and the candle cache.
+MVP uses PostgreSQL for the supported-symbol registry and completed candle persistence. Forming
+candle snapshots are process-local and are not shared through PostgreSQL or Redis.
 
 Logical model:
 
@@ -746,8 +738,8 @@ Responsibilities:
 - Fetch latest quotes through the selected Binance, Twelve Data, or yfinance adapter.
 - Fetch candles through Binance klines, Twelve Data time series, or yfinance `download` based on
   registry mapping.
-- Subscribe to Binance quote/kline streams and shared Twelve Data or yfinance price streams based
-  on persisted provider mapping.
+- Subscribe to Binance ticker streams and shared Twelve Data or yfinance price streams based on
+  persisted provider mapping. Candle history remains a REST provider concern.
 - Normalize provider-specific payloads into gateway DTOs.
 
 Binance stream names should be lowercase:
@@ -755,8 +747,6 @@ Binance stream names should be lowercase:
 ```text
 btcusd@ticker
 ethusd@ticker
-btcusd@kline_1m
-ethusd@kline_1m
 ```
 
 Gateway must handle Binance WebSocket reconnect and resubscribe behavior. Binance WebSocket connections are not a durable queue.
@@ -808,9 +798,9 @@ QUOTE_STALE_AFTER_SECONDS=30
 QUOTE_CACHE_TTL_SECONDS=10
 MAX_QUOTE_SYMBOLS=10
 MAX_CANDLES_PER_REQUEST=1000
+CANDLE_FORMING_CACHE_TTL_SECONDS=5
 STREAM_CLIENT_QUEUE_CAPACITY=256
 STREAM_PROVIDER_QUEUE_CAPACITY=1024
-STREAM_PERSISTENCE_QUEUE_CAPACITY=256
 STREAM_IDLE_GRACE_SECONDS=5
 STREAM_FRESHNESS_CHECK_SECONDS=1
 ECONOMIC_CALENDAR_POLL_SECONDS=300

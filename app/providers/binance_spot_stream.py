@@ -1,29 +1,24 @@
 import asyncio
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Protocol, cast
 
 from binance_common.configuration import ConfigurationWebSocketStreams
 from binance_sdk_spot.spot import Spot
-from binance_sdk_spot.websocket_streams.models import KlineIntervalEnum
 
 from app.core.observability import failure_metadata, log_failure, log_rate_limited_warning
-from app.domain.candles import Candle
 from app.domain.errors import ProviderUnavailableError
 from app.domain.quotes import Quote
 from app.domain.streams import (
-    CandleInterest,
     ProviderSignal,
     ProviderStreamEvent,
     QuoteInterest,
-    StreamCandle,
     StreamInterest,
     StreamQuote,
 )
 from app.domain.symbols import SupportedSymbol
-from app.domain.timeframes import get_timeframe
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +35,6 @@ class BinanceWebSocketStreams(Protocol):
     async def create_connection(self) -> object: ...
 
     async def ticker(self, symbol: str) -> StreamHandle: ...
-
-    async def kline(self, symbol: str, interval: KlineIntervalEnum) -> StreamHandle: ...
 
     async def close_connection(self) -> None: ...
 
@@ -87,66 +80,6 @@ class BinanceSpotStreamProvider:
                     provider="BINANCE_SPOT",
                     provider_symbol=symbol.provider_symbol,
                     symbol=symbol.symbol,
-                    failure_reason=str(metadata["failure_reason"]),
-                    retryable=bool(metadata["retryable"]),
-                ) from exc
-            self._symbols[symbol.provider_symbol] = symbol
-            self._handles[interest] = handle
-
-    async def subscribe_candle(
-        self,
-        symbol: SupportedSymbol,
-        timeframe: str,
-        provider_interval: str,
-    ) -> None:
-        interest = CandleInterest(
-            symbol.symbol,
-            timeframe,
-            symbol.provider,
-            symbol.provider_symbol,
-        )
-        interval = _KLINE_INTERVALS.get(provider_interval)
-        if interval is None:
-            error = ProviderUnavailableError(
-                failure_reason="PROVIDER_NOT_CONFIGURED",
-                operation="stream.subscribe_candle",
-                provider="BINANCE_SPOT",
-                provider_symbol=symbol.provider_symbol,
-                symbol=symbol.symbol,
-                timeframe=timeframe,
-            )
-            log_failure(logger, "binance_stream_timeframe_not_configured", error)
-            raise error
-        async with self._lock:
-            if interest in self._handles:
-                return
-            await self._ensure_connected()
-            try:
-                handle = await self._streams.kline(
-                    symbol.provider_symbol.lower(),
-                    interval,
-                )
-                handle.on("message", self._candle_callback(symbol, timeframe))
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                metadata = failure_metadata(exc)
-                log_failure(
-                    logger,
-                    "binance_stream_candle_subscribe_failed",
-                    exc,
-                    operation="stream.subscribe_candle",
-                    provider="BINANCE_SPOT",
-                    provider_symbol=symbol.provider_symbol,
-                    symbol=symbol.symbol,
-                    timeframe=timeframe,
-                )
-                raise ProviderUnavailableError(
-                    operation="stream.subscribe_candle",
-                    provider="BINANCE_SPOT",
-                    provider_symbol=symbol.provider_symbol,
-                    symbol=symbol.symbol,
-                    timeframe=timeframe,
                     failure_reason=str(metadata["failure_reason"]),
                     retryable=bool(metadata["retryable"]),
                 ) from exc
@@ -269,87 +202,6 @@ class BinanceSpotStreamProvider:
 
         return callback
 
-    def _candle_callback(
-        self,
-        symbol: SupportedSymbol,
-        timeframe: str,
-    ) -> Callable[[object], None]:
-        def callback(payload: object) -> None:
-            try:
-                provider_symbol = _field(payload, "s")
-                event_ms = _integer_field(payload, "E")
-                kline = getattr(payload, "k", None)
-                timeframe_model = get_timeframe(timeframe)
-                if (
-                    provider_symbol != symbol.provider_symbol
-                    or event_ms is None
-                    or kline is None
-                    or timeframe_model is None
-                    or _field(kline, "s") != symbol.provider_symbol
-                    or _field(kline, "i") != timeframe_model.provider_interval
-                ):
-                    raise ValueError
-                open_ms = _integer_field(kline, "t")
-                close_ms = _integer_field(kline, "T")
-                complete = getattr(kline, "x", None)
-                values = (
-                    _decimal_field(kline, "o", positive=True),
-                    _decimal_field(kline, "h", positive=True),
-                    _decimal_field(kline, "l", positive=True),
-                    _decimal_field(kline, "c", positive=True),
-                    _decimal_field(kline, "v", positive=False),
-                )
-                if (
-                    open_ms is None
-                    or close_ms is None
-                    or not isinstance(complete, bool)
-                    or any(value is None for value in values)
-                ):
-                    raise ValueError
-                open_time = datetime.fromtimestamp(open_ms / 1000, tz=UTC)
-                close_time = datetime.fromtimestamp(close_ms / 1000, tz=UTC)
-                expected_close = open_time + timeframe_model.duration - timedelta(milliseconds=1)
-                open_price, high, low, close, volume = cast(tuple[Decimal, ...], values)
-                if (
-                    close_time != expected_close
-                    or high < max(open_price, close)
-                    or low > min(open_price, close)
-                    or high < low
-                ):
-                    raise ValueError
-                received_at = datetime.now(UTC)
-                self.events.put_nowait(
-                    StreamCandle(
-                        Candle(
-                            symbol=symbol.symbol,
-                            asset_class=symbol.asset_class,
-                            provider=symbol.provider,
-                            provider_symbol=symbol.provider_symbol,
-                            timeframe=timeframe,
-                            open_time=open_time,
-                            close_time=close_time,
-                            open=open_price,
-                            high=high,
-                            low=low,
-                            close=close,
-                            volume=volume,
-                            complete=complete,
-                        ),
-                        received_at,
-                    )
-                )
-            except ValueError, asyncio.QueueFull:
-                log_rate_limited_warning(
-                    logger,
-                    "binance_stream_kline_rejected",
-                    key=f"BINANCE_SPOT:kline_rejected:{symbol.symbol}:{timeframe}",
-                    provider="BINANCE_SPOT",
-                    symbol=symbol.symbol,
-                    timeframe=timeframe,
-                )
-
-        return callback
-
     def emit_reconnecting(self) -> None:
         interests = tuple(self._handles)
         if interests:
@@ -411,11 +263,3 @@ def _decimal_field(payload: object, name: str, *, positive: bool) -> Decimal | N
     return parsed
 
 
-_KLINE_INTERVALS = {
-    "1m": KlineIntervalEnum.INTERVAL_1m,
-    "5m": KlineIntervalEnum.INTERVAL_5m,
-    "15m": KlineIntervalEnum.INTERVAL_15m,
-    "1h": KlineIntervalEnum.INTERVAL_1h,
-    "4h": KlineIntervalEnum.INTERVAL_4h,
-    "1d": KlineIntervalEnum.INTERVAL_1d,
-}

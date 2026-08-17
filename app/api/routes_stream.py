@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.api.serialization import format_datetime, format_decimal, format_price
+from app.api.serialization import format_datetime, format_price
 from app.core.config import get_settings
 from app.core.observability import failure_metadata, log_event, log_failure
 from app.db.repositories import PostgresSymbolRepository
@@ -18,7 +18,6 @@ from app.domain.errors import (
 from app.domain.streams import (
     DownstreamEvent,
     StatusEvent,
-    StreamCandle,
     StreamQuote,
 )
 from app.domain.symbols import SupportedSymbol
@@ -76,14 +75,23 @@ async def resolve_stream_symbols(websocket: WebSocket) -> list[SupportedSymbol]:
 async def stream_market_data(websocket: WebSocket) -> None:
     await websocket.accept()
     settings = get_settings()
+    raw_symbols = websocket.query_params.get("symbols")
+    raw_timeframe = websocket.query_params.get("timeframe")
     try:
+        # Check timeframe presence before even parsing Provider Override so every legacy
+        # candle-stream URL receives the same explicit quote-only rejection.
+        parse_stream_request(
+            raw_symbols,
+            raw_timeframe,
+            settings.max_quote_symbols,
+        )
         provider = parse_provider_values(
             websocket.query_params.getlist("provider"),
             error_type=StreamRequestError,
         )
         request = parse_stream_request(
-            websocket.query_params.get("symbols"),
-            websocket.query_params.get("timeframe"),
+            raw_symbols,
+            None,
             settings.max_quote_symbols,
             provider,
         )
@@ -94,6 +102,8 @@ async def stream_market_data(websocket: WebSocket) -> None:
             "websocket_request_rejected",
             operation="stream.request",
             error_code=exc.code,
+            symbols=raw_symbols,
+            timeframe=raw_timeframe,
         )
         await websocket.close(code=1008, reason=exc.code)
         return
@@ -217,22 +227,6 @@ def stream_event_payload(
                 price_display_decimals[event.quote.symbol],
             ),
             "receivedAt": format_datetime(event.quote.received_at),
-        }
-    if isinstance(event, StreamCandle):
-        candle = event.candle
-        return {
-            "type": "candle",
-            "symbol": candle.symbol,
-            "timeframe": candle.timeframe,
-            "openTime": format_datetime(candle.open_time),
-            "closeTime": format_datetime(candle.close_time),
-            "open": format_price(candle.open, price_display_decimals[candle.symbol]),
-            "high": format_price(candle.high, price_display_decimals[candle.symbol]),
-            "low": format_price(candle.low, price_display_decimals[candle.symbol]),
-            "close": format_price(candle.close, price_display_decimals[candle.symbol]),
-            "volume": format_decimal(candle.volume),
-            "complete": candle.complete,
-            "receivedAt": format_datetime(event.received_at),
         }
     if isinstance(event, StatusEvent):
         payload: dict[str, Any] = {

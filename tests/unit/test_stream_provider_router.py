@@ -5,7 +5,6 @@ import pytest
 
 from app.domain.errors import ProviderUnavailableError
 from app.domain.streams import (
-    CandleInterest,
     ProviderSignal,
     ProviderStreamEvent,
     QuoteInterest,
@@ -25,20 +24,11 @@ class FakeProvider:
     def __init__(self) -> None:
         self.events: asyncio.Queue[ProviderStreamEvent] = asyncio.Queue()
         self.quote_subscriptions: list[str] = []
-        self.candle_subscriptions: list[tuple[str, str, str]] = []
         self.unsubscribed: list[StreamInterest] = []
         self.closed = False
 
     async def subscribe_quote(self, symbol: SupportedSymbol) -> None:
         self.quote_subscriptions.append(symbol.symbol)
-
-    async def subscribe_candle(
-        self,
-        symbol: SupportedSymbol,
-        timeframe: str,
-        provider_interval: str,
-    ) -> None:
-        self.candle_subscriptions.append((symbol.symbol, timeframe, provider_interval))
 
     async def unsubscribe(self, interest: StreamInterest) -> None:
         self.unsubscribed.append(interest)
@@ -47,7 +37,7 @@ class FakeProvider:
         self.closed = True
 
 
-async def test_router_routes_mixed_interests_by_provider_and_forwards_events() -> None:
+async def test_router_routes_mixed_symbols_by_provider_and_forwards_events() -> None:
     binance = FakeProvider()
     twelvedata = FakeProvider()
     yfinance = FakeProvider()
@@ -61,22 +51,13 @@ async def test_router_routes_mixed_interests_by_provider_and_forwards_events() -
     )
     try:
         await router.subscribe_quote(BTC)
-        await router.subscribe_candle(BTC, "1m", "1m")
         await router.subscribe_quote(BINANCE_BTC)
         await router.subscribe_quote(EUR)
-        await router.subscribe_candle(EUR, "1m", "1m")
         await router.subscribe_quote(YFINANCE_SILVER)
-        await router.subscribe_candle(YFINANCE_SILVER, "1m", "1m")
 
         assert binance.quote_subscriptions == ["BTC/BINANCE"]
-        assert binance.candle_subscriptions == []
         assert twelvedata.quote_subscriptions == ["BTC/USD", "EUR/USD"]
-        assert twelvedata.candle_subscriptions == [
-            ("BTC/USD", "1m", "1m"),
-            ("EUR/USD", "1m", "1m"),
-        ]
         assert yfinance.quote_subscriptions == ["XAG/USD"]
-        assert yfinance.candle_subscriptions == [("XAG/USD", "1m", "1m")]
 
         signal = ProviderSignal(
             "RECONNECTING",
@@ -99,14 +80,14 @@ async def test_router_unsubscribes_idempotently_and_closes_children() -> None:
     )
 
     await router.subscribe_quote(BINANCE_BTC)
-    await router.subscribe_candle(EUR, "1m", "1m")
+    await router.subscribe_quote(EUR)
     await router.unsubscribe(QuoteInterest("BTC/BINANCE"))
     await router.unsubscribe(QuoteInterest("BTC/BINANCE"))
-    await router.unsubscribe(CandleInterest("EUR/USD", "1m"))
+    await router.unsubscribe(QuoteInterest("EUR/USD"))
     await router.close()
 
     assert binance.unsubscribed == [QuoteInterest("BTC/BINANCE")]
-    assert twelvedata.unsubscribed == [CandleInterest("EUR/USD", "1m")]
+    assert twelvedata.unsubscribed == [QuoteInterest("EUR/USD")]
     assert binance.closed is True
     assert twelvedata.closed is True
 
@@ -140,10 +121,8 @@ async def test_yfinance_symbols_route_only_to_yfinance_provider() -> None:
     )
 
     await router.subscribe_quote(YFINANCE_SILVER)
-    await router.subscribe_candle(YFINANCE_SILVER, "5m", "5m")
 
     assert yfinance.quote_subscriptions == ["XAG/USD"]
-    assert yfinance.candle_subscriptions == [("XAG/USD", "5m", "5m")]
     assert binance.quote_subscriptions == []
-    assert binance.candle_subscriptions == []
     await router.close()
+

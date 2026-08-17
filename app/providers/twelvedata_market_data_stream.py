@@ -12,10 +12,8 @@ from app.core.observability import (
     log_rate_limited_warning,
 )
 from app.domain.errors import ProviderUnavailableError
-from app.domain.market_sessions import get_market_session_policy
 from app.domain.quotes import Quote
 from app.domain.streams import (
-    CandleInterest,
     ProviderSignal,
     ProviderStreamEvent,
     QuoteInterest,
@@ -23,13 +21,8 @@ from app.domain.streams import (
     StreamQuote,
 )
 from app.domain.symbols import SupportedSymbol
-from app.domain.timeframes import get_timeframe
 from app.providers.normalization import parse_decimal
-from app.providers.price_tick_stream import (
-    PriceTick,
-    PriceTickCandleBuilder,
-    bucket_open,
-)
+from app.providers.price_tick_stream import PriceTick
 from app.providers.twelvedata_keys import TwelveDataApiKeyPool
 from app.providers.twelvedata_market_data import SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS
 
@@ -73,8 +66,6 @@ class TwelveDataMarketDataStreamProvider:
         self._symbols_by_provider_symbol: dict[str, SupportedSymbol] = {}
         self._provider_symbol_refs: dict[str, int] = {}
         self._quote_interests: set[QuoteInterest] = set()
-        self._candle_interests: dict[str, set[str]] = {}
-        self._builder = PriceTickCandleBuilder()
         self._lock = asyncio.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
@@ -98,83 +89,21 @@ class TwelveDataMarketDataStreamProvider:
             await self._subscribe_provider_symbol(symbol)
             self._quote_interests.add(interest)
 
-    async def subscribe_candle(
-        self,
-        symbol: SupportedSymbol,
-        timeframe: str,
-        provider_interval: str,
-    ) -> None:
-        del provider_interval
-        if symbol.provider_symbol not in SUPPORTED_TWELVEDATA_PROVIDER_SYMBOLS:
-            error = ProviderUnavailableError(
-                failure_reason="PROVIDER_NOT_CONFIGURED",
-                operation="stream.subscribe_candle",
-                provider="TWELVE_DATA",
-                provider_symbol=symbol.provider_symbol,
-                symbol=symbol.symbol,
-                timeframe=timeframe,
-            )
-            log_failure(logger, "twelvedata_stream_provider_not_configured", error)
-            raise error
-        if get_timeframe(timeframe) is None:
-            error = ProviderUnavailableError(
-                failure_reason="PROVIDER_NOT_CONFIGURED",
-                operation="stream.subscribe_candle",
-                provider="TWELVE_DATA",
-                provider_symbol=symbol.provider_symbol,
-                symbol=symbol.symbol,
-                timeframe=timeframe,
-            )
-            log_failure(logger, "twelvedata_stream_timeframe_not_configured", error)
-            raise error
-        async with self._lock:
-            await self._ensure_connected()
-            timeframes = self._candle_interests.setdefault(symbol.symbol, set())
-            if timeframe in timeframes:
-                return
-            await self._subscribe_provider_symbol(symbol)
-            timeframes.add(timeframe)
-            now = self._clock()
-            if not get_market_session_policy(symbol).is_eligible(
-                bucket_open(now, get_timeframe(timeframe).duration),  # type: ignore[union-attr]
-                timeframe,
-            ):
-                self._put_signal(
-                    ProviderSignal(
-                        "MARKET_CLOSED",
-                        (
-                            CandleInterest(
-                                symbol.symbol,
-                                timeframe,
-                                symbol.provider,
-                                symbol.provider_symbol,
-                            ),
-                        ),
-                        now,
-                    )
-                )
-
     async def unsubscribe(self, interest: StreamInterest) -> None:
         async with self._lock:
+            if interest not in self._quote_interests:
+                return
             symbol = self._symbol_for_interest(interest)
             if symbol is None:
                 return
-            if isinstance(interest, QuoteInterest):
-                self._quote_interests.discard(interest)
-            else:
-                timeframes = self._candle_interests.get(interest.symbol)
-                if timeframes is not None:
-                    timeframes.discard(interest.timeframe)
-                    if not timeframes:
-                        self._candle_interests.pop(interest.symbol, None)
+            self._quote_interests.discard(interest)
             await self._unsubscribe_provider_symbol(symbol)
-            if not self._quote_interests and not self._candle_interests:
+            if not self._quote_interests:
                 await self._disconnect()
 
     async def close(self) -> None:
         async with self._lock:
             self._quote_interests.clear()
-            self._candle_interests.clear()
             self._provider_symbol_refs.clear()
             self._symbols_by_provider_symbol.clear()
             await self._disconnect()
@@ -349,10 +278,6 @@ class TwelveDataMarketDataStreamProvider:
                     )
                 )
             )
-        for timeframe in self._candle_interests.get(tick.symbol.symbol, set()):
-            for event in self._builder.apply_tick(tick, timeframe):
-                self._put_event(event)
-
     def _normalize_tick(self, payload: object) -> PriceTick | None:
         if not isinstance(payload, dict):
             return None
@@ -379,23 +304,7 @@ class TwelveDataMarketDataStreamProvider:
         return None
 
     def _active_interests(self) -> tuple[StreamInterest, ...]:
-        interests: list[StreamInterest] = list(self._quote_interests)
-        for symbol, timeframes in self._candle_interests.items():
-            value = next(
-                (
-                    candidate
-                    for candidate in self._symbols_by_provider_symbol.values()
-                    if candidate.symbol == symbol
-                ),
-                None,
-            )
-            if value is None:
-                continue
-            interests.extend(
-                CandleInterest(symbol, timeframe, value.provider, value.provider_symbol)
-                for timeframe in timeframes
-            )
-        return tuple(interests)
+        return tuple(self._quote_interests)
 
     def _require_websocket(self) -> TwelveDataWebSocket:
         if self._websocket is None:

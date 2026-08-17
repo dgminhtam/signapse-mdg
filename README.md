@@ -243,19 +243,19 @@ are idempotent.
 Postman can test `WS /v1/stream` directly with a WebSocket request:
 
 ```text
-ws://127.0.0.1:8000/v1/stream?symbols=BTC%2FUSD,EUR%2FUSD&timeframe=1m
+ws://127.0.0.1:8000/v1/stream?symbols=BTC%2FUSD,EUR%2FUSD
 ```
 
 Forex-only example:
 
 ```text
-ws://127.0.0.1:8000/v1/stream?symbols=EUR%2FUSD,GBP%2FUSD&timeframe=1m
+ws://127.0.0.1:8000/v1/stream?symbols=EUR%2FUSD,GBP%2FUSD
 ```
 
 WTI and ETF example:
 
 ```text
-ws://127.0.0.1:8000/v1/stream?symbols=WTI,SPY,QQQ&timeframe=1m
+ws://127.0.0.1:8000/v1/stream?symbols=WTI,SPY,QQQ
 ```
 
 Expected status events keep the same shape:
@@ -265,16 +265,15 @@ Expected status events keep the same shape:
   "type": "status",
   "state": "CONNECTING",
   "symbols": ["BTC/USD", "EUR/USD"],
-  "channels": ["quote", "candle"],
+  "channels": ["quote"],
   "observedAt": "2026-06-22T00:00:00Z"
 }
 ```
 
-During a configured Forex, ETF, or WTI closed candle session, the candle channel can emit
-`MARKET_CLOSED` instead of `STALE`. Quote events may still arrive if Twelve Data sends prices.
-Twelve Data stream candles are derived from price ticks and use decimal zero volume;
-`/v1/candles` remains the authoritative backfill path. Holidays, early closes, late opens, and
-exceptional closures are not modeled yet.
+The quote stream does not accept `timeframe` and never emits candle events or `MARKET_CLOSED`.
+Requests containing any `timeframe` value close with `1008 TIMEFRAME_NOT_ALLOWED`. Use
+`/v1/candles?symbol=...&timeframe=...&limit=1` for forming or completed candle snapshots; the
+response is self-contained and uses the process-local five-second forming-cache TTL.
 
 ## Development Checks
 

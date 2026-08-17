@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -692,15 +693,16 @@ async def test_service_splits_wti_ranges_around_daily_maintenance() -> None:
 
 
 async def test_service_excludes_persisted_and_cached_closed_session_forex_candles() -> None:
-    cache = CandleCache()
     weekend_open = datetime(2026, 6, 20, 0, 0, tzinfo=UTC)
     weekend = make_candle(weekend_open, symbol=EUR)
+    cache = CandleCache(clock=lambda: weekend_open)
     await cache.put(weekend)
     provider = FakeProvider()
     service = CandleService(
         FakeRepository([weekend], symbol=EUR),
         provider,
         cache=cache,
+        clock=lambda: weekend_open,
     )
 
     result = await service.get_candles(
@@ -761,11 +763,12 @@ async def test_service_fetches_only_gaps_and_does_not_synthesize_missing_slots()
 
 async def test_service_returns_forming_candle_without_persisting_it() -> None:
     forming = make_candle(START, complete=False)
+    now = forming.close_time - timedelta(milliseconds=1)
     repository = FakeRepository()
     service = CandleService(
         repository,
         FakeProvider([forming]),
-        clock=lambda: forming.close_time,
+        clock=lambda: now,
     )
 
     result = await service.get_candles(
@@ -777,12 +780,13 @@ async def test_service_returns_forming_candle_without_persisting_it() -> None:
 
 
 async def test_service_merges_cached_forming_candle_in_range_without_persisting() -> None:
-    cache = CandleCache()
     current = make_candle(START + timedelta(minutes=1), complete=False, close="20")
+    now = current.open_time + timedelta(seconds=1)
+    cache = CandleCache(clock=lambda: now)
     await cache.put(current)
     repository = FakeRepository([make_candle(START)])
     provider = FakeProvider()
-    service = CandleService(repository, provider, cache=cache)
+    service = CandleService(repository, provider, cache=cache, clock=lambda: now)
 
     result = await service.get_candles(
         CandleRequest("BTC/USD", "1m", START, START + timedelta(minutes=2))
@@ -797,13 +801,14 @@ async def test_service_merges_cached_forming_candle_in_range_without_persisting(
 
 
 async def test_service_merges_cached_forming_candle_in_limit_mode() -> None:
-    cache = CandleCache()
     current = make_candle(START + timedelta(minutes=1), complete=False, close="20")
+    now = current.open_time + timedelta(seconds=1)
+    cache = CandleCache(clock=lambda: now)
     await cache.put(current)
     persisted = make_candle(START)
     repository = FakeRepository([persisted])
     provider = FakeProvider()
-    service = CandleService(repository, provider, cache=cache)
+    service = CandleService(repository, provider, cache=cache, clock=lambda: now)
 
     result = await service.get_candles(
         CandleRequest(
@@ -817,13 +822,19 @@ async def test_service_merges_cached_forming_candle_in_limit_mode() -> None:
 
     assert result.candles == [persisted, current]
     assert repository.upserted == []
-    assert provider.calls == [(START + timedelta(minutes=1), START + timedelta(minutes=2), 2)]
+    assert provider.calls == []
 
 
 async def test_service_ignores_cached_forming_candle_outside_range() -> None:
-    cache = CandleCache()
+    now = START
+    cache = CandleCache(clock=lambda: now)
     await cache.put(make_candle(START + timedelta(minutes=5), complete=False))
-    service = CandleService(FakeRepository([make_candle(START)]), FakeProvider(), cache=cache)
+    service = CandleService(
+        FakeRepository([make_candle(START)]),
+        FakeProvider(),
+        cache=cache,
+        clock=lambda: now,
+    )
 
     result = await service.get_candles(
         CandleRequest("BTC/USD", "1m", START, START + timedelta(minutes=1))
@@ -914,3 +925,195 @@ async def test_service_propagates_sanitized_boundary_errors(error: Exception) ->
         await service.get_candles(
             CandleRequest("BTC/USD", "1m", START, START + timedelta(minutes=1))
         )
+
+
+async def test_service_single_flights_concurrent_forming_snapshot_misses() -> None:
+    now = START + timedelta(seconds=30)
+    forming = make_candle(START, complete=False)
+
+    class BlockingProvider(FakeProvider):
+        def __init__(self) -> None:
+            super().__init__([forming])
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def fetch_candles(
+            self,
+            symbol: SupportedSymbol,
+            timeframe: str,
+            provider_interval: str,
+            start: datetime,
+            end: datetime,
+            limit: int,
+        ) -> list[Candle]:
+            self.started.set()
+            await self.release.wait()
+            return await super().fetch_candles(
+                symbol,
+                timeframe,
+                provider_interval,
+                start,
+                end,
+                limit,
+            )
+
+    provider = BlockingProvider()
+    cache = CandleCache(clock=lambda: now)
+    service = CandleService(
+        FakeRepository(),
+        provider,
+        cache=cache,
+        clock=lambda: now,
+    )
+    request = CandleRequest("BTC/USD", "1m", START, START + timedelta(minutes=1))
+
+    first = asyncio.create_task(service.get_candles(request))
+    second = asyncio.create_task(service.get_candles(request))
+    await asyncio.wait_for(provider.started.wait(), timeout=1)
+    await asyncio.sleep(0)
+    assert len(provider.calls) == 0
+
+    provider.release.set()
+    results = await asyncio.gather(first, second)
+
+    assert len(provider.calls) == 1
+    assert results[0].candles == [forming]
+    assert results[1].candles == [forming]
+
+
+async def test_service_does_not_serve_expired_forming_snapshot_after_refresh_failure() -> None:
+    now = [START + timedelta(seconds=30)]
+    forming = make_candle(START, complete=False)
+    cache = CandleCache(ttl_seconds=5, clock=lambda: now[0])
+    await cache.put(forming, stored_at=START)
+
+    class FailingProvider(FakeProvider):
+        async def fetch_candles(
+            self,
+            symbol: SupportedSymbol,
+            timeframe: str,
+            provider_interval: str,
+            start: datetime,
+            end: datetime,
+            limit: int,
+        ) -> list[Candle]:
+            del symbol, timeframe, provider_interval, start, end, limit
+            raise ProviderUnavailableError("raw provider detail")
+
+    service = CandleService(
+        FakeRepository(),
+        FailingProvider(),
+        cache=cache,
+        clock=lambda: now[0],
+    )
+    request = CandleRequest("BTC/USD", "1m", START, START + timedelta(minutes=1))
+    now[0] += timedelta(seconds=6)
+
+    with pytest.raises(ProviderUnavailableError):
+        await service.get_candles(request)
+
+    assert await cache.get("BTC/USD", "1m", "TWELVE_DATA", "BTC/USD", now=now[0]) is None
+
+
+async def test_service_limit_one_returns_cached_forming_snapshot_without_provider_call() -> None:
+    now = START + timedelta(seconds=30)
+    forming = make_candle(START, complete=False)
+    cache = CandleCache(clock=lambda: now)
+    await cache.put(forming)
+    provider = FakeProvider()
+    service = CandleService(
+        FakeRepository(),
+        provider,
+        cache=cache,
+        clock=lambda: now,
+    )
+
+    result = await service.get_candles(
+        CandleRequest("BTC/USD", "1m", now, now, limit=1)
+    )
+
+    assert result.candles == [forming]
+    assert provider.calls == []
+
+
+async def test_service_limit_one_returns_latest_completed_candle_without_forming_snapshot() -> None:
+    now = START + timedelta(minutes=1, seconds=30)
+    completed = make_candle(START + timedelta(minutes=1), complete=True)
+
+    class RangeRepository(FakeRepository):
+        async def list_complete(
+            self,
+            symbol: SupportedSymbol,
+            timeframe: str,
+            start: datetime,
+            end: datetime,
+        ) -> list[Candle]:
+            del symbol, timeframe
+            return [
+                candle for candle in self.persisted if start <= candle.open_time < end
+            ]
+
+    provider = FakeProvider()
+    service = CandleService(
+        RangeRepository([completed]),
+        provider,
+        cache=CandleCache(clock=lambda: now),
+        clock=lambda: now,
+    )
+
+    result = await service.get_candles(
+        CandleRequest("BTC/USD", "1m", now, now, limit=1)
+    )
+
+    assert result.candles == [completed]
+    assert provider.calls == []
+
+
+async def test_service_limit_one_falls_back_to_previous_completed_candle() -> None:
+    now = START + timedelta(seconds=30)
+    previous = make_candle(START - timedelta(minutes=1), complete=True)
+
+    class RangeRepository(FakeRepository):
+        async def list_complete(
+            self,
+            symbol: SupportedSymbol,
+            timeframe: str,
+            start: datetime,
+            end: datetime,
+        ) -> list[Candle]:
+            del symbol, timeframe
+            return [
+                candle for candle in self.persisted if start <= candle.open_time < end
+            ]
+
+    provider = FakeProvider()
+    service = CandleService(
+        RangeRepository([previous]),
+        provider,
+        cache=CandleCache(clock=lambda: now),
+        clock=lambda: now,
+    )
+
+    result = await service.get_candles(
+        CandleRequest("BTC/USD", "1m", now, now, limit=1)
+    )
+
+    assert result.candles == [previous]
+    assert provider.calls == [(START, START + timedelta(minutes=1), 2)]
+
+
+async def test_service_limit_one_returns_empty_when_no_eligible_candle_exists() -> None:
+    now = START + timedelta(seconds=30)
+    provider = FakeProvider()
+    service = CandleService(
+        FakeRepository(),
+        provider,
+        cache=CandleCache(clock=lambda: now),
+        clock=lambda: now,
+    )
+
+    result = await service.get_candles(
+        CandleRequest("BTC/USD", "1m", now, now, limit=1)
+    )
+
+    assert result.candles == []

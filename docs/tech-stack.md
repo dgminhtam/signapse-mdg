@@ -17,7 +17,7 @@ This document records the recommended technology stack for the crypto MVP descri
 | Twelve Data provider SDK | twelvedata 1.4.0 | Official SDK foundation for multi-asset REST, time series, and price streaming. |
 | yfinance provider dependency | yfinance 1.6.0 | Open-source Yahoo Finance wrapper for latest planned-asset quotes, historical candles, and asynchronous price streaming. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration tests; not used for production Binance transport. |
-| Database | PostgreSQL 18.4 | Reliable relational store for candle cache and future asset metadata. |
+| Database | PostgreSQL 18.4 | Reliable relational store for completed candles and future asset metadata. |
 | DB driver | asyncpg 0.31.0 | PostgreSQL driver designed for Python asyncio. |
 | ORM/query layer | SQLAlchemy 2.0.51 | Mature Core/ORM APIs with asyncio-compatible engine/session support. |
 | Migration | Alembic 1.18.4 | SQLAlchemy-native database migration tool. |
@@ -122,7 +122,9 @@ Production command:
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-For the MVP, run one worker per process because in-memory quote/current-candle caches are process-local. Scale horizontally only after moving shared live state to Redis or another pub/sub layer.
+For the MVP, run one worker per process because in-memory quote/forming-candle caches and stream
+fanout state are process-local. Scale horizontally only after moving shared live state to Redis or
+another pub/sub layer.
 
 ## 4. Contract and Data Modeling
 
@@ -184,11 +186,10 @@ WebSocket implementation uses the official Binance SDK WebSocket Streams APIs be
 adapter. The adapter owns SDK models, callbacks, handles, reconnect delay, and provider stream
 names so application services only see normalized domain events.
 
-Initial streams:
+Initial stream:
 
 ```text
 <symbol>@ticker
-<symbol>@kline_<interval>
 ```
 
 Examples from the current spec:
@@ -196,8 +197,6 @@ Examples from the current spec:
 ```text
 btcusd@ticker
 ethusd@ticker
-btcusd@kline_1m
-ethusd@kline_1m
 ```
 
 Provider-symbol decision:
@@ -255,9 +254,9 @@ Important constraints:
   interactions outside the ASGI event loop.
 - Use one shared process-local Twelve Data WebSocket connection for active Forex streams, matching
   the free-plan constraint and the MVP single-worker assumption.
-- Treat Twelve Data WebSocket as price-only upstream. Gateway Forex candles are derived from price
-  tick buckets with decimal zero volume; REST historical candles remain authoritative for backfill.
-- Apply the weekly Forex session filter to derived stream candles. Holidays and exceptional
+- Treat Twelve Data WebSocket as price-only upstream. Candle snapshots use the REST time-series
+  adapter and retain its session policy; no stream tick aggregation is performed.
+- Apply the weekly Forex session filter in the REST candle service. Holidays and exceptional
   closures remain out of scope.
 
 ### yfinance Market Data Provider
@@ -307,10 +306,10 @@ Important constraints:
 - Preserve natural Yahoo/yfinance gaps without synthesizing omitted candles.
 - Create the shared yfinance-compatible session lazily, serialize access in a worker thread, and
   clamp HTTP requests to `PROVIDER_HTTP_TIMEOUT_SECONDS`.
-- Use one lazy process-local yfinance `AsyncWebSocket` for active YFINANCE stream interests and
-  share provider-symbol subscriptions across quote and candle channels.
-- Derive YFINANCE stream candles from accepted price ticks on the UTC timeframe grid with decimal
-  zero volume. Ignore Yahoo day volume and do not synthesize skipped buckets.
+- Use one lazy process-local yfinance `AsyncWebSocket` for active YFINANCE quote interests and
+  share provider-symbol subscriptions.
+- Do not derive candles from stream ticks; use the REST candle adapter. Ignore Yahoo day volume for
+  the quote-only stream and do not synthesize quote events.
 - Keep accepted-but-silent YFINANCE interests in `CONNECTING`; do not poll, remap symbols, or fall
   back to another provider.
 - Supervise visible listener termination with the configured provider reconnect delay, a fresh
@@ -395,8 +394,12 @@ Patterns:
 Use process-local in-memory cache for:
 
 - Latest quote per canonical symbol.
-- Current forming candle per `(symbol, timeframe)`.
+- Forming candle snapshots per `(canonical symbol, provider, provider symbol, timeframe)`.
 - Optional provider health state.
+
+The forming snapshot cache uses `CANDLE_FORMING_CACHE_TTL_SECONDS` (default five seconds), evicts
+entries at TTL or candle close time, and uses per-key single-flight refreshes. Completed candles
+continue through PostgreSQL persistence; the cache is not shared across workers.
 
 Concurrency:
 
@@ -604,7 +607,7 @@ MAX_CANDLES_PER_REQUEST
 PROVIDER_HTTP_TIMEOUT_SECONDS
 STREAM_CLIENT_QUEUE_CAPACITY
 STREAM_PROVIDER_QUEUE_CAPACITY
-STREAM_PERSISTENCE_QUEUE_CAPACITY
+CANDLE_FORMING_CACHE_TTL_SECONDS
 STREAM_IDLE_GRACE_SECONDS
 STREAM_FRESHNESS_CHECK_SECONDS
 ```

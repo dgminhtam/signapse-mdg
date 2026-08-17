@@ -12,10 +12,7 @@ from app.db.repositories import PostgresSymbolRepository
 from app.domain.candles import Candle, CandleRequest
 from app.domain.quotes import ProviderQuoteBatch, Quote
 from app.domain.streams import (
-    CandleInterest,
     ProviderStreamEvent,
-    QuoteInterest,
-    StreamCandle,
     StreamQuote,
     StreamRequest,
 )
@@ -115,21 +112,11 @@ class MatrixStreamProvider:
     def __init__(self) -> None:
         self.events: asyncio.Queue[ProviderStreamEvent] = asyncio.Queue()
         self.quote_subscriptions: list[SupportedSymbol] = []
-        self.candle_subscriptions: list[tuple[SupportedSymbol, str]] = []
 
     async def subscribe_quote(self, symbol: SupportedSymbol) -> None:
         self.quote_subscriptions.append(symbol)
 
-    async def subscribe_candle(
-        self,
-        symbol: SupportedSymbol,
-        timeframe: str,
-        provider_interval: str,
-    ) -> None:
-        del provider_interval
-        self.candle_subscriptions.append((symbol, timeframe))
-
-    async def unsubscribe(self, interest: QuoteInterest | CandleInterest) -> None:
+    async def unsubscribe(self, interest: object) -> None:
         del interest
 
     async def close(self) -> None:
@@ -153,8 +140,8 @@ def _mapping_cases(
 
 async def _next_stream_event(
     registration_queue: asyncio.Queue[object],
-    event_type: type[StreamQuote] | type[StreamCandle],
-) -> StreamQuote | StreamCandle:
+    event_type: type[StreamQuote],
+) -> StreamQuote:
     while True:
         event = await asyncio.wait_for(registration_queue.get(), timeout=1)
         if isinstance(event, event_type):
@@ -240,10 +227,7 @@ async def test_every_registry_mapping_passes_market_data_surface_smoke_matrix(
     manager = StreamManager(
         provider=stream_provider,
         quote_cache=QuoteCache(),
-        candle_cache=CandleCache(),
-        candle_repository=None,
         client_queue_capacity=20,
-        persistence_queue_capacity=20,
         idle_grace_seconds=0,
         stale_after_seconds=60,
         freshness_check_seconds=3600,
@@ -253,7 +237,7 @@ async def test_every_registry_mapping_passes_market_data_surface_smoke_matrix(
         for symbol, mapping in cases:
             selected, _selection = resolve_provider_selection(symbol, mapping.provider)
             registration = await manager.register(
-                StreamRequest((symbol.symbol,), "1m", mapping.provider),
+                StreamRequest((symbol.symbol,), mapping.provider),
                 [selected],
             )
             child = stream_children[mapping.provider]
@@ -269,32 +253,9 @@ async def test_every_registry_mapping_passes_market_data_surface_smoke_matrix(
                     received_at=MATRIX_NOW,
                 )
             )
-            timeframe_model = get_timeframe("1m")
-            assert timeframe_model is not None
-            candle = StreamCandle(
-                candle=Candle(
-                    symbol=symbol.symbol,
-                    asset_class=symbol.asset_class,
-                    provider=mapping.provider,
-                    provider_symbol=mapping.provider_symbol,
-                    timeframe="1m",
-                    open_time=MATRIX_START,
-                    close_time=candle_close_time(MATRIX_START, timeframe_model),
-                    open=Decimal("100"),
-                    high=Decimal("101"),
-                    low=Decimal("99"),
-                    close=Decimal("100.50"),
-                    volume=Decimal("1"),
-                    complete=False,
-                ),
-                received_at=MATRIX_NOW,
-            )
             await child.events.put(quote)
-            await child.events.put(candle)
             assert await _next_stream_event(registration.queue, StreamQuote) == quote
-            assert await _next_stream_event(registration.queue, StreamCandle) == candle
             assert child.quote_subscriptions[-1] == selected
-            assert child.candle_subscriptions[-1] == (selected, "1m")
             await manager.unregister(registration.id)
             await asyncio.sleep(0)
     finally:

@@ -11,15 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from alembic import command
 from app.api.routes_candles import get_candle_provider, get_candle_repository
-from app.cache.candle_cache import CandleCache
-from app.cache.quote_cache import QuoteCache
 from app.core.config import get_settings
 from app.db.repositories import PostgresCandleRepository
 from app.domain.candles import Candle
-from app.domain.streams import ProviderStreamEvent, StreamCandle, StreamRequest
 from app.domain.symbols import SupportedSymbol
 from app.main import app
-from app.services.stream_manager import StreamManager
 
 pytestmark = pytest.mark.integration
 
@@ -399,62 +395,3 @@ async def test_repository_read_scope_closes_before_provider_wait() -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-
-
-async def test_stream_manager_persists_completed_candles_but_not_forming(
-    database_engine: AsyncEngine,
-) -> None:
-    class FakeStreamProvider:
-        def __init__(self) -> None:
-            self.events: asyncio.Queue[ProviderStreamEvent] = asyncio.Queue()
-
-        async def subscribe_quote(self, symbol: SupportedSymbol) -> None:
-            del symbol
-
-        async def subscribe_candle(
-            self,
-            symbol: SupportedSymbol,
-            timeframe: str,
-            provider_interval: str,
-        ) -> None:
-            del symbol, timeframe, provider_interval
-
-        async def unsubscribe(self, interest: object) -> None:
-            del interest
-
-        async def close(self) -> None:
-            return
-
-    provider = FakeStreamProvider()
-    repository = PostgresCandleRepository(async_sessionmaker(database_engine))
-    manager = StreamManager(
-        provider=provider,
-        quote_cache=QuoteCache(),
-        candle_cache=CandleCache(),
-        candle_repository=repository,
-        client_queue_capacity=20,
-        persistence_queue_capacity=20,
-        idle_grace_seconds=0,
-        stale_after_seconds=30,
-        freshness_check_seconds=3600,
-    )
-    try:
-        await manager.register(StreamRequest(("BTC/USD",), "1m"), [BTC])
-        forming = make_candle(START)
-        completed = replace(make_candle(START + timedelta(minutes=1)), complete=True)
-
-        await provider.events.put(StreamCandle(forming, START))
-        await provider.events.put(StreamCandle(completed, START + timedelta(minutes=1)))
-        await asyncio.wait_for(provider.events.join(), timeout=1)
-        await asyncio.wait_for(manager._persistence_queue.join(), timeout=1)  # noqa: SLF001
-    finally:
-        await manager.stop()
-
-    rows = await repository.list_complete(
-        BTC,
-        "1m",
-        START,
-        START + timedelta(minutes=2),
-    )
-
-    assert [row.open_time for row in rows] == [START + timedelta(minutes=1)]

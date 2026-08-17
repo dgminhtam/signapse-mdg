@@ -4,7 +4,6 @@ import logging
 from app.core.observability import log_failure, log_rate_limited_warning
 from app.domain.errors import ProviderUnavailableError
 from app.domain.streams import (
-    CandleInterest,
     MarketStreamProvider,
     ProviderStreamEvent,
     QuoteInterest,
@@ -36,19 +35,6 @@ class MultiProviderStreamProvider:
             self._interest_providers[
                 QuoteInterest(symbol.symbol, symbol.provider, symbol.provider_symbol)
             ] = symbol.provider
-
-    async def subscribe_candle(
-        self,
-        symbol: SupportedSymbol,
-        timeframe: str,
-        provider_interval: str,
-    ) -> None:
-        provider = self._provider_for(symbol)
-        interest = CandleInterest(symbol.symbol, timeframe, symbol.provider, symbol.provider_symbol)
-        async with self._lock:
-            self._ensure_forwarding(symbol.provider, provider)
-            await provider.subscribe_candle(symbol, timeframe, provider_interval)
-            self._interest_providers[interest] = symbol.provider
 
     async def unsubscribe(self, interest: StreamInterest) -> None:
         async with self._lock:

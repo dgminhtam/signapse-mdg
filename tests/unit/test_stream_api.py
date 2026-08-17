@@ -44,7 +44,7 @@ class FakeManager:
             asyncio.Queue(10),
         )
         registration.queue.put_nowait(
-            StatusEvent("CONNECTING", request.symbols, ("quote", "candle"), NOW)
+            StatusEvent("CONNECTING", request.symbols, ("quote",), NOW)
         )
         registration.queue.put_nowait(
             StreamQuote(
@@ -73,11 +73,18 @@ def clear_overrides() -> object:
     app.dependency_overrides.clear()
 
 
-def patch_registry(monkeypatch: pytest.MonkeyPatch, symbols: list[SupportedSymbol]) -> None:
+def patch_registry(
+    monkeypatch: pytest.MonkeyPatch,
+    symbols: list[SupportedSymbol],
+) -> list[bool]:
+    calls: list[bool] = []
+
     async def resolve(_: object) -> list[SupportedSymbol]:
+        calls.append(True)
         return symbols
 
     monkeypatch.setattr(routes_stream, "resolve_stream_symbols", resolve)
+    return calls
 
 
 def patch_manager(monkeypatch: pytest.MonkeyPatch, manager: FakeManager) -> None:
@@ -95,8 +102,10 @@ def assert_websocket_closes(path: str) -> WebSocketDisconnect:
 @pytest.mark.parametrize(
     ("path", "code", "reason"),
     [
-        ("/v1/stream?timeframe=1m", 1008, "INVALID_SYMBOLS"),
-        ("/v1/stream?symbols=BTC/USD&timeframe=2m", 1008, "UNSUPPORTED_TIMEFRAME"),
+        ("/v1/stream", 1008, "INVALID_SYMBOLS"),
+        ("/v1/stream?symbols=BTC/USD&timeframe=", 1008, "TIMEFRAME_NOT_ALLOWED"),
+        ("/v1/stream?symbols=BTC/USD&timeframe=1m", 1008, "TIMEFRAME_NOT_ALLOWED"),
+        ("/v1/stream?symbols=BTC/USD&timeframe=1w", 1008, "TIMEFRAME_NOT_ALLOWED"),
     ],
 )
 def test_stream_route_rejects_invalid_query_shape(
@@ -114,12 +123,51 @@ def test_stream_route_rejects_invalid_query_shape(
     assert disconnect.reason == reason
 
 
+def test_stream_timeframe_rejection_happens_before_registry_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail(_: object) -> list[SupportedSymbol]:
+        raise AssertionError("timeframe rejection must precede registry access")
+
+    monkeypatch.setattr(routes_stream, "resolve_stream_symbols", fail)
+    patch_manager(monkeypatch, FakeManager())
+
+    disconnect = assert_websocket_closes("/v1/stream?symbols=BTC/USD&timeframe=1m")
+
+    assert disconnect.code == 1008
+    assert disconnect.reason == "TIMEFRAME_NOT_ALLOWED"
+
+
+def test_stream_timeframe_rejection_logs_safe_context(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    patch_registry(monkeypatch, [BTC])
+    patch_manager(monkeypatch, FakeManager())
+
+    disconnect = assert_websocket_closes("/v1/stream?symbols=BTC/USD&timeframe=1w")
+
+    assert disconnect.reason == "TIMEFRAME_NOT_ALLOWED"
+    records = [
+        record
+        for record in caplog.records
+        if record.getMessage() == "websocket_request_rejected"
+    ]
+    assert records
+    fields = records[-1].diagnostic_fields
+    assert fields["operation"] == "stream.request"
+    assert fields["error_code"] == "TIMEFRAME_NOT_ALLOWED"
+    assert fields["symbols"] == "BTC/USD"
+    assert fields["timeframe"] == "1w"
+    assert all("secret" not in str(record.diagnostic_fields).lower() for record in records)
+
+
 def test_stream_route_rejects_too_many_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
     patch_registry(monkeypatch, [BTC, ETH])
     patch_manager(monkeypatch, FakeManager())
     monkeypatch.setattr(routes_stream, "get_settings", lambda: Settings(max_quote_symbols=1))
 
-    disconnect = assert_websocket_closes("/v1/stream?symbols=BTC/USD,ETH/USD&timeframe=1m")
+    disconnect = assert_websocket_closes("/v1/stream?symbols=BTC/USD,ETH/USD")
 
     assert disconnect.code == 1008
     assert disconnect.reason == "TOO_MANY_SYMBOLS"
@@ -132,7 +180,7 @@ def test_stream_route_rejects_unsupported_symbol_before_provider_access(
     patch_registry(monkeypatch, [BTC])
     patch_manager(monkeypatch, manager)
 
-    disconnect = assert_websocket_closes("/v1/stream?symbols=SOL/USD&timeframe=1m")
+    disconnect = assert_websocket_closes("/v1/stream?symbols=SOL/USD")
 
     assert disconnect.code == 1008
     assert disconnect.reason == "UNSUPPORTED_SYMBOL"
@@ -146,7 +194,7 @@ def test_stream_route_rejects_database_unavailable(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(routes_stream, "resolve_stream_symbols", fail)
     patch_manager(monkeypatch, FakeManager())
 
-    disconnect = assert_websocket_closes("/v1/stream?symbols=BTC/USD&timeframe=1m")
+    disconnect = assert_websocket_closes("/v1/stream?symbols=BTC/USD")
 
     assert disconnect.code == 1011
     assert disconnect.reason == "DATABASE_UNAVAILABLE"
@@ -157,7 +205,7 @@ def test_stream_route_rejects_provider_unavailable(monkeypatch: pytest.MonkeyPat
     patch_registry(monkeypatch, [BTC])
     patch_manager(monkeypatch, manager)
 
-    disconnect = assert_websocket_closes("/v1/stream?symbols=BTC/USD&timeframe=1m")
+    disconnect = assert_websocket_closes("/v1/stream?symbols=BTC/USD")
 
     assert disconnect.code == 1011
     assert disconnect.reason == "PROVIDER_UNAVAILABLE"
@@ -171,12 +219,12 @@ def test_stream_route_sends_exact_status_and_quote_events_and_unregisters(
     patch_manager(monkeypatch, manager)
 
     with TestClient(app) as client:
-        with client.websocket_connect("/v1/stream?symbols=BTC/USD,BTC/USD&timeframe=1m") as ws:
+        with client.websocket_connect("/v1/stream?symbols=BTC/USD,BTC/USD") as ws:
             assert ws.receive_json() == {
                 "type": "status",
                 "state": "CONNECTING",
                 "symbols": ["BTC/USD"],
-                "channels": ["quote", "candle"],
+                "channels": ["quote"],
                 "observedAt": "2026-06-19T10:30:00Z",
             }
             assert ws.receive_json() == {
@@ -186,8 +234,22 @@ def test_stream_route_sends_exact_status_and_quote_events_and_unregisters(
                 "receivedAt": "2026-06-19T10:30:00Z",
             }
 
-    assert manager.registered[0][0] == StreamRequest(("BTC/USD",), "1m")
+    assert manager.registered[0][0] == StreamRequest(("BTC/USD",))
     assert manager.unregistered == ["client-1"]
+
+
+def test_stream_route_accepts_provider_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = FakeManager()
+    patch_registry(monkeypatch, [BTC])
+    patch_manager(monkeypatch, manager)
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/v1/stream?symbols=BTC/USD&provider=TWELVE_DATA"
+        ) as ws:
+            assert ws.receive_json()["state"] == "CONNECTING"
+
+    assert manager.registered[0][0] == StreamRequest(("BTC/USD",), "TWELVE_DATA")
 
 
 def test_stream_route_accepts_valid_mixed_provider_symbols(
@@ -198,29 +260,27 @@ def test_stream_route_accepts_valid_mixed_provider_symbols(
     patch_manager(monkeypatch, manager)
 
     with TestClient(app) as client:
-        with client.websocket_connect("/v1/stream?symbols=BTC/USD,EUR/USD&timeframe=1m") as ws:
+        with client.websocket_connect("/v1/stream?symbols=BTC/USD,EUR/USD") as ws:
             assert ws.receive_json()["state"] == "CONNECTING"
 
-    assert manager.registered[0][0] == StreamRequest(("BTC/USD", "EUR/USD"), "1m")
+    assert manager.registered[0][0] == StreamRequest(("BTC/USD", "EUR/USD"))
     assert manager.registered[0][1] == [BTC, EUR]
 
 
-def test_stream_handshake_echoes_request_id(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_stream_handshake_echoes_request_id(monkeypatch: pytest.MonkeyPatch) -> None:
     manager = FakeManager()
     patch_registry(monkeypatch, [BTC])
     patch_manager(monkeypatch, manager)
 
     with TestClient(app) as client:
         with client.websocket_connect(
-            "/v1/stream?symbols=BTC/USD&timeframe=1m",
+            "/v1/stream?symbols=BTC/USD",
             headers={"X-Request-ID": "ws-trace-123"},
         ) as ws:
             assert (b"x-request-id", b"ws-trace-123") in (ws.extra_headers or [])
 
 
-def test_stream_route_accepts_yfinance_and_three_provider_symbols(
+def test_stream_route_accepts_yfinance_and_three_symbols(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manager = FakeManager()
@@ -229,12 +289,9 @@ def test_stream_route_accepts_yfinance_and_three_provider_symbols(
 
     with TestClient(app) as client:
         with client.websocket_connect(
-            "/v1/stream?symbols=BTC/USD,EUR/USD,XAG/USD&timeframe=5m"
+            "/v1/stream?symbols=BTC/USD,EUR/USD,XAG/USD"
         ) as ws:
             assert ws.receive_json()["state"] == "CONNECTING"
 
-    assert manager.registered[0][0] == StreamRequest(
-        ("BTC/USD", "EUR/USD", "XAG/USD"),
-        "5m",
-    )
+    assert manager.registered[0][0] == StreamRequest(("BTC/USD", "EUR/USD", "XAG/USD"))
     assert manager.registered[0][1] == [BTC, EUR, SILVER]

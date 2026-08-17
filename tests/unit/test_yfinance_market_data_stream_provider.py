@@ -6,18 +6,10 @@ from decimal import Decimal
 import pytest
 
 from app.domain.errors import ProviderUnavailableError
-from app.domain.streams import (
-    CandleInterest,
-    ProviderSignal,
-    QuoteInterest,
-    StreamCandle,
-    StreamQuote,
-)
+from app.domain.streams import ProviderSignal, QuoteInterest, StreamQuote
 from app.domain.symbols import SupportedSymbol
 from app.providers.yfinance_market_data import SUPPORTED_YFINANCE_PROVIDER_SYMBOLS
-from app.providers.yfinance_market_data_stream import (
-    YFinanceMarketDataStreamProvider,
-)
+from app.providers.yfinance_market_data_stream import YFinanceMarketDataStreamProvider
 
 SILVER = SupportedSymbol("XAG/USD", "COMMODITY", "YFINANCE", "SI=F", True, 3)
 BRENT = SupportedSymbol("BRENT", "COMMODITY", "YFINANCE", "BZ=F", True, 2)
@@ -108,17 +100,15 @@ async def test_provider_is_lazy_shares_symbols_and_releases_final_references() -
 
     assert factory.created == []
     await provider.subscribe_quote(SILVER)
-    await provider.subscribe_candle(SILVER, "1m", "1m")
     await provider.subscribe_quote(BRENT)
 
+    assert not hasattr(provider, "subscribe_candle")
     assert factory.created == [client]
     assert client.subscribed == [["SI=F"], "BZ=F"]
 
-    await provider.unsubscribe(CandleInterest("XAG/USD", "1m"))
-    assert client.unsubscribed == []
-    await provider.unsubscribe(QuoteInterest("XAG/USD"))
+    await provider.unsubscribe(QuoteInterest("XAG/USD", "YFINANCE", "SI=F"))
     assert client.unsubscribed == ["SI=F"]
-    await provider.unsubscribe(QuoteInterest("BRENT"))
+    await provider.unsubscribe(QuoteInterest("BRENT", "YFINANCE", "BZ=F"))
 
     assert client.unsubscribed == ["SI=F", "BZ=F"]
     assert client.closed is True
@@ -130,15 +120,11 @@ async def test_provider_idempotently_subscribes_and_unsubscribes() -> None:
 
     await provider.subscribe_quote(SILVER)
     await provider.subscribe_quote(SILVER)
-    await provider.subscribe_candle(SILVER, "5m", "5m")
-    await provider.subscribe_candle(SILVER, "5m", "5m")
 
     assert client.subscribed == [["SI=F"]]
 
-    await provider.unsubscribe(CandleInterest("XAG/USD", "5m"))
-    await provider.unsubscribe(CandleInterest("XAG/USD", "5m"))
-    await provider.unsubscribe(QuoteInterest("XAG/USD"))
-    await provider.unsubscribe(QuoteInterest("XAG/USD"))
+    await provider.unsubscribe(QuoteInterest("XAG/USD", "YFINANCE", "SI=F"))
+    await provider.unsubscribe(QuoteInterest("XAG/USD", "YFINANCE", "SI=F"))
 
     assert client.unsubscribed == ["SI=F"]
 
@@ -175,51 +161,6 @@ async def test_provider_accepts_absent_provider_time() -> None:
 
     assert isinstance(event, StreamQuote)
     assert event.quote.provider_time is None
-    await provider.close()
-
-
-async def test_provider_derives_zero_volume_candles_and_ignores_day_volume() -> None:
-    client = FakeWebSocket()
-    provider = make_provider(FakeFactory(client))
-    await provider.subscribe_candle(SILVER, "1m", "1m")
-    await client.listen_started.wait()
-
-    client.emit(
-        {
-            "id": "SI=F",
-            "price": "63.10",
-            "time": int(datetime(2026, 6, 23, 9, 0, 10, tzinfo=UTC).timestamp() * 1000),
-            "day_volume": "999999",
-        }
-    )
-    first = await next_event(provider)
-    client.emit(
-        {
-            "id": "SI=F",
-            "price": "63.40",
-            "time": int(datetime(2026, 6, 23, 9, 0, 50, tzinfo=UTC).timestamp() * 1000),
-        }
-    )
-    updated = await next_event(provider)
-    client.emit(
-        {
-            "id": "SI=F",
-            "price": "63.20",
-            "time": int(datetime(2026, 6, 23, 9, 5, 1, tzinfo=UTC).timestamp() * 1000),
-        }
-    )
-    completed = await next_event(provider)
-    later = await next_event(provider)
-
-    assert isinstance(first, StreamCandle)
-    assert first.candle.volume == Decimal("0")
-    assert isinstance(updated, StreamCandle)
-    assert updated.candle.high == Decimal("63.40")
-    assert isinstance(completed, StreamCandle)
-    assert completed.candle.complete is True
-    assert completed.candle.open_time == datetime(2026, 6, 23, 9, 0, tzinfo=UTC)
-    assert isinstance(later, StreamCandle)
-    assert later.candle.open_time == datetime(2026, 6, 23, 9, 5, tzinfo=UTC)
     await provider.close()
 
 
@@ -270,7 +211,6 @@ async def test_successful_silent_subscription_emits_nothing() -> None:
     provider = make_provider(FakeFactory(client))
 
     await provider.subscribe_quote(SILVER)
-    await provider.subscribe_candle(SILVER, "1m", "1m")
     await client.listen_started.wait()
     await asyncio.sleep(0)
 
@@ -289,7 +229,7 @@ async def test_listener_failure_emits_reconnecting_and_recreates_client() -> Non
 
     assert isinstance(signal, ProviderSignal)
     assert signal.state == "RECONNECTING"
-    assert signal.interests == (QuoteInterest("XAG/USD"),)
+    assert signal.interests == (QuoteInterest("XAG/USD", "YFINANCE", "SI=F"),)
     assert first.closed is True
     assert second.subscribed == [["SI=F"]]
     await provider.close()
@@ -302,7 +242,7 @@ async def test_unsubscribe_failure_is_isolated_and_close_is_deterministic() -> N
     await provider.subscribe_quote(SILVER)
     await client.listen_started.wait()
 
-    await provider.unsubscribe(QuoteInterest("XAG/USD"))
+    await provider.unsubscribe(QuoteInterest("XAG/USD", "YFINANCE", "SI=F"))
 
     assert client.closed is True
     assert provider.events.empty()
@@ -319,14 +259,12 @@ async def test_initial_subscribe_failure_is_sanitized_and_closes_client() -> Non
     assert provider.events.empty()
 
 
-async def test_provider_rejects_unsupported_symbol_and_timeframe_without_client() -> None:
+async def test_provider_rejects_unsupported_symbol_without_client() -> None:
     factory = FakeFactory(FakeWebSocket())
     provider = make_provider(factory)
 
     with pytest.raises(ProviderUnavailableError):
         await provider.subscribe_quote(UNSUPPORTED)
-    with pytest.raises(ProviderUnavailableError):
-        await provider.subscribe_candle(SILVER, "2m", "2m")
 
     assert factory.created == []
 
@@ -347,3 +285,4 @@ async def test_provider_subscribes_every_approved_provider_symbol() -> None:
     ]
     assert subscribed == sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS)
     await provider.close()
+

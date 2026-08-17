@@ -1,18 +1,11 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
-from binance_sdk_spot.websocket_streams.models import KlineIntervalEnum
 
 from app.domain.errors import ProviderUnavailableError
-from app.domain.streams import (
-    CandleInterest,
-    ProviderSignal,
-    QuoteInterest,
-    StreamCandle,
-    StreamQuote,
-)
+from app.domain.streams import ProviderSignal, QuoteInterest, StreamQuote
 from app.domain.symbols import SupportedSymbol
 from app.providers.binance_spot_stream import BinanceSpotStreamProvider, BinanceWebSocketStreams
 
@@ -39,9 +32,8 @@ class FakeStreams:
         self.connect = connect
         self.error = error
         self.ticker_symbols: list[str] = []
-        self.kline_calls: list[tuple[str, KlineIntervalEnum]] = []
+        self.kline_calls: list[object] = []
         self.ticker_handle = FakeHandle()
-        self.kline_handle = FakeHandle()
         self.closed = False
 
     async def create_connection(self) -> object:
@@ -55,10 +47,6 @@ class FakeStreams:
         self.ticker_symbols.append(symbol)
         return self.ticker_handle
 
-    async def kline(self, symbol: str, interval: KlineIntervalEnum) -> FakeHandle:
-        self.kline_calls.append((symbol, interval))
-        return self.kline_handle
-
     async def close_connection(self) -> None:
         self.closed = True
         self.connections.clear()
@@ -70,64 +58,20 @@ def ticker_payload(**overrides: object) -> SimpleNamespace:
     return SimpleNamespace(**data)
 
 
-def kline_payload(**overrides: object) -> SimpleNamespace:
-    open_ms = int(START.timestamp() * 1000)
-    close_ms = int((START + timedelta(minutes=1) - timedelta(milliseconds=1)).timestamp() * 1000)
-    kline = SimpleNamespace(
-        s="BTCUSD",
-        i="1m",
-        t=open_ms,
-        T=close_ms,
-        o="10.00",
-        h="11.00",
-        l="9.00",
-        c="10.50",
-        v="0E-8",
-        x=False,
-    )
-    data = {"s": "BTCUSD", "E": open_ms + 1000, "k": kline}
-    data.update(overrides)
-    return SimpleNamespace(**data)
-
-
-async def test_stream_provider_subscribes_with_lowercase_sdk_names_and_normalizes_events() -> None:
+async def test_stream_provider_is_ticker_only_and_normalizes_quotes() -> None:
     streams = FakeStreams()
     provider = BinanceSpotStreamProvider(cast(BinanceWebSocketStreams, streams), queue_capacity=10)
 
     await provider.subscribe_quote(BTC)
-    await provider.subscribe_candle(BTC, "1m", "1m")
     streams.ticker_handle.callbacks[0](ticker_payload())
-    streams.kline_handle.callbacks[0](kline_payload())
 
     quote = await provider.events.get()
-    candle = await provider.events.get()
     assert streams.ticker_symbols == ["btcusd"]
-    assert streams.kline_calls == [("btcusd", KlineIntervalEnum.INTERVAL_1m)]
+    assert streams.kline_calls == []
     assert isinstance(quote, StreamQuote)
     assert quote.quote.symbol == "BTC/USD"
     assert str(quote.quote.price) == "63388.84000000"
-    assert isinstance(candle, StreamCandle)
-    assert candle.candle.complete is False
-    assert str(candle.candle.volume) == "0E-8"
-
-
-async def test_stream_provider_maps_four_hour_interval() -> None:
-    streams = FakeStreams()
-    provider = BinanceSpotStreamProvider(cast(BinanceWebSocketStreams, streams), queue_capacity=10)
-
-    await provider.subscribe_candle(BTC, "4h", "4h")
-
-    assert streams.kline_calls == [("btcusd", KlineIntervalEnum.INTERVAL_4h)]
-
-
-async def test_stream_provider_rejects_unknown_interval_before_connecting() -> None:
-    streams = FakeStreams()
-    provider = BinanceSpotStreamProvider(cast(BinanceWebSocketStreams, streams), queue_capacity=10)
-
-    with pytest.raises(ProviderUnavailableError):
-        await provider.subscribe_candle(BTC, "2m", "2m")
-
-    assert streams.connections == []
+    assert quote.quote.provider_symbol == "BTCUSD"
 
 
 @pytest.mark.parametrize(
@@ -144,24 +88,6 @@ async def test_stream_provider_rejects_malformed_ticker_payload(payload: object)
     await provider.subscribe_quote(BTC)
 
     streams.ticker_handle.callbacks[0](payload)
-
-    assert provider.events.empty()
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [
-        kline_payload(s="ETHUSD"),
-        kline_payload(k=SimpleNamespace(s="BTCUSD", i="5m")),
-        kline_payload(k=SimpleNamespace(s="BTCUSD", i="1m", x=False)),
-    ],
-)
-async def test_stream_provider_rejects_malformed_kline_payload(payload: object) -> None:
-    streams = FakeStreams()
-    provider = BinanceSpotStreamProvider(cast(BinanceWebSocketStreams, streams), queue_capacity=10)
-    await provider.subscribe_candle(BTC, "1m", "1m")
-
-    streams.kline_handle.callbacks[0](payload)
 
     assert provider.events.empty()
 
@@ -193,11 +119,10 @@ async def test_stream_provider_unsubscribes_and_closes_connection() -> None:
     assert streams.closed is True
 
 
-async def test_stream_provider_emits_reconnecting_and_error_signals() -> None:
+async def test_stream_provider_emits_quote_reconnecting_and_error_signals() -> None:
     streams = FakeStreams()
     provider = BinanceSpotStreamProvider(cast(BinanceWebSocketStreams, streams), queue_capacity=10)
     await provider.subscribe_quote(BTC)
-    await provider.subscribe_candle(BTC, "1m", "1m")
 
     provider.emit_reconnecting()
     provider.emit_error()
@@ -206,9 +131,9 @@ async def test_stream_provider_emits_reconnecting_and_error_signals() -> None:
     error = await provider.events.get()
     assert isinstance(reconnecting, ProviderSignal)
     assert reconnecting.state == "RECONNECTING"
-    assert set(reconnecting.interests) == {
-        QuoteInterest("BTC/USD"),
-        CandleInterest("BTC/USD", "1m"),
-    }
+    assert reconnecting.interests == (
+        QuoteInterest("BTC/USD", "BINANCE_SPOT", "BTCUSD"),
+    )
     assert isinstance(error, ProviderSignal)
     assert error.state == "ERROR"
+

@@ -12,7 +12,6 @@ from app.api.errors import (
     quote_request_error_handler,
     unexpected_error_handler,
 )
-from app.api.routes_candles import get_candle_cache
 from app.api.routes_candles import router as candles_router
 from app.api.routes_crawl import router as crawl_router
 from app.api.routes_economic_calendar import router as economic_calendar_router
@@ -25,7 +24,7 @@ from app.api.routes_symbols import router as symbols_router
 from app.core.config import get_settings
 from app.core.cronjob import CronjobManager
 from app.core.observability import DiagnosticContextMiddleware, configure_logging
-from app.db.repositories import PostgresCandleRepository, PostgresEconomicCalendarRepository
+from app.db.repositories import PostgresEconomicCalendarRepository
 from app.db.session import build_session_factory
 from app.domain.errors import (
     CandleRequestError,
@@ -56,7 +55,6 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     cronjob_manager = CronjobManager()
     database = build_session_factory(settings)
-    repository = PostgresCandleRepository(database[1]) if database is not None else None
     if database is not None and settings.economic_calendar_poll_seconds > 0:
         cronjob_manager.register(
             EconomicCalendarFetchCronjob(
@@ -92,10 +90,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     manager = StreamManager(
         provider=provider,
         quote_cache=get_quote_cache(),
-        candle_cache=get_candle_cache(),
-        candle_repository=repository,
         client_queue_capacity=settings.stream_client_queue_capacity,
-        persistence_queue_capacity=settings.stream_persistence_queue_capacity,
         idle_grace_seconds=settings.stream_idle_grace_seconds,
         stale_after_seconds=settings.quote_stale_after_seconds,
         freshness_check_seconds=settings.stream_freshness_check_seconds,

@@ -81,9 +81,9 @@ by quote, candle, and stream; no route-specific selection or fallback exists.
 
 - Serve normalized latest quotes through HTTP.
 - Serve normalized historical candles through HTTP.
-- Stream normalized quote and candle events through WebSocket.
+- Stream normalized quote events through WebSocket; serve candle snapshots through REST.
 - Enforce latest-quote freshness internally and expose stale HTTP data as `DATA_STALE`.
-- Cache latest quotes and current candles in memory.
+- Cache latest quotes and short-lived forming candle snapshots in process-local memory.
 - Persist closed candles in PostgreSQL.
 - Keep the MVP deployable as a small isolated FastAPI service.
 
@@ -225,7 +225,8 @@ Recommended initial timeframes:
 - Is wired to public `/v1/quotes`, `/v1/candles`, and `/v1/stream` through provider routers.
 - Maps the gateway's half-open candle range to Twelve Data UTC time-series boundaries.
 - Normalizes missing Forex volume to zero as an unavailable-volume placeholder.
-- Normalizes Twelve Data WebSocket price ticks into quote events and derives stream candles locally.
+- Normalizes Twelve Data WebSocket price ticks into quote events only; candle snapshots remain on
+  the REST candle service.
 
 ### yfinance Market Data Providers
 
@@ -240,11 +241,11 @@ Recommended initial timeframes:
   decimal zero and preserving natural provider gaps without synthetic candles.
 - Runs serialized synchronous yfinance work in `asyncio.to_thread` and applies
   `PROVIDER_HTTP_TIMEOUT_SECONDS` through the shared yfinance-compatible session.
-- Uses one lazy process-local `AsyncWebSocket` for active YFINANCE stream interests, shares
-  provider-symbol subscriptions across quote and candle channels, and supervises visible listener
+- Uses one lazy process-local `AsyncWebSocket` for active YFINANCE quote interests, shares
+  provider-symbol subscriptions, and supervises visible listener
   termination with fresh-client reconstruction and resubscription.
-- Normalizes valid WebSocket price ticks into quote events and derives UTC-aligned candles with
-  decimal zero volume; Yahoo day volume is ignored because it is not interval volume.
+- Normalizes valid WebSocket price ticks into quote events; Yahoo day volume is not exposed because
+  the quote event has no volume field.
 - Keeps successfully subscribed but silent symbols in `CONNECTING` without polling, remapping,
   fallback, or fabricated events.
 - Keeps yfinance imports and SDK details inside `app/providers/`.
@@ -260,7 +261,11 @@ Recommended initial timeframes:
 
 ### Candle Cache and Repository
 
-- Stores current forming candles in memory.
+- Stores forming candle snapshots in one process-local cache with
+  `CANDLE_FORMING_CACHE_TTL_SECONDS` (default five seconds).
+- Keys snapshots by canonical symbol, Provider Selection/provider symbol, and timeframe.
+- Evicts entries at TTL expiry or candle `closeTime`; per-key locks make concurrent REST misses
+  single-flight.
 - Persists closed candles in PostgreSQL.
 - Reads closed candles from PostgreSQL before calling provider REST.
 - Upserts closed candles by `(provider, provider_symbol, timeframe, open_time)`.
@@ -268,14 +273,16 @@ Recommended initial timeframes:
 ### Stream Manager
 
 - Accepts client WebSocket subscriptions.
-- Validates all symbols and timeframe before accepting a stream.
+- Validates all symbols and optional Provider Override before accepting a stream. A present
+  `timeframe` query is rejected with `1008 TIMEFRAME_NOT_ALLOWED` before registry/provider access.
 - Routes upstream interests by persisted provider mapping through a multi-provider stream router.
 - Opens upstream Binance, Twelve Data, or YFINANCE streams only when at least one client is
   subscribed.
 - Closes upstream streams when no matching clients remain, optionally after a short idle grace period.
 - Subscribes to normalized provider events from the adapter.
-- Fans out quote and candle events to matching clients.
-- Emits status events such as `SUBSCRIBED`, `STALE`, `RECONNECTING`, `MARKET_CLOSED`, and `ERROR`.
+- Fans out quote events to matching clients and updates QuoteCache before fanout.
+- Emits quote-only status events such as `CONNECTING`, `SUBSCRIBED`, `STALE`, `RECONNECTING`, and
+  `ERROR`; `MARKET_CLOSED` and candle lifecycle state do not exist on this stream.
 
 ## 6. Data Flow
 
@@ -375,35 +382,25 @@ therefore remains provider-agnostic to clients while making its coarser precisio
 ### WebSocket Stream Flow
 
 ```text
-Client -> WS /v1/stream?symbols=BTC/USD,EUR/USD&timeframe=1m
-  -> API validates all symbols and timeframe
-  -> Stream Manager registers client subscription
-  -> Stream Manager sends CONNECTING
-  -> Stream Router opens matching upstream Binance, Twelve Data, and YFINANCE streams if needed
-  -> Stream Manager sends status SUBSCRIBED when upstream data is available
-  -> Binance Adapter receives provider ticker/kline events
-  -> Twelve Data Adapter receives Forex price ticks from one shared SDK WebSocket
-  -> YFINANCE Adapter receives price ticks from one shared yfinance AsyncWebSocket
-  -> Adapters normalize quote events
-  -> Twelve Data and YFINANCE adapters derive candle events from price tick buckets
-  -> Quote/Candle caches are updated
-  -> Completed candles are queued for idempotent PostgreSQL persistence
-  -> Stream Manager fans out events to matching clients
+Client -> WS /v1/stream?symbols=BTC/USD,EUR/USD[&provider=...]
+  -> API rejects any present timeframe query with 1008 TIMEFRAME_NOT_ALLOWED
+  -> API validates symbols, Provider Override, registry rows, and selected mappings
+  -> Stream Manager registers one quote interest per canonical symbol/mapping
+  -> Stream Manager sends CONNECTING; no initial quote snapshot is synthesized
+  -> Stream Router opens matching upstream Binance ticker, Twelve Data price, or YFINANCE streams
+  -> Adapters normalize valid quote events
+  -> Stream Manager updates QuoteCache before fanout
+  -> Stream Manager sends SUBSCRIBED after the first valid quote
+  -> Stream Manager emits STALE/RECONNECTING/ERROR for quote lifecycle changes
 ```
 
-Twelve Data and YFINANCE stream candles are derived from price ticks for the requested timeframe.
-Volume is decimal zero because those price events do not provide gateway-compatible interval
-volume. The gateway does not synthesize skipped buckets; REST historical candles remain
-authoritative for backfill. Silent YFINANCE interests remain `CONNECTING` until their first valid
-tick.
-
-If upstream reconnects, the stream should emit `RECONNECTING`. If open-session data exceeds the
-freshness threshold, it should emit `STALE`. If a Forex candle channel is outside the weekly quote
-session, it emits `MARKET_CLOSED`, is excluded from stale evaluation, and returns to `CONNECTING`
-when the session reopens. The same scope limit applies as HTTP candles: holidays, early closes,
-late opens, exceptional closures, and provider maintenance windows are not modeled yet.
-Per-client bounded queues isolate slow consumers; an overloaded client is closed with `1013`
-without blocking provider consumption or other clients.
+The WebSocket is quote-only. It does not subscribe to klines, derive candles from ticks, maintain
+candle session state, write candle snapshots, or persist candle events. Clients that need a forming
+or completed candle call `GET /v1/candles` with an explicit timeframe. That REST flow is
+self-contained: it reads completed PostgreSQL rows, fills provider gaps, stores eligible forming
+snapshots for five seconds, and returns `503 PROVIDER_UNAVAILABLE` if an expired snapshot cannot be
+refreshed. Per-client bounded queues isolate slow consumers; an overloaded client is closed with
+`1013` without blocking provider consumption or other clients.
 
 ## 7. API Surface
 
@@ -422,7 +419,7 @@ without blocking provider consumption or other clients.
 
 | Path | Purpose |
 | --- | --- |
-| `/v1/stream?symbols=...&timeframe=...` | Realtime normalized quote, candle, and status events. |
+| `/v1/stream?symbols=...[&provider=...]` | Realtime normalized quote and quote-lifecycle status events. |
 
 ## 8. Internal Models
 
@@ -605,7 +602,7 @@ ON market_data_candles (provider, provider_symbol, timeframe, open_time);
 | `PROVIDER_HTTP_TIMEOUT_SECONDS` | `5` | Provider REST timeout. |
 | `STREAM_CLIENT_QUEUE_CAPACITY` | `256` | Per-client downstream event queue size. |
 | `STREAM_PROVIDER_QUEUE_CAPACITY` | `1024` | Provider adapter ingress queue size. |
-| `STREAM_PERSISTENCE_QUEUE_CAPACITY` | `256` | Completed-candle persistence queue size. |
+| `CANDLE_FORMING_CACHE_TTL_SECONDS` | `5` | Process-local forming snapshot TTL. |
 | `STREAM_IDLE_GRACE_SECONDS` | `5` | Delay before closing unused upstream interests. |
 | `STREAM_FRESHNESS_CHECK_SECONDS` | `1` | Freshness monitor interval. |
 
@@ -677,7 +674,8 @@ backfill runs carry a `job_id` instead.
   client access.
 - Use SQLAlchemy 2 async sessions for PostgreSQL access.
 - Run provider WebSocket consumers as background asyncio tasks created on demand by subscriptions.
-- Protect in-memory quote and current-candle caches with an `asyncio.Lock` or a small cache abstraction that owns mutation.
+- Protect in-memory quote and forming-candle caches with cache-owned `asyncio.Lock` instances;
+  use an independent per-key lock for forming snapshot single-flight refreshes.
 - Keep fanout non-blocking: one slow client should not block provider consumption or other clients.
 
 ## 14. Observability
