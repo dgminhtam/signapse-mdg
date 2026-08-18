@@ -15,7 +15,7 @@ This document records the recommended technology stack for the crypto MVP descri
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation and generated models/errors. |
 | Twelve Data provider SDK | twelvedata 1.4.0 | Official SDK foundation for multi-asset REST, time series, and price streaming. |
-| yfinance provider dependency | yfinance 1.4.1 | Open-source Yahoo Finance wrapper for latest planned-asset quotes, historical candles, and asynchronous price streaming. |
+| yfinance provider dependency | yfinance 1.6.0 | Open-source Yahoo Finance wrapper for latest planned-asset quotes, historical candles, and asynchronous price streaming. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration tests; not used for production Binance transport. |
 | Database | PostgreSQL 18.4 | Reliable relational store for completed candles and future asset metadata. |
 | DB driver | asyncpg 0.31.0 | PostgreSQL driver designed for Python asyncio. |
@@ -49,8 +49,7 @@ These versions are locked as the project baseline from 2026-06-19. Use latest st
 | pydantic-settings | `2.14.1` |
 | binance-sdk-spot | `9.2.0` |
 | twelvedata | `1.4.0` |
-| yfinance | `1.4.1` |
-| Crawl4AI | `0.9.1` |
+| yfinance | `1.6.0` |
 | HTTPX (dev) | `0.28.1` |
 | asyncpg | `0.31.0` |
 | SQLAlchemy | `2.0.51` |
@@ -526,20 +525,6 @@ uv run ruff format .
 uv run mypy app
 ```
 
-### Crawl4AI Runtime
-
-Crawl4AI is a locked gateway runtime dependency:
-
-```text
-uv sync
-uv run python -m playwright install chromium
-uv run crawl4ai-doctor
-```
-
-The gateway always registers `/crawl`. The dev gateway image includes Crawl4AI and Playwright
-Chromium; local development must provision Chromium once. FastAPI does not initialize a browser
-during startup.
-
 ### Ruff
 
 Use Ruff for linting and formatting.
@@ -623,8 +608,7 @@ pydantic==2.13.4
 pydantic-settings==2.14.1
 binance-sdk-spot==9.2.0
 twelvedata==1.4.0
-yfinance==1.4.1
-crawl4ai==0.9.1
+yfinance==1.6.0
 sqlalchemy[asyncio]==2.0.51
 asyncpg==0.31.0
 alembic==1.18.4
@@ -659,7 +643,6 @@ mypy==2.1.0
 - PostgreSQL + SQLAlchemy async + Alembic for candle cache.
 - Process-local cache for MVP.
 - uv + Ruff + mypy + pytest for developer workflow.
-- Crawl4AI 0.9.1 as a required runtime packaged with Playwright Chromium in the dev gateway image.
 - Docker Compose deployment on the existing server.
 
 ### Deferred

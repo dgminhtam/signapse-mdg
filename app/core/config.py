@@ -20,7 +20,6 @@ class Settings(BaseSettings):
     binance_ws_base_url: str = "wss://stream.binance.com:9443"
     twelvedata_api_keys: str | None = None
     twelvedata_rest_base_url: str = "https://api.twelvedata.com"
-    crawl_proxy_url: str | None = None
     provider_http_timeout_seconds: float = Field(default=5, gt=0)
     provider_ws_reconnect_delay_seconds: float = Field(default=5, ge=0)
     quote_cache_ttl_seconds: float = Field(default=10, ge=0)

@@ -13,7 +13,6 @@ from app.api.errors import (
     unexpected_error_handler,
 )
 from app.api.routes_candles import router as candles_router
-from app.api.routes_crawl import router as crawl_router
 from app.api.routes_economic_calendar import router as economic_calendar_router
 from app.api.routes_health import router as health_router
 from app.api.routes_historical_price import router as historical_price_router
@@ -141,7 +140,6 @@ def create_app() -> FastAPI:
     application.include_router(historical_price_router)
     application.include_router(economic_calendar_router)
     application.include_router(stream_router)
-    application.include_router(crawl_router)
     return application
 
 

@@ -480,72 +480,12 @@ Semantics:
 - `key` is `{type}:{external_event_id}`. Database `id`, `externalEventId`, provider source, and
   upstream site fields are not exposed.
 - `description` and `newsUrl` are nullable enrichment fields from upstream event details. `newsUrl`
-  is a single related article redirect URL for downstream crawling; raw news HTML, article content,
-  and history rows are not exposed.
+  is a single related article redirect URL for downstream article retrieval; raw news HTML, article
+  content, and history rows are not exposed.
 - The refresh keeps the configured polling cadence (`300` seconds in production) for base values.
   Each run uses non-extended base scraping, preserves stored enrichment when base values are null,
   and requests details only for incomplete events not attempted during the current UTC day.
 - Empty valid ranges return `200` with `events: []`.
-
-### Crawl4AI API
-
-This endpoint converts caller-supplied URLs to fit Markdown. It is always registered but remains
-outside the public `/v1` market-data contract.
-
-```http
-POST /crawl
-Content-Type: application/json
-
-{"urls": ["https://example.com", "https://crawl4ai.com"]}
-```
-
-Response:
-
-```json
-{
-  "results": [
-    {"url": "https://example.com/", "content": "# Example Domain", "error": null},
-    {"url": "https://crawl4ai.com/", "content": null, "error": "Crawl failed."}
-  ]
-}
-```
-
-Example curl:
-
-```bash
-curl --location 'http://localhost:8000/crawl' \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "urls": [
-      "https://example.com",
-      "https://crawl4ai.com"
-    ]
-  }'
-```
-
-Semantics:
-
-- Crawl4AI is a required runtime dependency. Local development needs `uv sync` and one
-  `uv run python -m playwright install chromium` setup.
-- The route is always registered.
-- The request accepts only `urls`, containing 1 through 10 HTTP(S) URLs; Crawl4AI configuration
-  fields are rejected.
-- Browser, crawl, and pruning settings are server-owned. Crawl runs use Crawl4AI's undetected
-  browser adapter with stealth and magic modes, wait for the page load event, and allow two seconds
-  for post-load JavaScript. Returned `content` is Crawl4AI fit Markdown without source-specific
-  cleanup.
-- When `CRAWL_PROXY_URL` is set, every crawl uses that server-owned HTTP, HTTPS, or SOCKS5 proxy;
-  proxy configuration and credentials are never accepted by the API.
-- Each result contains its normalized input `url`. Response order is unspecified; callers correlate
-  results by URL rather than list position.
-- URL-level failures set `content` to null and `error` to `"Crawl failed."` without discarding other
-  results. Mixed success/failure and all-item failure responses use HTTP `200`.
-- Browser or batch-execution failures that prevent per-URL outcomes return sanitized HTTP `502`;
-  invalid request bodies return HTTP `422`.
-- Each request owns one browser and submits the URL list through Crawl4AI's native batch operation,
-  then closes the browser when complete.
-- Do not expose this endpoint on a publicly reachable gateway. Public use requires SSRF controls
-  covering DNS resolution, redirects, and browser subrequests.
 
 ## WebSocket Stream Contract
 
@@ -794,7 +734,7 @@ Recommended stack:
 | DTO validation | Pydantic 2.13.4 | Typed models, JSON serialization, validation. |
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation; synchronous REST calls are offloaded from the event loop. |
-| yfinance provider dependency | yfinance 1.4.1 | Open-source Yahoo Finance wrapper used for latest quotes, historical candles, and asynchronous price streaming on planned commodities and indexes. |
+| yfinance provider dependency | yfinance 1.6.0 | Open-source Yahoo Finance wrapper used for latest quotes, historical candles, and asynchronous price streaming on planned commodities and indexes. |
 | Economic calendar dependency | market-calendar-tool 0.2.2 | Scrapes ForexFactory, MetalsMine, EnergyExch, and CryptoCraft calendar rows for persistence. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration testing only. |
 | Database | PostgreSQL 18.4 | Reuse relational persistence for candle cache. |

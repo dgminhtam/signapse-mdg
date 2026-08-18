@@ -8,8 +8,7 @@ container database có sẵn trong Docker network `signapse_default`.
 - Docker và Docker Compose.
 - PostgreSQL container `signapse-database-1` đang chạy trong network `signapse_default`.
 - Server có outbound network tới Binance, Twelve Data, và Yahoo Finance.
-- Máy build có outbound network tới Python package index, Playwright CDN, và Debian package
-  repositories để cài Crawl4AI, Chromium, cùng Linux libraries cần thiết.
+- Máy build có outbound network tới Python package index và Debian package repositories.
 
 ## Configure
 
@@ -23,9 +22,6 @@ Trước khi deploy dev, sửa các giá trị này trong `docker-compose.yml` n
 - `DATABASE_URL`
 - `TWELVEDATA_API_KEYS`
 - published port ở `ports`
-
-`/crawl` luôn được đăng ký trong gateway image. Giữ endpoint ở network nội bộ vì caller cung cấp
-URL để crawler truy cập.
 
 Default `DATABASE_URL` dùng service name `database` trong Docker network `signapse_default`:
 
@@ -102,16 +98,10 @@ Trên máy local, build image bằng `Dockerfile` rồi push lên Docker Hub:
 
 ```bash
 docker login
-docker buildx build --platform linux/amd64 -t dgminhtam/signapse-mdg:dev --push .
 ```
 
-Dockerfile cài locked Crawl4AI runtime và Playwright Chromium cùng Linux dependencies. Build sẽ dừng
-nếu một trong hai bước lỗi. Có thể build một image local để kiểm tra trước khi push:
-
 ```bash
-docker buildx build --platform linux/amd64 -t signapse-mdg:crawl-smoke --load .
-docker run --rm signapse-mdg:crawl-smoke python -c "import importlib.metadata, crawl4ai; print(importlib.metadata.version('crawl4ai'))"
-docker run --rm signapse-mdg:crawl-smoke python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(headless=True); browser.close(); p.stop()"
+docker buildx build --platform linux/amd64 -t dgminhtam/signapse-mdg:dev --push .
 ```
 
 Giá trị tag này phải khớp với `image` trong `docker-compose.yml`:
@@ -126,12 +116,9 @@ Trên dev server, pull image:
 
 ```bash
 docker compose pull gateway
-```
-
-Run migrations:
-
-```bash
 docker compose run --rm gateway uv run alembic upgrade head
+docker compose up -d --force-recreate gateway
+docker compose logs -f gateway
 ```
 
 Optional candle backfill:
@@ -147,12 +134,6 @@ docker compose run --rm gateway uv run python -m app.backfill_candles \
 Backfill is manual and does not run automatically during deploy. It requires `DATABASE_URL` and
 the provider configuration needed for any missing candle ranges. Use filters to keep the first run
 small; reruns are safe because complete candle upserts are idempotent.
-
-Start the gateway:
-
-```bash
-docker compose up -d --force-recreate gateway
-```
 
 ## Verify
 
@@ -183,18 +164,6 @@ Binance quote smoke test:
 ```bash
 curl "http://127.0.0.1:8000/v1/quotes?symbols=BTC%2FUSD"
 ```
-
-Crawl4AI batch smoke test:
-
-```bash
-curl --fail-with-body --location 'http://127.0.0.1:8000/crawl' \
-  --header 'Content-Type: application/json' \
-  --data '{"urls":["https://example.com"]}'
-```
-
-Response phải chứa item tương ứng với input URL và có `content` hoặc `error`. Endpoint này chỉ dành
-cho traffic nội bộ; không public trực tiếp vì URL do caller cung cấp cần được bảo vệ bằng auth,
-rate limiting, và chính sách chống SSRF ở lớp đứng trước.
 
 ## Operate
 

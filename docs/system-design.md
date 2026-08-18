@@ -230,7 +230,7 @@ Recommended initial timeframes:
 
 ### yfinance Market Data Providers
 
-- Locks the open-source `yfinance==1.4.1` package for latest quote, historical candle, and
+- Locks the open-source `yfinance==1.6.0` package for latest quote, historical candle, and
   asynchronous price-stream retrieval.
 - Supports the 23-symbol approved yfinance allowlist used by active defaults and inactive manual
   alternatives.
