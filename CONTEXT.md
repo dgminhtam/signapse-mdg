@@ -59,3 +59,23 @@ _Avoid_: Candle stream, timeframe stream
 **Candle Snapshot**:
 The OHLC state returned for a canonical asset and requested timeframe at one point in time. A snapshot may represent either a forming candle or a completed candle.
 _Avoid_: Live price, quote tick
+
+**Eligible Candle Slot**:
+A timeframe opening timestamp permitted by an asset's market-session policy, whether or not an upstream candle exists for that timestamp.
+_Avoid_: Candle row, available candle
+
+**Provider-backed Candle Snapshot**:
+A candle snapshot whose OHLCV values are backed by an upstream provider observation and retained by the gateway as forming or completed data.
+_Avoid_: Synthetic candle, fabricated candle
+
+**Candle Count**:
+An upper bound on Provider-backed Candle Snapshots selected from a directional anchor; the result may contain fewer snapshots when history is exhausted or unavailable.
+_Avoid_: Slot limit, exact row guarantee
+
+**Candle Count Scan Budget**:
+The maximum number of Eligible Candle Slots that a count query may inspect while searching for Provider-backed Candle Snapshots. Reaching this budget may produce a partial result and never justifies synthetic candles.
+_Avoid_: Candle count, provider row limit
+
+**Candle History Window**:
+A UTC half-open interval used to select candle snapshots by their opening timestamp; the lower boundary is included and the upper boundary is excluded.
+_Avoid_: Candle overlap range, visual chart window

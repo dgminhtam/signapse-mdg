@@ -329,6 +329,37 @@ Semantics:
   exclusive. Public boundaries do not need to align to timeframe boundaries.
 - `to` is optional; when omitted, the gateway captures request-time UTC once and always returns
   that resolved value in the response.
+- Candle query modes are distinct:
+
+  | Mode | Query shape | Semantics |
+  | --- | --- | --- |
+  | Exact range | `from + to` | Return provider-backed candles with `from <= openTime < to`. |
+  | Range to request time | `from` | Exact range from `from` through one captured `requestNow`. |
+  | Forward slot limit | `from + limit` | Scan the next eligible timeframe slots from `from`. |
+  | Backward slot limit | `to + limit` | Scan the latest eligible timeframe slots strictly before `to`. |
+  | Latest slot limit | `limit` | Scan the latest eligible timeframe slots before one captured `requestNow`. |
+  | Forward actual count | `from + count` | Return up to `count` provider-backed snapshots with `openTime >= from`. |
+  | Backward actual count | `to + count` | Return up to `count` provider-backed snapshots with `openTime < to`. |
+  | Latest actual count | `count` | Return up to `count` provider-backed snapshots before one captured `requestNow`. |
+
+- `limit` counts eligible timeframe slots, not actual candle rows. A provider or session gap may
+  therefore make `candles.length < limit`.
+- `count` counts unique Provider-backed Candle Snapshots. Its public maximum is `1000`; it may
+  return fewer rows when history is exhausted, provider/session gaps remain, or the internal
+  `MAX_CANDLE_COUNT_SCAN_SLOTS` budget is reached. It never creates synthetic OHLCV candles.
+- `count` includes an eligible forming snapshot as one row with `complete = false`. If forming and
+  completed snapshots share an `openTime`, the completed snapshot wins; the response is sorted by
+  `openTime` ascending.
+- `from + to + count` and `limit + count` are invalid and return `400 INVALID_TIME_RANGE`.
+  Non-integer, zero, negative, or greater-than-1000 `count` values return the same error.
+- `before` is not supported. Requests containing it return `400 INVALID_TIME_RANGE`; clients use
+  `to + limit` for slot-based backward scans or `to + count` for actual-row scans.
+- A valid count query with no history returns `200` with `candles: []`. Provider timeout,
+  rate-limit, transport, configuration, or normalization failures remain `503 PROVIDER_UNAVAILABLE`.
+- Count responses keep the existing top-level shape and resolved `from`/`to` boundaries. They do
+  not add `hasMoreBefore`, `nextBefore`, cursor, or partial-result metadata.
+- Exact ranges remain pure: MDG never expands them into earlier history. Any fallback, repeated
+  count request, or merge policy for chart display belongs to the WS Java consumer.
 - Gateway should reject unsupported timeframe values.
 - Historical candle timeframes are `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`, and `1mo`.
 - Gateway enforces `MAX_CANDLES_PER_REQUEST`.

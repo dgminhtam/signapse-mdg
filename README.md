@@ -71,6 +71,7 @@ QUOTE_CACHE_TTL_SECONDS=10
 QUOTE_STALE_AFTER_SECONDS=30
 MAX_QUOTE_SYMBOLS=10
 MAX_CANDLES_PER_REQUEST=1000
+MAX_CANDLE_COUNT_SCAN_SLOTS=10000
 ```
 
 Apply the schema and seed the supported symbols:
@@ -154,6 +155,17 @@ Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=WTI&timeframe=1h&from
 The response still includes `to`, resolved to the exact UTC request time. Request boundaries do
 not need to align to timeframe boundaries, and provider candle timestamps such as Twelve Data
 hourly `:30` labels are preserved.
+
+For sparse assets, request actual provider-backed rows with `count` instead of changing the
+slot-based `limit` semantics:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSD&timeframe=1h&to=2026-06-19T10%3A00%3A00Z&count=300"
+```
+
+`count` returns up to 1,000 real provider-backed candles and may return fewer when history or the
+internal scan budget is exhausted. It never creates synthetic candles. Exact-range requests stay
+within `[from,to)`; chart fallback and repeated requests are owned by the WS Java consumer.
 
 Fetch a Twelve Data-backed Forex candle range:
 

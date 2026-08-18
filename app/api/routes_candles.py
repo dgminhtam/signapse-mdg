@@ -124,6 +124,7 @@ def get_candle_service(
         provider=provider,
         cache=cache,
         max_candles=settings.max_candles_per_request,
+        count_scan_budget=settings.max_candle_count_scan_slots,
     )
 
 
@@ -149,6 +150,8 @@ async def get_candles(
         request.query_params.get("to"),
         request.query_params.get("limit"),
         provider,
+        raw_count=request.query_params.get("count"),
+        raw_before=request.query_params.get("before"),
         max_candles=settings.max_candles_per_request,
         clock=clock,
     )

@@ -40,9 +40,13 @@ def parse_candle_request(
     raw_limit: str | None = None,
     raw_provider: str | None = None,
     *,
+    raw_count: str | None = None,
+    raw_before: str | None = None,
     max_candles: int,
     clock: Callable[[], datetime] = utc_now,
 ) -> CandleRequest:
+    if raw_before is not None:
+        raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
     symbol = (raw_symbol or "").strip()
     if not symbol:
         raise CandleRequestError(
@@ -58,6 +62,34 @@ def parse_candle_request(
             UNSUPPORTED_TIMEFRAME_MESSAGE,
             {"timeframe": timeframe_value},
         )
+    if raw_limit is not None and raw_count is not None:
+        raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
+    if raw_count is not None:
+        count = _parse_limit(raw_count, max_candles=max_candles)
+        if raw_from is not None and raw_to is not None:
+            raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
+        if raw_from is not None:
+            start = _parse_utc(raw_from)
+            return CandleRequest(
+                symbol=symbol,
+                timeframe=timeframe.value,
+                start=start,
+                end=start,
+                count=count,
+                count_direction="forward",
+                provider=raw_provider,
+            )
+        end = clock().astimezone(UTC) if raw_to is None else _parse_utc(raw_to)
+        return CandleRequest(
+            symbol=symbol,
+            timeframe=timeframe.value,
+            start=end,
+            end=end,
+            count=count,
+            count_direction="backward",
+            provider=raw_provider,
+        )
+
     limit = _parse_limit(raw_limit, max_candles=max_candles)
     if limit is not None:
         if raw_from is not None and raw_to is not None:
@@ -148,12 +180,14 @@ class CandleService:
         cache: CandleCache | None = None,
         clock: Callable[[], datetime] | None = None,
         max_candles: int = 1000,
+        count_scan_budget: int = 10000,
     ) -> None:
         self._repository = repository
         self._provider = provider
         self._cache = cache
         self._clock = clock or (lambda: datetime.now(UTC))
         self._max_candles = max_candles
+        self._count_scan_budget = count_scan_budget
 
     async def resolve_symbol(
         self,
@@ -205,6 +239,8 @@ class CandleService:
         symbol: SupportedSymbol,
         timeframe: Timeframe,
     ) -> CandleResult:
+        if request.count is not None:
+            return await self._get_count_candles(request, symbol, timeframe)
         policy = get_market_session_policy(symbol)
         schedule = get_candle_schedule(symbol, timeframe)
         if request.limit is None:
@@ -385,6 +421,163 @@ class CandleService:
                 ),
                 key=lambda candle: candle.open_time,
             ),
+            price_display_decimals=symbol.price_display_decimals,
+        )
+
+    async def _get_count_candles(
+        self,
+        request: CandleRequest,
+        symbol: SupportedSymbol,
+        timeframe: Timeframe,
+    ) -> CandleResult:
+        count = request.count
+        if count is None:
+            raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
+
+        policy = get_market_session_policy(symbol)
+        schedule = get_candle_schedule(symbol, timeframe)
+        scan_opens = (
+            schedule.next_opens(
+                request.start,
+                self._count_scan_budget,
+                policy,
+                request.timeframe,
+            )
+            if request.count_direction == "forward"
+            else schedule.latest_opens(
+                request.end,
+                self._count_scan_budget,
+                policy,
+                request.timeframe,
+            )
+        )
+        if not scan_opens:
+            return CandleResult(
+                symbol=request.symbol,
+                timeframe=request.timeframe,
+                start=request.start,
+                end=request.end,
+                candles=[],
+                price_display_decimals=symbol.price_display_decimals,
+            )
+
+        batch_size = max(1, self._max_candles - 1)
+        batches: list[tuple[datetime, ...]] = []
+        if request.count_direction == "forward":
+            for start in range(0, len(scan_opens), batch_size):
+                batches.append(scan_opens[start : start + batch_size])
+        else:
+            end = len(scan_opens)
+            while end > 0:
+                start = max(0, end - batch_size)
+                batches.append(scan_opens[start:end])
+                end = start
+
+        now = self._clock()
+        current = (
+            await self._cache.get(
+                request.symbol,
+                request.timeframe,
+                symbol.provider,
+                symbol.provider_symbol,
+                now=now,
+            )
+            if self._cache is not None
+            else None
+        )
+        merged: dict[datetime, Candle] = {}
+        result_start = request.start if request.count_direction == "forward" else request.end
+        result_end = request.start if request.count_direction == "forward" else request.end
+
+        async def load_batch(expected_opens: tuple[datetime, ...]) -> None:
+            nonlocal result_start, result_end
+            batch_start = expected_opens[0]
+            batch_end = schedule.end_after(expected_opens[-1])
+            if request.count_direction == "forward":
+                result_end = batch_end
+            else:
+                result_start = batch_start
+
+            expected_set = set(expected_opens)
+            persisted = await self._repository.list_complete(
+                symbol,
+                request.timeframe,
+                batch_start,
+                batch_end,
+            )
+            persisted = [
+                candle
+                for candle in persisted
+                if candle.open_time in expected_set
+                and policy.is_eligible(candle.open_time, request.timeframe)
+            ]
+
+            async def fetch_normalized(
+                sections: tuple[ProviderFetchSection, ...],
+            ) -> list[Candle]:
+                fetched: list[Candle] = []
+                for section in sections:
+                    fetched.extend(
+                        await self._provider.fetch_candles(
+                            symbol=symbol,
+                            timeframe=request.timeframe,
+                            provider_interval=timeframe.provider_interval,
+                            start=section.start,
+                            end=section.end,
+                            limit=min(section.expected_count + 1, self._max_candles),
+                        )
+                    )
+                return [
+                    replace(candle, complete=candle.close_time <= now)
+                    for candle in fetched
+                    if candle.open_time in expected_set
+                    and policy.is_eligible(candle.open_time, request.timeframe)
+                ]
+
+            async def store_normalized(candles: list[Candle]) -> None:
+                await self._repository.upsert_complete(
+                    [candle for candle in candles if candle.complete]
+                )
+                if self._cache is not None:
+                    for candle in candles:
+                        if not candle.complete:
+                            await self._cache.put(candle, stored_at=now)
+
+            cached_opens = (
+                {current.open_time}
+                if current is not None
+                and current.open_time in expected_set
+                and policy.is_eligible(current.open_time, request.timeframe)
+                else set()
+            )
+            gaps = _find_gaps(
+                persisted,
+                expected_opens,
+                schedule,
+                available_opens=cached_opens,
+            )
+            normalized = await fetch_normalized(gaps)
+            await store_normalized(normalized)
+
+            batch_merged = {candle.open_time: candle for candle in normalized}
+            batch_merged.update({candle.open_time: candle for candle in persisted})
+            if current is not None and current.open_time in expected_set:
+                batch_merged.setdefault(current.open_time, current)
+            merged.update(batch_merged)
+
+        for batch in batches:
+            await load_batch(batch)
+            if len(merged) >= count:
+                break
+
+        ordered = sorted(merged.values(), key=lambda candle: candle.open_time)
+        candles = ordered[:count] if request.count_direction == "forward" else ordered[-count:]
+        return CandleResult(
+            symbol=request.symbol,
+            timeframe=request.timeframe,
+            start=result_start,
+            end=result_end,
+            candles=candles,
             price_display_decimals=symbol.price_display_decimals,
         )
 

@@ -191,6 +191,117 @@ def test_parse_candle_request_accepts_forward_limit_mode() -> None:
     )
 
 
+def test_parse_candle_request_accepts_latest_actual_count_mode() -> None:
+    now = START + timedelta(minutes=10)
+
+    request = parse_candle_request(
+        "BTC/USD",
+        "1m",
+        None,
+        None,
+        raw_count="3",
+        max_candles=1000,
+        clock=lambda: now,
+    )
+
+    assert request.count == 3
+    assert request.count_direction == "backward"
+    assert request.start == now
+    assert request.end == now
+
+
+def test_parse_candle_request_accepts_forward_actual_count_mode() -> None:
+    request = parse_candle_request(
+        "BTC/USD",
+        "1m",
+        "2026-06-19T00:00:30Z",
+        None,
+        raw_count="3",
+        max_candles=1000,
+    )
+
+    assert request.count == 3
+    assert request.count_direction == "forward"
+    assert request.start == START + timedelta(seconds=30)
+    assert request.end == START + timedelta(seconds=30)
+
+
+def test_parse_candle_request_accepts_backward_actual_count_mode() -> None:
+    cutoff = START + timedelta(minutes=10)
+
+    request = parse_candle_request(
+        "BTC/USD",
+        "1m",
+        None,
+        "2026-06-19T00:10:00Z",
+        raw_count="3",
+        max_candles=1000,
+    )
+
+    assert request.count == 3
+    assert request.count_direction == "backward"
+    assert request.start == cutoff
+    assert request.end == cutoff
+
+
+def test_parse_candle_request_accepts_maximum_actual_count() -> None:
+    request = parse_candle_request(
+        "BTC/USD",
+        "1m",
+        None,
+        None,
+        raw_count="1000",
+        max_candles=1000,
+    )
+
+    assert request.count == 1000
+    assert request.count_direction == "backward"
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "raw_count"),
+    [
+        ({}, ""),
+        ({}, "0"),
+        ({}, "1001"),
+        ({}, "1.5"),
+        ({}, "abc"),
+        ({"raw_limit": "1"}, "1"),
+        ({"raw_from": "2026-06-19T00:00:00Z", "raw_to": "2026-06-19T00:01:00Z"}, "1"),
+    ],
+)
+def test_parse_candle_request_rejects_invalid_actual_count_mode(
+    kwargs: dict[str, str],
+    raw_count: str,
+) -> None:
+    with pytest.raises(CandleRequestError) as exc_info:
+        parse_candle_request(
+            "BTC/USD",
+            "1m",
+            kwargs.pop("raw_from", None),
+            kwargs.pop("raw_to", None),
+            raw_count=raw_count,
+            max_candles=1000,
+            **kwargs,
+        )
+
+    assert exc_info.value.code == "INVALID_TIME_RANGE"
+
+
+def test_parse_candle_request_rejects_unsupported_before() -> None:
+    with pytest.raises(CandleRequestError) as exc_info:
+        parse_candle_request(
+            "BTC/USD",
+            "1m",
+            None,
+            None,
+            raw_before="2026-06-19T00:10:00Z",
+            max_candles=1000,
+        )
+
+    assert exc_info.value.code == "INVALID_TIME_RANGE"
+
+
 @pytest.mark.parametrize(
     ("timeframe", "start", "end", "code"),
     [
@@ -534,6 +645,295 @@ async def test_service_fetches_forward_limit_mode_range() -> None:
         START + timedelta(minutes=1),
         START + timedelta(minutes=3),
     ]
+
+
+async def test_service_fetches_actual_rows_backward_before_cutoff() -> None:
+    fetched = [
+        make_candle(START + timedelta(minutes=7)),
+        make_candle(START + timedelta(minutes=9)),
+    ]
+    provider = FakeProvider(fetched)
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        provider,
+        clock=lambda: START + timedelta(minutes=20),
+        count_scan_budget=4,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START + timedelta(minutes=10),
+            START + timedelta(minutes=10),
+            count=2,
+            count_direction="backward",
+        )
+    )
+
+    assert [candle.open_time for candle in result.candles] == [
+        START + timedelta(minutes=7),
+        START + timedelta(minutes=9),
+    ]
+    assert result.start == START + timedelta(minutes=6)
+    assert result.end == START + timedelta(minutes=10)
+    assert all(end <= START + timedelta(minutes=10) for _, end, _ in provider.calls)
+
+
+async def test_service_actual_count_excludes_candle_at_backward_cutoff() -> None:
+    fetched = [
+        make_candle(START + timedelta(minutes=9)),
+        make_candle(START + timedelta(minutes=10)),
+    ]
+    provider = FakeProvider(fetched)
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        provider,
+        clock=lambda: START + timedelta(minutes=20),
+        count_scan_budget=2,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START + timedelta(minutes=10),
+            START + timedelta(minutes=10),
+            count=2,
+            count_direction="backward",
+        )
+    )
+
+    assert [candle.open_time for candle in result.candles] == [
+        START + timedelta(minutes=9),
+    ]
+
+
+async def test_service_actual_count_scans_past_provider_gap() -> None:
+    fetched = [
+        make_candle(START),
+        make_candle(START + timedelta(minutes=3)),
+    ]
+    provider = FakeProvider(fetched)
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        provider,
+        clock=lambda: START + timedelta(minutes=20),
+        count_scan_budget=4,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START,
+            START,
+            count=2,
+            count_direction="forward",
+        )
+    )
+
+    assert [candle.open_time for candle in result.candles] == [
+        START,
+        START + timedelta(minutes=3),
+    ]
+    assert result.start == START
+    assert result.end == START + timedelta(minutes=4)
+
+
+async def test_service_actual_count_returns_partial_without_synthetic_rows() -> None:
+    provider = FakeProvider([make_candle(START)])
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        provider,
+        clock=lambda: START + timedelta(minutes=20),
+        count_scan_budget=2,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START,
+            START,
+            count=3,
+            count_direction="forward",
+        )
+    )
+
+    assert [candle.open_time for candle in result.candles] == [START]
+    assert len(result.candles) < 3
+
+
+async def test_service_actual_count_caps_provider_page_size() -> None:
+    provider = FakeProvider()
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        provider,
+        count_scan_budget=2,
+        max_candles=2,
+    )
+
+    await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START,
+            START,
+            count=2,
+            count_direction="forward",
+        )
+    )
+
+    assert provider.calls
+    assert all(limit <= 2 for _, _, limit in provider.calls)
+
+
+async def test_service_actual_count_includes_forming_snapshot() -> None:
+    forming = make_candle(START, complete=False)
+    now = START + timedelta(seconds=30)
+    repository = FakeRepository(symbol=BTC)
+    service = CandleService(
+        repository,
+        FakeProvider([forming]),
+        clock=lambda: now,
+        count_scan_budget=1,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START + timedelta(minutes=1),
+            START + timedelta(minutes=1),
+            count=1,
+            count_direction="backward",
+        )
+    )
+
+    assert len(result.candles) == 1
+    assert result.candles[0].open_time == START
+    assert result.candles[0].complete is False
+    assert repository.upserted == []
+
+
+async def test_service_actual_count_prefers_completed_over_cached_forming_snapshot() -> None:
+    completed = make_candle(START, close="20")
+    forming = make_candle(START, complete=False, close="99")
+    now = START + timedelta(seconds=30)
+    cache = CandleCache(clock=lambda: now)
+    await cache.put(forming)
+    repository = FakeRepository([completed], symbol=BTC)
+    service = CandleService(
+        repository,
+        FakeProvider(),
+        cache=cache,
+        clock=lambda: now,
+        count_scan_budget=1,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START,
+            START,
+            count=1,
+            count_direction="forward",
+        )
+    )
+
+    assert result.candles == [completed]
+
+
+async def test_service_actual_count_propagates_provider_failure() -> None:
+    class FailingProvider(FakeProvider):
+        async def fetch_candles(
+            self,
+            symbol: SupportedSymbol,
+            timeframe: str,
+            provider_interval: str,
+            start: datetime,
+            end: datetime,
+            limit: int,
+        ) -> list[Candle]:
+            del symbol, timeframe, provider_interval, start, end, limit
+            raise ProviderUnavailableError("raw provider payload")
+
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        FailingProvider(),
+        count_scan_budget=1,
+    )
+
+    with pytest.raises(ProviderUnavailableError):
+        await service.get_candles(
+            CandleRequest(
+                "BTC/USD",
+                "1m",
+                START,
+                START,
+                count=1,
+                count_direction="forward",
+            )
+        )
+
+
+async def test_service_actual_count_supports_calendar_month_schedule() -> None:
+    first = datetime(2026, 2, 1, tzinfo=UTC)
+    second = datetime(2026, 3, 1, tzinfo=UTC)
+    fetched = [
+        Candle(
+            "BTC/USD",
+            "CRYPTO",
+            "TWELVE_DATA",
+            "BTC/USD",
+            "1mo",
+            first,
+            datetime(2026, 2, 28, 23, 59, 59, 999000, tzinfo=UTC),
+            Decimal("10"),
+            Decimal("11"),
+            Decimal("9"),
+            Decimal("10.5"),
+            Decimal("12.34"),
+            True,
+        ),
+        Candle(
+            "BTC/USD",
+            "CRYPTO",
+            "TWELVE_DATA",
+            "BTC/USD",
+            "1mo",
+            second,
+            datetime(2026, 3, 31, 23, 59, 59, 999000, tzinfo=UTC),
+            Decimal("10"),
+            Decimal("11"),
+            Decimal("9"),
+            Decimal("10.5"),
+            Decimal("12.34"),
+            True,
+        ),
+    ]
+    provider = FakeProvider(fetched)
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        provider,
+        clock=lambda: datetime(2026, 4, 1, tzinfo=UTC),
+        count_scan_budget=2,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1mo",
+            datetime(2026, 1, 15, tzinfo=UTC),
+            datetime(2026, 1, 15, tzinfo=UTC),
+            count=2,
+            count_direction="forward",
+        )
+    )
+
+    assert [candle.open_time for candle in result.candles] == [first, second]
 
 
 async def test_service_splits_forex_provider_ranges_around_weekend_close() -> None:

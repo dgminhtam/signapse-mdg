@@ -325,21 +325,23 @@ volume remains a raw fixed-point decimal string.
 ### Candle HTTP Flow
 
 ```text
-Client -> GET /v1/candles?symbol=EUR/USD&timeframe=1m&from=...[&to=...]
-  -> API validates required query params
-  -> If to is omitted, API captures request-time UTC once
+Client -> GET /v1/candles?symbol=EUR/USD&timeframe=1m&from=...[&to=...|&limit=...|&count=...]
+  -> API validates one exact-range, slot-limit, or provider-backed-count mode
+  -> If an upper boundary is omitted, API captures request-time UTC once
   -> Symbol Registry validates symbol and timeframe
-  -> Service validates exact UTC [from,to) and conservative candle count
+  -> Service validates exact UTC [from,to), slot/count maximums, and query combinations
   -> Service selects market-session policy from persisted asset class
   -> Service selects provider/market-aware candle schedule
+  -> Count mode derives eligible opens within its internal scan budget; exact/limit mode derives its requested opens
   -> Repository loads persisted closed candles
   -> Service discards persisted rows outside the selected session policy
-  -> Service calculates missing scheduled opens and coalesces provider ranges
+  -> Service calculates missing scheduled opens and coalesces bounded provider ranges
   -> Candle Provider Router selects the persisted provider mapping
   -> Service fetches missing ranges from Binance, Twelve Data, or yfinance if needed
   -> Provider adapters normalize and discard known session-ineligible rows
   -> Service persists newly fetched closed candles
-  -> Service merges closed candles with current forming candle if policy-eligible
+  -> Service merges unique rows with current forming candle if policy-eligible
+  -> Count mode stops at requested rows, history exhaustion, or scan budget
   -> API returns normalized response
 ```
 
@@ -358,6 +360,10 @@ Friday are eligible and Saturday/Sunday are excluded. The policy intentionally d
 holidays, early closes, late opens, exceptional closures, or provider maintenance windows. Natural
 open-session provider gaps remain absent. Missing or null Twelve Data volume is represented as
 decimal zero to satisfy the existing contract and does not mean measured zero activity.
+The `limit` query parameter bounds eligible timeframe slots; `count` bounds provider-backed rows
+and may return fewer rows. Exact ranges remain within `[from,to)` and do not perform fallback.
+Fallback, repeated requests, and chart merge policy belong to the WS Java consumer, not this MDG
+flow.
 
 ### Historical Price Flow
 
@@ -598,6 +604,7 @@ ON market_data_candles (provider, provider_symbol, timeframe, open_time);
 | `QUOTE_STALE_AFTER_SECONDS` | `30` | Quote freshness threshold. |
 | `QUOTE_CACHE_TTL_SECONDS` | `10` | Latest quote cache TTL. |
 | `MAX_CANDLES_PER_REQUEST` | `1000` | Max expected timeframe slots in one candle request. |
+| `MAX_CANDLE_COUNT_SCAN_SLOTS` | `10000` | Internal eligible-slot scan budget for actual-row candle count queries. |
 | `MAX_QUOTE_SYMBOLS` | `10` | Max symbols in one quote request. |
 | `PROVIDER_HTTP_TIMEOUT_SECONDS` | `5` | Provider REST timeout. |
 | `STREAM_CLIENT_QUEUE_CAPACITY` | `256` | Per-client downstream event queue size. |

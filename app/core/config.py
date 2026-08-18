@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     candle_forming_cache_ttl_seconds: float = Field(default=5, gt=0)
     max_quote_symbols: int = Field(default=10, ge=1)
     max_candles_per_request: int = Field(default=1000, ge=1, le=1000)
+    max_candle_count_scan_slots: int = Field(default=10000, ge=1)
     stream_client_queue_capacity: int = Field(default=256, ge=1)
     stream_provider_queue_capacity: int = Field(default=1024, ge=1)
     stream_idle_grace_seconds: float = Field(default=5, ge=0)

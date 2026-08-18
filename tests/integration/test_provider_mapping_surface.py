@@ -172,6 +172,7 @@ async def test_every_registry_mapping_passes_market_data_surface_smoke_matrix(
         candle_provider,
         CandleCache(),
         clock=lambda: MATRIX_NOW,
+        count_scan_budget=2,
     )
     historical_service = HistoricalPriceService(candle_service)
 
@@ -204,6 +205,24 @@ async def test_every_registry_mapping_passes_market_data_surface_smoke_matrix(
                 candle.provider == mapping.provider
                 and candle.provider_symbol == mapping.provider_symbol
                 for candle in result.candles
+            )
+
+            actual_count_result = await candle_service.get_candles(
+                CandleRequest(
+                    symbol.symbol,
+                    timeframe,
+                    start,
+                    start,
+                    count=1,
+                    count_direction="forward",
+                    provider=mapping.provider,
+                )
+            )
+            assert actual_count_result.candles
+            assert all(
+                candle.provider == mapping.provider
+                and candle.provider_symbol == mapping.provider_symbol
+                for candle in actual_count_result.candles
             )
 
         historical = await historical_service.get_historical_price(
