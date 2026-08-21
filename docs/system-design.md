@@ -237,6 +237,9 @@ Recommended initial timeframes:
 - Uses `Ticker.get_info().regularMarketPrice` behind a provider-owned adapter.
 - Uses yfinance `download` for historical candles with explicit `start`, `end`, `interval`,
   `timeout`, and shared-session controls.
+- Keeps Yahoo intraday range limits inside the adapter: one logical history window is split into
+  sequential half-open native requests only when the selected interval requires it; the service
+  still observes one logical provider fill and no cross-provider fallback.
 - Normalizes yfinance history rows into gateway candles, treating missing or null volume as
   decimal zero and preserving natural provider gaps without synthetic candles.
 - Runs serialized synchronous yfinance work in `asyncio.to_thread` and applies
@@ -332,27 +335,31 @@ Client -> GET /v1/candles?symbol=EUR/USD&timeframe=1m&from=...[&to=...|&limit=..
   -> Service validates exact UTC [from,to), slot/count maximums, and query combinations
   -> Service selects market-session policy from persisted asset class
   -> Service selects provider/market-aware candle schedule
-  -> Count mode derives eligible opens within its internal scan budget; exact/limit mode derives its requested opens
-  -> Repository loads persisted closed candles
+  -> Count mode derives one bounded eligible-open page at a time within its internal scan budget; exact/limit mode derives its requested opens
+  -> Repository loads persisted closed candles for the current range/page
   -> Service discards persisted rows outside the selected session policy
-  -> Service calculates missing scheduled opens and coalesces bounded provider ranges
+  -> Exact/limit mode calculates missing scheduled opens and coalesces bounded provider ranges
+  -> Incomplete count pages request one logical contiguous provider window, including closed intervals
   -> Candle Provider Router selects the persisted provider mapping
-  -> Service fetches missing ranges from Binance, Twelve Data, or yfinance if needed
+  -> Provider adapter fetches the selected window and may perform native range chunking internally
   -> Provider adapters normalize and discard known session-ineligible rows
-  -> Service persists newly fetched closed candles
+  -> Service bulk-upserts newly fetched closed candles for the page
   -> Service merges unique rows with current forming candle if policy-eligible
-  -> Count mode stops at requested rows, history exhaustion, or scan budget
+  -> Count mode advances only when needed and stops at requested rows, history exhaustion, or scan budget
   -> API returns normalized response
 ```
 
 The current candle may have `complete = false`; closed candles should have `complete = true`.
 The public response contains only `symbol`, `timeframe`, `from`, `to`, and `candles`; provider
-identity and mapping remain internal. Response `to` is always present and contains either the
-explicit request value or the exact request-time UTC instant resolved by the gateway.
+identity and mapping remain internal. Response `to` is always present. Exact-range, slot-limit,
+and backward/latest-count responses keep their requested or captured cutoff; a forward-count
+response moves `to` to the last page boundary actually scanned. For count mode, `from`/`to`
+therefore describe the consumed Candle History Window, not unused page capacity.
 Provider open timestamps remain authoritative. Binance uses the epoch-aligned schedule; verified
-WTI/SPY/QQQ hourly Twelve Data rows use a minute-30 schedule, while their shorter intervals remain
-epoch-aligned and daily values use date labels. Recognized Twelve Data no-data ranges and empty
-yfinance history results normalize to an empty provider result instead of an operational failure.
+WTI/SPY/QQQ hourly Twelve Data rows and NYSE hourly YFinance rows use a minute-30 schedule, while
+their shorter intervals remain epoch-aligned and daily values use date labels. Recognized Twelve
+Data no-data ranges and empty yfinance history results normalize to an empty provider result
+instead of an operational failure.
 Forex intraday candles follow the Signapse weekly quote session from Sunday 17:00 inclusive through
 Friday 17:00 exclusive in `America/New_York`; `zoneinfo` and `tzdata` keep the boundary DST-aware
 instead of relying on a fixed UTC offset. Forex `1d` candles use UTC weekday labels: Monday through
@@ -361,9 +368,12 @@ holidays, early closes, late opens, exceptional closures, or provider maintenanc
 open-session provider gaps remain absent. Missing or null Twelve Data volume is represented as
 decimal zero to satisfy the existing contract and does not mean measured zero activity.
 The `limit` query parameter bounds eligible timeframe slots; `count` bounds provider-backed rows
-and may return fewer rows. Exact ranges remain within `[from,to)` and do not perform fallback.
-Fallback, repeated requests, and chart merge policy belong to the WS Java consumer, not this MDG
-flow.
+and may return fewer rows. Count execution uses lazy pages, persistence-first hydration, one logical
+contiguous fill for an incomplete page, completed-over-forming merge precedence, and bulk completed
+upsert. Exact ranges remain within `[from,to)` and do not perform fallback. Signapse owns its
+end-to-end caller timeout; MDG keeps finite per-provider-operation timeouts but has no total elapsed
+time cutoff. Fallback, repeated requests, and chart merge policy belong to the WS Java consumer, not
+this MDG flow.
 
 ### Historical Price Flow
 
@@ -719,6 +729,9 @@ Structured log fields:
 - `to`
 - `error_code`
 - `request_id`
+- count execution fields: `count_direction`, `eligible_slots_scanned`, `page_count`,
+  `provider_call_count`, source row counts, `stop_reason`, and calendar/database/provider elapsed
+  times
 
 ## 15. Security Boundary
 

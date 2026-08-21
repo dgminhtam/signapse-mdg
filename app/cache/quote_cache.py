@@ -20,9 +20,7 @@ class QuoteCache:
             result: dict[str, Quote] = {}
             for symbol in symbols:
                 if isinstance(symbol, str):
-                    matches = [
-                        quote for key, quote in self._quotes.items() if key[0] == symbol
-                    ]
+                    matches = [quote for key, quote in self._quotes.items() if key[0] == symbol]
                     if len(matches) == 1:
                         result[symbol] = matches[0]
                     continue

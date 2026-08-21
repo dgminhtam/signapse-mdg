@@ -172,39 +172,42 @@ class PostgresCandleRepository:
             return
         try:
             async with self._session_factory.begin() as session:
-                for candle in complete:
-                    statement = insert(MarketDataCandleModel).values(
-                        symbol=candle.symbol,
-                        asset_class=candle.asset_class,
-                        provider=candle.provider,
-                        provider_symbol=candle.provider_symbol,
-                        timeframe=candle.timeframe,
-                        open_time=candle.open_time,
-                        close_time=candle.close_time,
-                        open=candle.open,
-                        high=candle.high,
-                        low=candle.low,
-                        close=candle.close,
-                        volume=candle.volume,
-                        complete=True,
+                values = [
+                    {
+                        "symbol": candle.symbol,
+                        "asset_class": candle.asset_class,
+                        "provider": candle.provider,
+                        "provider_symbol": candle.provider_symbol,
+                        "timeframe": candle.timeframe,
+                        "open_time": candle.open_time,
+                        "close_time": candle.close_time,
+                        "open": candle.open,
+                        "high": candle.high,
+                        "low": candle.low,
+                        "close": candle.close,
+                        "volume": candle.volume,
+                        "complete": True,
+                    }
+                    for candle in complete
+                ]
+                statement = insert(MarketDataCandleModel).values(values)
+                await session.execute(
+                    statement.on_conflict_do_update(
+                        constraint="uq_market_data_candles_identity",
+                        set_={
+                            "symbol": statement.excluded.symbol,
+                            "asset_class": statement.excluded.asset_class,
+                            "close_time": statement.excluded.close_time,
+                            "open": statement.excluded.open,
+                            "high": statement.excluded.high,
+                            "low": statement.excluded.low,
+                            "close": statement.excluded.close,
+                            "volume": statement.excluded.volume,
+                            "complete": True,
+                            "updated_at": func.now(),
+                        },
                     )
-                    await session.execute(
-                        statement.on_conflict_do_update(
-                            constraint="uq_market_data_candles_identity",
-                            set_={
-                                "symbol": statement.excluded.symbol,
-                                "asset_class": statement.excluded.asset_class,
-                                "close_time": statement.excluded.close_time,
-                                "open": statement.excluded.open,
-                                "high": statement.excluded.high,
-                                "low": statement.excluded.low,
-                                "close": statement.excluded.close,
-                                "volume": statement.excluded.volume,
-                                "complete": True,
-                                "updated_at": func.now(),
-                            },
-                        )
-                    )
+                )
         except SQLAlchemyError as exc:
             _raise_database_failure(
                 exc,

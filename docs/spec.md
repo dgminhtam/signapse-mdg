@@ -347,6 +347,14 @@ Semantics:
 - `count` counts unique Provider-backed Candle Snapshots. Its public maximum is `1000`; it may
   return fewer rows when history is exhausted, provider/session gaps remain, or the internal
   `MAX_CANDLE_COUNT_SCAN_SLOTS` budget is reached. It never creates synthetic OHLCV candles.
+- Provider-backed `count` execution scans eligible opens lazily in bounded pages. The initial page
+  contains no more than the requested `count` and the provider-safe page capacity; later pages are
+  derived only when earlier pages did not supply enough unique rows, up to the same internal scan
+  budget. A fully persisted page makes no provider request.
+- When a count page is incomplete, MDG makes one logical contiguous request through the immutable
+  selected Provider Mapping, even when the window crosses a closed session. The selected adapter
+  may split that logical window into provider-native range-limited requests; Count Query Execution
+  does not select a fallback provider or contain provider-specific range rules.
 - `count` includes an eligible forming snapshot as one row with `complete = false`. If forming and
   completed snapshots share an `openTime`, the completed snapshot wins; the response is sorted by
   `openTime` ascending.
@@ -356,8 +364,13 @@ Semantics:
   `to + limit` for slot-based backward scans or `to + count` for actual-row scans.
 - A valid count query with no history returns `200` with `candles: []`. Provider timeout,
   rate-limit, transport, configuration, or normalization failures remain `503 PROVIDER_UNAVAILABLE`.
-- Count responses keep the existing top-level shape and resolved `from`/`to` boundaries. They do
-  not add `hasMoreBefore`, `nextBefore`, cursor, or partial-result metadata.
+- Count responses keep the existing top-level shape. Their `from`/`to` boundaries describe the
+  Candle History Window actually scanned: forward scans end at the last page boundary, while
+  backward/latest scans retain their exclusive cutoff and move `from` to the earliest scanned page.
+  They do not add `hasMoreBefore`, `nextBefore`, cursor, or partial-result metadata.
+- MDG does not impose a total request deadline or stop valid work at a hard elapsed-time threshold;
+  Signapse owns its caller timeout. Individual provider operations retain finite configured
+  timeouts, and caller cancellation still propagates.
 - Exact ranges remain pure: MDG never expands them into earlier history. Any fallback, repeated
   count request, or merge policy for chart display belongs to the WS Java consumer.
 - Gateway should reject unsupported timeframe values.
@@ -365,7 +378,9 @@ Semantics:
 - Gateway enforces `MAX_CANDLES_PER_REQUEST`.
 - `provider` is optional and selects one configured mapping for the asset. Empty or repeated values
   return `400 INVALID_PROVIDER`; an unmapped value returns `400 UNSUPPORTED_PROVIDER`.
-- Closed candles are read from PostgreSQL first; only missing contiguous ranges are fetched.
+- Closed candles are read from PostgreSQL first. Exact-range and slot-based `limit` requests fetch
+  only their missing contiguous sections; incomplete `count` pages use the one logical contiguous
+  provider window described above.
 - Missing ranges are routed through the selected Provider Mapping. When `provider` is omitted,
   the selected mapping is the asset's persisted Default Provider; an explicit override routes
   the same candle flow through that exact mapping.
@@ -386,8 +401,9 @@ Semantics:
   windows are out of scope for this policy.
 - Natural provider gaps such as omitted open-session Forex candles remain absent and are never
   synthesized.
-- Provider candle open times remain authoritative. Twelve Data offset labels such as hourly
-  `13:30Z` are not shifted onto an epoch-aligned grid.
+- Provider candle open times remain authoritative. Twelve Data and YFinance NYSE hourly offset
+  labels such as `13:30Z` are matched on their exchange-open schedule and are not shifted onto an
+  epoch-aligned grid.
 - A recognized Twelve Data no-data response produces a successful empty candle list rather than
   `PROVIDER_UNAVAILABLE`.
 
@@ -807,6 +823,9 @@ Logs should include:
 - request range when relevant
 - public error code when relevant
 - internal `failure_reason`, `retryable`, exception type, upstream status/code, and latency when available
+- provider-backed count diagnostics also include count direction, eligible slots scanned, page and
+  logical provider-call counts, persisted/provider/returned row counts, stop reason, and calendar,
+  database, and provider elapsed times
 
 Logs are JSON records written to stdout through the standard-library logging system. `LOG_LEVEL`
 defaults to `INFO`. Raw provider payloads, DataFrames, API keys, DSNs, and unrestricted exception

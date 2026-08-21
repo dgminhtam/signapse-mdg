@@ -125,4 +125,3 @@ async def test_yfinance_symbols_route_only_to_yfinance_provider() -> None:
     assert yfinance.quote_subscriptions == ["XAG/USD"]
     assert binance.quote_subscriptions == []
     await router.close()
-

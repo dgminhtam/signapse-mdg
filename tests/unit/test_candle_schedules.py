@@ -7,6 +7,17 @@ from app.domain.timeframes import get_timeframe
 
 BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
 SPY = SupportedSymbol("SPY", "ETF", "TWELVE_DATA", "SPY", True, 2)
+SPY_YFINANCE = SupportedSymbol(
+    "SPY",
+    "ETF",
+    "YFINANCE",
+    "SPY",
+    True,
+    2,
+    "pandas_market_calendars",
+    "NYSE",
+    "America/New_York",
+)
 WTI = SupportedSymbol("WTI", "COMMODITY", "TWELVE_DATA", "WTI", True, 2)
 
 
@@ -45,6 +56,18 @@ def test_twelvedata_hourly_schedule_uses_verified_minute_thirty_anchor() -> None
         datetime(2026, 6, 22, 13, 30, tzinfo=UTC),
         datetime(2026, 6, 22, 14, 30, tzinfo=UTC),
         datetime(2026, 6, 22, 15, 30, tzinfo=UTC),
+    )
+
+
+def test_yfinance_spy_hourly_schedule_uses_exchange_open_anchor() -> None:
+    start = datetime(2026, 6, 22, 13, 0, tzinfo=UTC)
+    end = datetime(2026, 6, 22, 17, 0, tzinfo=UTC)
+
+    assert expected_opens(SPY_YFINANCE, "1h", start, end) == (
+        datetime(2026, 6, 22, 13, 30, tzinfo=UTC),
+        datetime(2026, 6, 22, 14, 30, tzinfo=UTC),
+        datetime(2026, 6, 22, 15, 30, tzinfo=UTC),
+        datetime(2026, 6, 22, 16, 30, tzinfo=UTC),
     )
 
 

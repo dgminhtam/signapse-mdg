@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Protocol, cast
 
@@ -59,6 +59,18 @@ _YFINANCE_INTERVALS = {
     "1d": "1d",
     "1w": "1wk",
     "1mo": "1mo",
+}
+
+# Yahoo rejects some intraday history windows before returning a useful payload.  Keep
+# those range limits inside the adapter so callers can request one logical window while
+# the adapter performs the minimum sequential native requests needed by the upstream API.
+_YFINANCE_MAX_HISTORY_RANGE = {
+    "1m": timedelta(days=7),
+    "5m": timedelta(days=60),
+    "15m": timedelta(days=60),
+    "30m": timedelta(days=60),
+    "1h": timedelta(days=730),
+    "4h": timedelta(days=730),
 }
 
 logger = logging.getLogger(__name__)
@@ -184,15 +196,23 @@ class YFinanceQuoteProvider:
             )
             log_failure(logger, "yfinance_interval_not_configured", error)
             raise error
+        ranges = _history_ranges(start, end, interval)
         try:
             async with self._client_lock:
-                payload = await asyncio.to_thread(
-                    self._fetch_history_sync,
-                    symbol.provider_symbol,
-                    interval,
-                    start,
-                    end,
-                )
+                payloads = [
+                    (
+                        chunk_start,
+                        chunk_end,
+                        await asyncio.to_thread(
+                            self._fetch_history_sync,
+                            symbol.provider_symbol,
+                            interval,
+                            chunk_start,
+                            chunk_end,
+                        ),
+                    )
+                    for chunk_start, chunk_end in ranges
+                ]
         except ProviderUnavailableError as exc:
             log_failure(
                 logger,
@@ -230,7 +250,9 @@ class YFinanceQuoteProvider:
                 failure_reason=str(metadata["failure_reason"]),
                 retryable=bool(metadata["retryable"]),
             ) from exc
-        if bool(getattr(payload, "empty", False)):
+        if not payloads or all(
+            bool(getattr(payload, "empty", False)) for _, _, payload in payloads
+        ):
             log_event(
                 logger,
                 logging.DEBUG,
@@ -245,14 +267,19 @@ class YFinanceQuoteProvider:
             )
             return []
         try:
-            return _normalize_history(
-                payload=payload,
-                symbol=symbol,
-                timeframe=timeframe,
-                start=start,
-                end=end,
-                timeframe_model=timeframe_model,
-            )
+            candles: list[Candle] = []
+            for chunk_start, chunk_end, payload in payloads:
+                candles.extend(
+                    _normalize_history(
+                        payload=payload,
+                        symbol=symbol,
+                        timeframe=timeframe,
+                        start=chunk_start,
+                        end=chunk_end,
+                        timeframe_model=timeframe_model,
+                    )
+                )
+            return candles
         except ProviderUnavailableError as exc:
             log_failure(
                 logger,
@@ -334,6 +361,27 @@ def build_yfinance_provider(timeout_seconds: float) -> YFinanceQuoteProvider:
 
 def build_yfinance_quote_provider(timeout_seconds: float) -> YFinanceQuoteProvider:
     return build_yfinance_provider(timeout_seconds)
+
+
+def _history_ranges(
+    start: datetime,
+    end: datetime,
+    interval: str,
+) -> tuple[tuple[datetime, datetime], ...]:
+    """Return half-open upstream windows that honor Yahoo intraday range limits."""
+
+    if end <= start:
+        return ()
+    maximum = _YFINANCE_MAX_HISTORY_RANGE.get(interval)
+    if maximum is None:
+        return ((start, end),)
+    ranges: list[tuple[datetime, datetime]] = []
+    cursor = start
+    while cursor < end:
+        chunk_end = min(cursor + maximum, end)
+        ranges.append((cursor, chunk_end))
+        cursor = chunk_end
+    return tuple(ranges)
 
 
 def build_yfinance_candle_provider(timeout_seconds: float) -> YFinanceQuoteProvider:
@@ -512,9 +560,7 @@ def _history_timestamp_for_log(value: object | None) -> str | None:
         converted = to_pydatetime()
         if isinstance(converted, datetime):
             return (
-                converted.astimezone(UTC).isoformat()
-                if converted.tzinfo
-                else converted.isoformat()
+                converted.astimezone(UTC).isoformat() if converted.tzinfo else converted.isoformat()
             )
     return None
 

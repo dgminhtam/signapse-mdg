@@ -69,17 +69,11 @@ class CandleCache:
             keys = (
                 [(symbol, provider, provider_symbol, timeframe)]
                 if provider is not None and provider_symbol is not None
-                else [
-                    key
-                    for key in self._candles
-                    if key[0] == symbol and key[3] == timeframe
-                ]
+                else [key for key in self._candles if key[0] == symbol and key[3] == timeframe]
             )
             for key in keys:
                 current = self._candles.get(key)
-                if current is not None and (
-                    open_time is None or current[0].open_time == open_time
-                ):
+                if current is not None and (open_time is None or current[0].open_time == open_time):
                     self._candles.pop(key, None)
 
     @asynccontextmanager
@@ -101,11 +95,7 @@ class CandleCache:
         if snapshot is None:
             return None
         candle, stored_at = snapshot
-        if (
-            candle.complete
-            or now >= candle.close_time
-            or now - stored_at > self._ttl
-        ):
+        if candle.complete or now >= candle.close_time or now - stored_at > self._ttl:
             self._candles.pop(key, None)
             return None
         return candle

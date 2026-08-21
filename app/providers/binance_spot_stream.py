@@ -261,5 +261,3 @@ def _decimal_field(payload: object, name: str, *, positive: bool) -> Decimal | N
     if not parsed.is_finite() or parsed < 0 or (positive and parsed <= 0):
         return None
     return parsed
-
-

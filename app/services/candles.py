@@ -25,6 +25,7 @@ from app.domain.timeframes import (
     get_timeframe,
     month_opens,
 )
+from app.services.candle_count import CountQueryExecution
 from app.services.provider_selection import resolve_provider_selection
 
 UNSUPPORTED_SYMBOL_MESSAGE = "Symbol is not supported by this gateway."
@@ -188,6 +189,14 @@ class CandleService:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._max_candles = max_candles
         self._count_scan_budget = count_scan_budget
+        self._count_execution = CountQueryExecution(
+            repository=repository,
+            provider=provider,
+            cache=cache,
+            clock=self._clock,
+            max_candles=max_candles,
+            scan_budget=count_scan_budget,
+        )
 
     async def resolve_symbol(
         self,
@@ -392,12 +401,8 @@ class CandleService:
                 )
                 fallback_normalized = await fetch_normalized(fallback_gaps)
                 await store_normalized(fallback_normalized)
-                fallback_merged = {
-                    candle.open_time: candle for candle in fallback_normalized
-                }
-                fallback_merged.update(
-                    {candle.open_time: candle for candle in fallback_persisted}
-                )
+                fallback_merged = {candle.open_time: candle for candle in fallback_normalized}
+                fallback_merged.update({candle.open_time: candle for candle in fallback_persisted})
                 if (
                     current is not None
                     and current.open_time == fallback_open
@@ -414,11 +419,7 @@ class CandleService:
             start=result_start,
             end=result_end,
             candles=sorted(
-                (
-                    candle
-                    for open_time, candle in merged.items()
-                    if open_time in response_opens
-                ),
+                (candle for open_time, candle in merged.items() if open_time in response_opens),
                 key=lambda candle: candle.open_time,
             ),
             price_display_decimals=symbol.price_display_decimals,
@@ -430,156 +431,7 @@ class CandleService:
         symbol: SupportedSymbol,
         timeframe: Timeframe,
     ) -> CandleResult:
-        count = request.count
-        if count is None:
-            raise CandleRequestError("INVALID_TIME_RANGE", INVALID_TIME_RANGE_MESSAGE)
-
-        policy = get_market_session_policy(symbol)
-        schedule = get_candle_schedule(symbol, timeframe)
-        scan_opens = (
-            schedule.next_opens(
-                request.start,
-                self._count_scan_budget,
-                policy,
-                request.timeframe,
-            )
-            if request.count_direction == "forward"
-            else schedule.latest_opens(
-                request.end,
-                self._count_scan_budget,
-                policy,
-                request.timeframe,
-            )
-        )
-        if not scan_opens:
-            return CandleResult(
-                symbol=request.symbol,
-                timeframe=request.timeframe,
-                start=request.start,
-                end=request.end,
-                candles=[],
-                price_display_decimals=symbol.price_display_decimals,
-            )
-
-        batch_size = max(1, self._max_candles - 1)
-        batches: list[tuple[datetime, ...]] = []
-        if request.count_direction == "forward":
-            for start in range(0, len(scan_opens), batch_size):
-                batches.append(scan_opens[start : start + batch_size])
-        else:
-            end = len(scan_opens)
-            while end > 0:
-                start = max(0, end - batch_size)
-                batches.append(scan_opens[start:end])
-                end = start
-
-        now = self._clock()
-        current = (
-            await self._cache.get(
-                request.symbol,
-                request.timeframe,
-                symbol.provider,
-                symbol.provider_symbol,
-                now=now,
-            )
-            if self._cache is not None
-            else None
-        )
-        merged: dict[datetime, Candle] = {}
-        result_start = request.start if request.count_direction == "forward" else request.end
-        result_end = request.start if request.count_direction == "forward" else request.end
-
-        async def load_batch(expected_opens: tuple[datetime, ...]) -> None:
-            nonlocal result_start, result_end
-            batch_start = expected_opens[0]
-            batch_end = schedule.end_after(expected_opens[-1])
-            if request.count_direction == "forward":
-                result_end = batch_end
-            else:
-                result_start = batch_start
-
-            expected_set = set(expected_opens)
-            persisted = await self._repository.list_complete(
-                symbol,
-                request.timeframe,
-                batch_start,
-                batch_end,
-            )
-            persisted = [
-                candle
-                for candle in persisted
-                if candle.open_time in expected_set
-                and policy.is_eligible(candle.open_time, request.timeframe)
-            ]
-
-            async def fetch_normalized(
-                sections: tuple[ProviderFetchSection, ...],
-            ) -> list[Candle]:
-                fetched: list[Candle] = []
-                for section in sections:
-                    fetched.extend(
-                        await self._provider.fetch_candles(
-                            symbol=symbol,
-                            timeframe=request.timeframe,
-                            provider_interval=timeframe.provider_interval,
-                            start=section.start,
-                            end=section.end,
-                            limit=min(section.expected_count + 1, self._max_candles),
-                        )
-                    )
-                return [
-                    replace(candle, complete=candle.close_time <= now)
-                    for candle in fetched
-                    if candle.open_time in expected_set
-                    and policy.is_eligible(candle.open_time, request.timeframe)
-                ]
-
-            async def store_normalized(candles: list[Candle]) -> None:
-                await self._repository.upsert_complete(
-                    [candle for candle in candles if candle.complete]
-                )
-                if self._cache is not None:
-                    for candle in candles:
-                        if not candle.complete:
-                            await self._cache.put(candle, stored_at=now)
-
-            cached_opens = (
-                {current.open_time}
-                if current is not None
-                and current.open_time in expected_set
-                and policy.is_eligible(current.open_time, request.timeframe)
-                else set()
-            )
-            gaps = _find_gaps(
-                persisted,
-                expected_opens,
-                schedule,
-                available_opens=cached_opens,
-            )
-            normalized = await fetch_normalized(gaps)
-            await store_normalized(normalized)
-
-            batch_merged = {candle.open_time: candle for candle in normalized}
-            batch_merged.update({candle.open_time: candle for candle in persisted})
-            if current is not None and current.open_time in expected_set:
-                batch_merged.setdefault(current.open_time, current)
-            merged.update(batch_merged)
-
-        for batch in batches:
-            await load_batch(batch)
-            if len(merged) >= count:
-                break
-
-        ordered = sorted(merged.values(), key=lambda candle: candle.open_time)
-        candles = ordered[:count] if request.count_direction == "forward" else ordered[-count:]
-        return CandleResult(
-            symbol=request.symbol,
-            timeframe=request.timeframe,
-            start=result_start,
-            end=result_end,
-            candles=candles,
-            price_display_decimals=symbol.price_display_decimals,
-        )
+        return await self._count_execution.execute(request, symbol, timeframe)
 
 
 def _find_gaps(

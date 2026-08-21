@@ -63,6 +63,17 @@ _ALLOWED_FIELDS = {
     "close_code",
     "queue",
     "count",
+    "count_direction",
+    "eligible_slots_scanned",
+    "page_count",
+    "provider_call_count",
+    "persisted_rows",
+    "provider_rows",
+    "returned_rows",
+    "stop_reason",
+    "calendar_ms",
+    "db_ms",
+    "provider_ms",
     "mode",
     "client_id",
 }
@@ -153,11 +164,7 @@ class JsonFormatter(logging.Formatter):
         fields = getattr(record, "diagnostic_fields", {})
         if isinstance(fields, Mapping):
             payload.update(
-                {
-                    key: _safe_value(value)
-                    for key, value in fields.items()
-                    if key in _ALLOWED_FIELDS
-                }
+                {key: _safe_value(value) for key, value in fields.items() if key in _ALLOWED_FIELDS}
             )
         if record.exc_info:
             exception_type = record.exc_info[0]

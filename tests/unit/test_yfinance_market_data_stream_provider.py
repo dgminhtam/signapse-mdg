@@ -285,4 +285,3 @@ async def test_provider_subscribes_every_approved_provider_symbol() -> None:
     ]
     assert subscribed == sorted(SUPPORTED_YFINANCE_PROVIDER_SYMBOLS)
     await provider.close()
-

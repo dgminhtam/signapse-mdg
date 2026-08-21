@@ -278,6 +278,7 @@ class TwelveDataMarketDataStreamProvider:
                     )
                 )
             )
+
     def _normalize_tick(self, payload: object) -> PriceTick | None:
         if not isinstance(payload, dict):
             return None

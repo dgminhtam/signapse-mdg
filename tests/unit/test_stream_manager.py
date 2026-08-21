@@ -214,9 +214,7 @@ async def test_manager_status_transitions_and_provider_signals() -> None:
         assert stale.state == "STALE"
         assert stale.channels == ("quote",)
 
-        await provider.events.put(
-            ProviderSignal("RECONNECTING", registration.interests, current)
-        )
+        await provider.events.put(ProviderSignal("RECONNECTING", registration.interests, current))
         reconnecting = await next_event(registration.queue)
         assert isinstance(reconnecting, StatusEvent)
         assert reconnecting.state == "RECONNECTING"
@@ -281,4 +279,3 @@ async def test_manager_shutdown_closes_provider_and_clients() -> None:
     assert registration.closed.is_set()
     assert registration.close_code == 1012
     assert provider.closed is True
-

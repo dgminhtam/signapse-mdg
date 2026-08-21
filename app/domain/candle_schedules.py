@@ -7,6 +7,7 @@ from app.domain.symbols import SupportedSymbol
 from app.domain.timeframes import EPOCH, Timeframe, add_month, month_opens
 
 TWELVEDATA_OFFSET_HOURLY_SYMBOLS = frozenset({"WTI", "SPY", "QQQ"})
+YFINANCE_OFFSET_HOURLY_CALENDARS = frozenset({"NYSE"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,6 +236,10 @@ def get_candle_schedule(
     if (
         symbol.provider == "TWELVE_DATA"
         and symbol.provider_symbol in TWELVEDATA_OFFSET_HOURLY_SYMBOLS
+        and timeframe.value == "1h"
+    ) or (
+        symbol.provider == "YFINANCE"
+        and symbol.calendar_name in YFINANCE_OFFSET_HOURLY_CALENDARS
         and timeframe.value == "1h"
     ):
         offset = timedelta(minutes=30)

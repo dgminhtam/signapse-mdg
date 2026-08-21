@@ -43,9 +43,7 @@ class FakeManager:
             {symbol.symbol: symbol.price_display_decimals for symbol in symbols},
             asyncio.Queue(10),
         )
-        registration.queue.put_nowait(
-            StatusEvent("CONNECTING", request.symbols, ("quote",), NOW)
-        )
+        registration.queue.put_nowait(StatusEvent("CONNECTING", request.symbols, ("quote",), NOW))
         registration.queue.put_nowait(
             StreamQuote(
                 Quote(
@@ -149,9 +147,7 @@ def test_stream_timeframe_rejection_logs_safe_context(
 
     assert disconnect.reason == "TIMEFRAME_NOT_ALLOWED"
     records = [
-        record
-        for record in caplog.records
-        if record.getMessage() == "websocket_request_rejected"
+        record for record in caplog.records if record.getMessage() == "websocket_request_rejected"
     ]
     assert records
     fields = records[-1].diagnostic_fields
@@ -244,9 +240,7 @@ def test_stream_route_accepts_provider_override(monkeypatch: pytest.MonkeyPatch)
     patch_manager(monkeypatch, manager)
 
     with TestClient(app) as client:
-        with client.websocket_connect(
-            "/v1/stream?symbols=BTC/USD&provider=TWELVE_DATA"
-        ) as ws:
+        with client.websocket_connect("/v1/stream?symbols=BTC/USD&provider=TWELVE_DATA") as ws:
             assert ws.receive_json()["state"] == "CONNECTING"
 
     assert manager.registered[0][0] == StreamRequest(("BTC/USD",), "TWELVE_DATA")
@@ -288,9 +282,7 @@ def test_stream_route_accepts_yfinance_and_three_symbols(
     patch_manager(monkeypatch, manager)
 
     with TestClient(app) as client:
-        with client.websocket_connect(
-            "/v1/stream?symbols=BTC/USD,EUR/USD,XAG/USD"
-        ) as ws:
+        with client.websocket_connect("/v1/stream?symbols=BTC/USD,EUR/USD,XAG/USD") as ws:
             assert ws.receive_json()["state"] == "CONNECTING"
 
     assert manager.registered[0][0] == StreamRequest(("BTC/USD", "EUR/USD", "XAG/USD"))

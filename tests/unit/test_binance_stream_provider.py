@@ -131,9 +131,6 @@ async def test_stream_provider_emits_quote_reconnecting_and_error_signals() -> N
     error = await provider.events.get()
     assert isinstance(reconnecting, ProviderSignal)
     assert reconnecting.state == "RECONNECTING"
-    assert reconnecting.interests == (
-        QuoteInterest("BTC/USD", "BINANCE_SPOT", "BTCUSD"),
-    )
+    assert reconnecting.interests == (QuoteInterest("BTC/USD", "BINANCE_SPOT", "BTCUSD"),)
     assert isinstance(error, ProviderSignal)
     assert error.state == "ERROR"
-

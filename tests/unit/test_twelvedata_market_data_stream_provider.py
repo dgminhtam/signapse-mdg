@@ -249,4 +249,3 @@ async def test_provider_heartbeat_failure_emits_quote_reconnecting_signal() -> N
     assert signal.state == "RECONNECTING"
     assert signal.interests == (QuoteInterest("EUR/USD", "TWELVE_DATA", "EUR/USD"),)
     await provider.close()
-

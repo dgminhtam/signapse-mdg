@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 import pytest
 
 from app.domain import market_sessions as session_module
@@ -180,6 +181,41 @@ def test_pandas_calendar_policy_excludes_break_window(monkeypatch: pytest.Monkey
     assert policy.is_eligible(datetime(2026, 6, 22, 15, 59, tzinfo=UTC), "1m") is True
     assert policy.is_eligible(datetime(2026, 6, 22, 16, 30, tzinfo=UTC), "1m") is False
     assert policy.is_eligible(datetime(2026, 6, 22, 17, 0, tzinfo=UTC), "1m") is True
+
+
+def test_pandas_calendar_policy_bulk_caches_year_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeCalendar:
+        def __init__(self) -> None:
+            self.calls: list[tuple[object, object]] = []
+
+        def schedule(self, *, start_date: object, end_date: object) -> pd.DataFrame:
+            self.calls.append((start_date, end_date))
+            index = pd.DatetimeIndex([pd.Timestamp("2026-06-19"), pd.Timestamp("2026-06-22")])
+            return pd.DataFrame(
+                {
+                    "market_open": [
+                        pd.Timestamp("2026-06-19 13:30", tz="UTC"),
+                        pd.Timestamp("2026-06-22 13:30", tz="UTC"),
+                    ],
+                    "market_close": [
+                        pd.Timestamp("2026-06-19 20:00", tz="UTC"),
+                        pd.Timestamp("2026-06-22 20:00", tz="UTC"),
+                    ],
+                },
+                index=index,
+            )
+
+    calendar = FakeCalendar()
+    monkeypatch.setattr(session_module, "_calendar", lambda name: calendar)
+    session_module._calendar_sessions.cache_clear()
+    if hasattr(session_module, "_calendar_year_sessions"):
+        session_module._calendar_year_sessions.cache_clear()
+    policy = PandasMarketCalendarSessionPolicy("TEST_BULK")
+
+    assert policy.is_eligible(datetime(2026, 6, 19, 14, 0, tzinfo=UTC), "1m") is True
+    assert policy.is_eligible(datetime(2026, 6, 22, 14, 0, tzinfo=UTC), "1m") is True
+
+    assert len(calendar.calls) == 1
 
 
 @pytest.mark.parametrize(

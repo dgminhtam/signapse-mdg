@@ -351,6 +351,46 @@ async def test_candles_call_yfinance_download_with_expected_arguments() -> None:
     ]
 
 
+async def test_candles_chunk_intraday_history_inside_yahoo_range_limit() -> None:
+    chunk_boundary = START + timedelta(days=7)
+    frame = make_history_frame(
+        [
+            {
+                "Open": "10.00",
+                "High": "11.00",
+                "Low": "9.50",
+                "Close": "10.50",
+                "Volume": "123",
+            },
+            {
+                "Open": "12.00",
+                "High": "13.00",
+                "Low": "11.50",
+                "Close": "12.50",
+                "Volume": "456",
+            },
+        ],
+        index=[START, chunk_boundary],
+    )
+    provider, calls = make_history_provider(frame)
+
+    candles = await provider.fetch_candles(
+        YFINANCE_SILVER,
+        "1m",
+        "1m",
+        START,
+        START + timedelta(days=8),
+        999,
+    )
+
+    assert [candle.open_time for candle in candles] == [START, chunk_boundary]
+    assert len(calls) == 2
+    assert calls[0]["start"] == START
+    assert calls[0]["end"] == chunk_boundary
+    assert calls[1]["start"] == chunk_boundary
+    assert calls[1]["end"] == START + timedelta(days=8)
+
+
 @pytest.mark.parametrize(
     ("provider_interval", "expected"),
     [

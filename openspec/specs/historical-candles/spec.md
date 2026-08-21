@@ -158,11 +158,76 @@ The gateway MUST resolve the canonical symbol through the PostgreSQL-backed enab
 - **AND** the error code is `UNSUPPORTED_SYMBOL`
 - **AND** no Provider Mapping validation or candle provider call is made
 
+### Requirement: Provider-backed count scans Eligible Candle Slots lazily
+
+The gateway SHALL execute a provider-backed candle `count` query through bounded, directional
+pages of Eligible Candle Slots and SHALL NOT materialize the entire Candle Count Scan Budget before
+attempting to resolve the requested Provider-backed Candle Snapshots. The first page SHALL contain
+no more slots than both the requested Candle Count and the configured page capacity; subsequent
+pages SHALL be created only while the requested Candle Count remains unsatisfied and the Candle
+Count Scan Budget remains.
+
+#### Scenario: Initial count page is bounded by the requested count
+
+- **WHEN** a client requests a valid provider-backed count smaller than the configured page capacity
+- **THEN** the gateway derives no more than that Candle Count of Eligible Candle Slots for the
+  initial page
+- **AND** it does not derive later pages unless the initial page cannot satisfy the Candle Count
+
+#### Scenario: Sparse count advances only as needed
+
+- **WHEN** a count page contains fewer Provider-backed Candle Snapshots than the requested Candle
+  Count because eligible slots are absent from persistence and the selected provider
+- **THEN** the gateway derives the next directional page within the remaining Candle Count Scan
+  Budget
+- **AND** it stops deriving pages as soon as it has accumulated the requested number of unique
+  rows
+
+#### Scenario: Calendar-backed count preserves session eligibility
+
+- **WHEN** a provider-backed count query crosses a holiday, early close, session break, DST
+  transition, or configured provider schedule offset
+- **THEN** its lazily derived Eligible Candle Slots preserve the symbol's market-session policy and
+  candle-schedule semantics
+- **AND** closed-session slots do not consume the Candle Count Scan Budget
+
+### Requirement: Incomplete provider-backed count pages use one logical contiguous fill
+
+For an incomplete provider-backed count page, the gateway SHALL request one logical contiguous
+Candle History Window from the immutable Provider Selection and SHALL filter normalized provider
+rows back to the page's Eligible Candle Slots before merging. A selected provider adapter MAY
+internally chunk or page that logical window to honor provider-native limits.
+
+#### Scenario: Fully persisted count page avoids provider access
+
+- **WHEN** every Eligible Candle Slot in a count page has a persisted complete candle
+- **THEN** the gateway returns those canonical persisted candles for the page
+- **AND** it makes no provider candle request for that page
+
+#### Scenario: Partially persisted count page uses a contiguous logical fill
+
+- **WHEN** one or more Eligible Candle Slots in a count page are absent from complete persistence
+- **THEN** the gateway requests one logical contiguous Candle History Window from the selected
+  Provider Selection for that page
+- **AND** it may receive rows already present in persistence
+- **AND** it filters, canonicalizes, and persists valid completed rows without changing the
+  Provider Selection
+
+#### Scenario: Contiguous count fill crosses a closed interval safely
+
+- **WHEN** a count page's Candle History Window spans an overnight, weekend, holiday, or configured
+  session break
+- **THEN** the gateway may include that closed interval in the logical provider request
+- **AND** it returns only rows whose open times are Eligible Candle Slots in the page
+- **AND** it does not create a provider request for a page containing no Eligible Candle Slots
+
 ### Requirement: Closed candles are reused from PostgreSQL
 
 The gateway SHALL query persisted complete candles before calling the selected provider, SHALL
 discard candles that violate the symbol's market-session policy, and SHALL identify missing
-expected opens using the symbol's provider/market candle schedule.
+expected opens using the symbol's provider/market candle schedule. For a provider-backed `count`
+page, the gateway SHALL first query persisted complete candles for that page and, when the page
+remains incomplete, SHALL use the count-page contiguous-fill behavior.
 
 #### Scenario: Complete eligible range is persisted
 
@@ -173,8 +238,8 @@ expected opens using the symbol's provider/market candle schedule.
 #### Scenario: Part of the eligible range is missing
 
 - **WHEN** one or more expected eligible opens are absent from persistence
-- **THEN** the gateway requests only provider windows covering those missing sections from
-  the symbol's persisted mapping
+- **THEN** the gateway requests only provider windows covering those missing sections from the
+  symbol's persisted mapping for exact-range and slot-based `limit` requests
 - **AND** it merges valid fetched candles with eligible persisted candles by open time
 
 #### Scenario: Provider schedule is offset from UTC epoch
@@ -1108,7 +1173,9 @@ of price display precision.
 The gateway SHALL allow `GET /v1/candles` clients to request up to `count` unique
 Provider-backed Candle Snapshots. A result MAY contain fewer snapshots when history is exhausted,
 provider or session gaps leave rows absent, or the internal scan budget is reached. The gateway
-MUST NOT create synthetic candles to satisfy `count`.
+MUST NOT create synthetic candles to satisfy `count`. The gateway SHALL accumulate snapshots from
+lazy Eligible Candle Slot pages until the Candle Count is reached, history exhaustion, or the Candle
+Count Scan Budget is reached.
 
 #### Scenario: Latest provider-backed count resolves actual snapshots
 
@@ -1166,14 +1233,14 @@ MUST NOT create synthetic candles to satisfy `count`.
 - **AND** a completed snapshot takes precedence over a forming snapshot
 - **AND** the duplicate does not consume more than one count row
 
-#### Scenario: Provider-backed count preserves response shape and order
+#### Scenario: Provider-backed count preserves response shape, order, and scan boundaries
 
 - **WHEN** a valid provider-backed count query returns one or more snapshots
 - **THEN** the response contains only `symbol`, `timeframe`, `from`, `to`, and `candles` at the top
   level
 - **AND** the candle list is sorted by `openTime` ascending
-- **AND** the response boundaries describe the resolved query boundaries rather than inferred data
-  extents
+- **AND** the response boundaries describe the resolved Candle History Window actually scanned,
+  rather than inferred data extents or unused page capacity
 
 #### Scenario: Provider-backed count is provider-agnostic
 

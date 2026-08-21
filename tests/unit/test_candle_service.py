@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -22,6 +23,17 @@ SPY_NYSE = SupportedSymbol(
     "SPY",
     "ETF",
     "TWELVE_DATA",
+    "SPY",
+    True,
+    2,
+    "pandas_market_calendars",
+    "NYSE",
+    "America/New_York",
+)
+SPY_YFINANCE_NYSE = SupportedSymbol(
+    "SPY",
+    "ETF",
+    "YFINANCE",
     "SPY",
     True,
     2,
@@ -546,6 +558,56 @@ async def test_service_recognizes_persisted_offset_hourly_candle() -> None:
     assert provider.calls == []
 
 
+async def test_service_count_recognizes_yfinance_exchange_open_hourly_candles() -> None:
+    cutoff = datetime(2026, 6, 22, 17, 0, tzinfo=UTC)
+    timeframe = get_timeframe("1h")
+    assert timeframe is not None
+    policy = get_market_session_policy(SPY_YFINANCE_NYSE)
+    schedule = get_candle_schedule(SPY_YFINANCE_NYSE, timeframe)
+    expected_opens = schedule.latest_opens(cutoff, 3, policy, "1h")
+    fetched = [
+        Candle(
+            symbol=SPY_YFINANCE_NYSE.symbol,
+            asset_class=SPY_YFINANCE_NYSE.asset_class,
+            provider=SPY_YFINANCE_NYSE.provider,
+            provider_symbol=SPY_YFINANCE_NYSE.provider_symbol,
+            timeframe="1h",
+            open_time=open_time,
+            close_time=open_time + timedelta(hours=1) - timedelta(milliseconds=1),
+            open=Decimal("10"),
+            high=Decimal("11"),
+            low=Decimal("9"),
+            close=Decimal("10.5"),
+            volume=Decimal("12.34"),
+            complete=True,
+        )
+        for open_time in expected_opens
+    ]
+    provider = FakeProvider(fetched)
+    service = CandleService(
+        FakeRepository(symbol=SPY_YFINANCE_NYSE),
+        provider,
+        clock=lambda: cutoff + timedelta(hours=1),
+        count_scan_budget=3,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "SPY",
+            "1h",
+            cutoff,
+            cutoff,
+            count=3,
+            count_direction="backward",
+        )
+    )
+
+    assert [candle.open_time for candle in result.candles] == list(expected_opens)
+    assert provider.calls == [
+        (expected_opens[0], schedule.end_after(expected_opens[-1]), 4),
+    ]
+
+
 async def test_service_fetches_missing_forex_range_through_selected_provider() -> None:
     fetched = make_candle(START, symbol=EUR, complete=False)
     repository = FakeRepository(symbol=EUR)
@@ -787,6 +849,287 @@ async def test_service_actual_count_caps_provider_page_size() -> None:
 
     assert provider.calls
     assert all(limit <= 2 for _, _, limit in provider.calls)
+
+
+async def test_service_actual_count_limits_initial_page_to_requested_count() -> None:
+    provider = FakeProvider(
+        [
+            make_candle(START),
+            make_candle(START + timedelta(minutes=1)),
+        ]
+    )
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        provider,
+        count_scan_budget=8,
+        max_candles=9,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START,
+            START,
+            count=2,
+            count_direction="forward",
+        )
+    )
+
+    assert [candle.open_time for candle in result.candles] == [
+        START,
+        START + timedelta(minutes=1),
+    ]
+    assert provider.calls == [
+        (START, START + timedelta(minutes=2), 3),
+    ]
+    assert result.end == START + timedelta(minutes=2)
+
+
+async def test_service_actual_count_uses_fully_warm_page_without_provider_call() -> None:
+    persisted = [
+        make_candle(START),
+        make_candle(START + timedelta(minutes=1)),
+        make_candle(START + timedelta(minutes=2)),
+    ]
+    repository = FakeRepository(persisted, symbol=BTC)
+    provider = FakeProvider()
+    service = CandleService(repository, provider, count_scan_budget=3)
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START,
+            START,
+            count=3,
+            count_direction="forward",
+        )
+    )
+
+    assert result.candles == persisted
+    assert provider.calls == []
+    assert repository.upserted == []
+
+
+async def test_service_actual_count_hydrates_partially_warm_page_once() -> None:
+    persisted = [make_candle(START)]
+    fetched = [
+        make_candle(START + timedelta(minutes=1)),
+        make_candle(START + timedelta(minutes=2)),
+    ]
+    repository = FakeRepository(persisted, symbol=BTC)
+    provider = FakeProvider(fetched)
+    service = CandleService(
+        repository,
+        provider,
+        clock=lambda: START + timedelta(minutes=20),
+        count_scan_budget=3,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START,
+            START,
+            count=3,
+            count_direction="forward",
+        )
+    )
+
+    assert [candle.open_time for candle in result.candles] == [
+        START,
+        START + timedelta(minutes=1),
+        START + timedelta(minutes=2),
+    ]
+    assert provider.calls == [(START, START + timedelta(minutes=3), 4)]
+    assert [candle.open_time for candle in repository.upserted] == [
+        START + timedelta(minutes=1),
+        START + timedelta(minutes=2),
+    ]
+
+
+async def test_service_actual_count_coalesces_market_closure_provider_window() -> None:
+    timeframe = get_timeframe("1h")
+    assert timeframe is not None
+    cutoff = datetime(2026, 6, 22, 21, 0, tzinfo=UTC)
+    policy = get_market_session_policy(SPY_NYSE)
+    schedule = get_candle_schedule(SPY_NYSE, timeframe)
+    expected_opens = schedule.latest_opens(cutoff, 8, policy, "1h")
+    provider = FakeProvider(
+        [make_candle(open_time, symbol=SPY_NYSE) for open_time in expected_opens]
+    )
+    service = CandleService(
+        FakeRepository(symbol=SPY_NYSE),
+        provider,
+        clock=lambda: cutoff + timedelta(hours=1),
+        count_scan_budget=8,
+        max_candles=9,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "SPY",
+            "1h",
+            cutoff,
+            cutoff,
+            count=8,
+            count_direction="backward",
+        )
+    )
+
+    assert [candle.open_time for candle in result.candles] == list(expected_opens)
+    assert provider.calls == [
+        (expected_opens[0], schedule.end_after(expected_opens[-1]), 9),
+    ]
+    assert result.start == expected_opens[0]
+    assert result.end == cutoff
+
+
+async def test_service_actual_count_emits_page_work_diagnostics(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="app.services.candle_count")
+    provider = FakeProvider([make_candle(START)])
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        provider,
+        count_scan_budget=1,
+    )
+
+    await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START,
+            START,
+            count=1,
+            count_direction="forward",
+        )
+    )
+
+    record = next(record for record in caplog.records if record.name == "app.services.candle_count")
+    fields = record.diagnostic_fields
+    assert fields["page_count"] == 1
+    assert fields["eligible_slots_scanned"] == 1
+    assert fields["provider_call_count"] == 1
+    assert fields["stop_reason"] == "target"
+
+
+async def test_service_actual_count_emits_partial_diagnostics(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="app.services.candle_count")
+    service = CandleService(
+        FakeRepository(symbol=BTC),
+        FakeProvider(),
+        count_scan_budget=1,
+    )
+
+    result = await service.get_candles(
+        CandleRequest(
+            "BTC/USD",
+            "1m",
+            START,
+            START,
+            count=1,
+            count_direction="forward",
+        )
+    )
+
+    assert result.candles == []
+    record = next(record for record in caplog.records if record.name == "app.services.candle_count")
+    assert record.diagnostic_fields["stop_reason"] == "scan_budget"
+
+
+async def test_service_actual_count_emits_provider_failure_diagnostics(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class FailingProvider(FakeProvider):
+        async def fetch_candles(
+            self,
+            symbol: SupportedSymbol,
+            timeframe: str,
+            provider_interval: str,
+            start: datetime,
+            end: datetime,
+            limit: int,
+        ) -> list[Candle]:
+            del symbol, timeframe, provider_interval, start, end, limit
+            raise ProviderUnavailableError("upstream failure")
+
+    caplog.set_level(logging.INFO, logger="app.services.candle_count")
+    service = CandleService(FakeRepository(symbol=BTC), FailingProvider(), count_scan_budget=1)
+
+    with pytest.raises(ProviderUnavailableError):
+        await service.get_candles(
+            CandleRequest(
+                "BTC/USD",
+                "1m",
+                START,
+                START,
+                count=1,
+                count_direction="forward",
+            )
+        )
+
+    record = next(record for record in caplog.records if record.name == "app.services.candle_count")
+    assert record.diagnostic_fields["stop_reason"] == "provider_failure"
+
+
+async def test_service_actual_count_emits_cancellation_diagnostics(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class BlockingProvider(FakeProvider):
+        def __init__(self) -> None:
+            super().__init__()
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def fetch_candles(
+            self,
+            symbol: SupportedSymbol,
+            timeframe: str,
+            provider_interval: str,
+            start: datetime,
+            end: datetime,
+            limit: int,
+        ) -> list[Candle]:
+            self.started.set()
+            await self.release.wait()
+            return await super().fetch_candles(
+                symbol,
+                timeframe,
+                provider_interval,
+                start,
+                end,
+                limit,
+            )
+
+    caplog.set_level(logging.INFO, logger="app.services.candle_count")
+    provider = BlockingProvider()
+    service = CandleService(FakeRepository(symbol=BTC), provider, count_scan_budget=1)
+    task = asyncio.create_task(
+        service.get_candles(
+            CandleRequest(
+                "BTC/USD",
+                "1m",
+                START,
+                START,
+                count=1,
+                count_direction="forward",
+            )
+        )
+    )
+    await provider.started.wait()
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    record = next(record for record in caplog.records if record.name == "app.services.candle_count")
+    assert record.diagnostic_fields["stop_reason"] == "cancelled"
 
 
 async def test_service_actual_count_includes_forming_snapshot() -> None:
@@ -1428,9 +1771,7 @@ async def test_service_limit_one_returns_cached_forming_snapshot_without_provide
         clock=lambda: now,
     )
 
-    result = await service.get_candles(
-        CandleRequest("BTC/USD", "1m", now, now, limit=1)
-    )
+    result = await service.get_candles(CandleRequest("BTC/USD", "1m", now, now, limit=1))
 
     assert result.candles == [forming]
     assert provider.calls == []
@@ -1449,9 +1790,7 @@ async def test_service_limit_one_returns_latest_completed_candle_without_forming
             end: datetime,
         ) -> list[Candle]:
             del symbol, timeframe
-            return [
-                candle for candle in self.persisted if start <= candle.open_time < end
-            ]
+            return [candle for candle in self.persisted if start <= candle.open_time < end]
 
     provider = FakeProvider()
     service = CandleService(
@@ -1461,9 +1800,7 @@ async def test_service_limit_one_returns_latest_completed_candle_without_forming
         clock=lambda: now,
     )
 
-    result = await service.get_candles(
-        CandleRequest("BTC/USD", "1m", now, now, limit=1)
-    )
+    result = await service.get_candles(CandleRequest("BTC/USD", "1m", now, now, limit=1))
 
     assert result.candles == [completed]
     assert provider.calls == []
@@ -1482,9 +1819,7 @@ async def test_service_limit_one_falls_back_to_previous_completed_candle() -> No
             end: datetime,
         ) -> list[Candle]:
             del symbol, timeframe
-            return [
-                candle for candle in self.persisted if start <= candle.open_time < end
-            ]
+            return [candle for candle in self.persisted if start <= candle.open_time < end]
 
     provider = FakeProvider()
     service = CandleService(
@@ -1494,9 +1829,7 @@ async def test_service_limit_one_falls_back_to_previous_completed_candle() -> No
         clock=lambda: now,
     )
 
-    result = await service.get_candles(
-        CandleRequest("BTC/USD", "1m", now, now, limit=1)
-    )
+    result = await service.get_candles(CandleRequest("BTC/USD", "1m", now, now, limit=1))
 
     assert result.candles == [previous]
     assert provider.calls == [(START, START + timedelta(minutes=1), 2)]
@@ -1512,8 +1845,6 @@ async def test_service_limit_one_returns_empty_when_no_eligible_candle_exists() 
         clock=lambda: now,
     )
 
-    result = await service.get_candles(
-        CandleRequest("BTC/USD", "1m", now, now, limit=1)
-    )
+    result = await service.get_candles(CandleRequest("BTC/USD", "1m", now, now, limit=1))
 
     assert result.candles == []

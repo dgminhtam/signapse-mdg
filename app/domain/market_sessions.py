@@ -184,13 +184,12 @@ def _calendar(calendar_name: str) -> Any:
     return mcal.get_calendar(calendar_name)
 
 
-@lru_cache(maxsize=4096)
-def _calendar_sessions(
-    calendar_name: str,
-    start_date: date,
-    end_date: date,
-) -> tuple[CalendarSession, ...]:
-    schedule = _calendar(calendar_name).schedule(start_date=start_date, end_date=end_date)
+@lru_cache(maxsize=32)
+def _calendar_year_sessions(calendar_name: str, year: int) -> tuple[CalendarSession, ...]:
+    schedule = _calendar(calendar_name).schedule(
+        start_date=date(year, 1, 1),
+        end_date=date(year, 12, 31),
+    )
     sessions: list[CalendarSession] = []
     for session_date, row in schedule.iterrows():
         break_start = row.get("break_start")
@@ -211,5 +210,23 @@ def _calendar_sessions(
                     else cast(datetime, break_end.to_pydatetime()).astimezone(UTC)
                 ),
             )
+        )
+    return tuple(sessions)
+
+
+@lru_cache(maxsize=4096)
+def _calendar_sessions(
+    calendar_name: str,
+    start_date: date,
+    end_date: date,
+) -> tuple[CalendarSession, ...]:
+    if end_date < start_date:
+        return ()
+    sessions: list[CalendarSession] = []
+    for year in range(start_date.year, end_date.year + 1):
+        sessions.extend(
+            session
+            for session in _calendar_year_sessions(calendar_name, year)
+            if start_date <= session.session_date <= end_date
         )
     return tuple(sessions)

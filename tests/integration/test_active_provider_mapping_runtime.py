@@ -147,12 +147,15 @@ async def test_provider_switch_keeps_old_candles_under_their_recorded_identity(
     symbol = await repository.get_enabled_symbol("BTC/USD")
 
     assert symbol is not None
-    assert await repository.list_complete(
-        symbol,
-        "1m",
-        open_time,
-        open_time + timedelta(minutes=2),
-    ) == []
+    assert (
+        await repository.list_complete(
+            symbol,
+            "1m",
+            open_time,
+            open_time + timedelta(minutes=2),
+        )
+        == []
+    )
     async with database_engine.connect() as connection:
         old_candle = (
             await connection.execute(

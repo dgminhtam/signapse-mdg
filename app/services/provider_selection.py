@@ -40,9 +40,13 @@ def resolve_provider_selection(
         )
     default = defaults[0]
 
-    selected = default if provider is None else next(
-        (mapping for mapping in mappings if mapping.provider == provider),
-        None,
+    selected = (
+        default
+        if provider is None
+        else next(
+            (mapping for mapping in mappings if mapping.provider == provider),
+            None,
+        )
     )
     if selected is None:
         raise ProviderSelectionError(
