@@ -81,12 +81,16 @@ class MarketCalendarToolProvider:
     def _scrape(self, calendar_type: str, start: datetime, end: datetime) -> object:
         module = importlib.import_module("market_calendar_tool")
         site = getattr(module.Site, SITE_BY_TYPE[calendar_type])
-        result = module.scrape_calendar(
+        scraper = importlib.import_module("market_calendar_tool.scraper").BaseScraper(
             site=site,
             date_from=start.date().isoformat(),
             date_to=end.date().isoformat(),
-            extended=False,
         )
+        with scraper.session:
+            post = scraper.session.post
+            # SDK 0.2.2 hard-codes 10s; override only this scraper's request.
+            scraper.session.post = lambda *args, **kwargs: post(*args, **{**kwargs, "timeout": 30})
+            result = scraper.scrape()
         clean_base = importlib.import_module("market_calendar_tool.cleaning.cleaner").clean_base
         return SimpleNamespace(
             base=clean_base(result.base),

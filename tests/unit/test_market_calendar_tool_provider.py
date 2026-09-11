@@ -1,6 +1,7 @@
 import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -44,10 +45,16 @@ async def test_market_calendar_tool_provider_maps_type_and_normalizes_rows(
     fake_cleaner = SimpleNamespace(clean_base=lambda base: base)
     fake_module = SimpleNamespace(
         Site=FakeSite,
-        scrape_calendar=scrape_calendar,
+    )
+    fake_scraper_module = SimpleNamespace(
+        BaseScraper=lambda **kwargs: SimpleNamespace(
+            session=MagicMock(), scrape=lambda: scrape_calendar(**kwargs)
+        )
     )
 
     def import_module(name: str) -> object:
+        if name == "market_calendar_tool.scraper":
+            return fake_scraper_module
         return fake_cleaner if name == "market_calendar_tool.cleaning.cleaner" else fake_module
 
     monkeypatch.setattr(provider_module.importlib, "import_module", import_module)
@@ -63,7 +70,6 @@ async def test_market_calendar_tool_provider_maps_type_and_normalizes_rows(
             "site": "https://www.forexfactory.com/calendar",
             "date_from": "2026-07-01",
             "date_to": "2026-07-08",
-            "extended": False,
         }
     ]
     assert events[0].calendar_type == "FOREX"
@@ -72,6 +78,33 @@ async def test_market_calendar_tool_provider_maps_type_and_normalizes_rows(
     assert events[0].actual_better_worse == "better"
     assert events[0].description is None
     assert events[0].news_url is None
+
+
+async def test_market_calendar_tool_provider_overrides_sdk_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import market_calendar_tool.cleaning.cleaner as cleaner
+    import requests
+    from market_calendar_tool.scraper import BaseScraper
+
+    timeouts: list[object] = []
+
+    def post(self: object, *args: object, **kwargs: object) -> object:
+        timeouts.append(kwargs["timeout"])
+        return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {})
+
+    monkeypatch.setattr(requests.Session, "post", post)
+    monkeypatch.setattr(BaseScraper, "_process_data", lambda self, data: [])
+    monkeypatch.setattr(cleaner, "clean_base", lambda data: data)
+
+    events = await MarketCalendarToolProvider().fetch_events(
+        "FOREX",
+        datetime(2026, 9, 9, tzinfo=UTC),
+        datetime(2026, 9, 18, tzinfo=UTC),
+    )
+
+    assert events == []
+    assert timeouts == [30]
 
 
 async def test_market_calendar_tool_provider_allows_missing_extended_fields(
