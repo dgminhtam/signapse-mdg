@@ -1,6 +1,8 @@
 import asyncio
 import importlib
 import logging
+import time
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 from types import SimpleNamespace
@@ -9,8 +11,9 @@ from urllib.parse import urljoin, urlparse
 
 import aiohttp
 from bs4 import BeautifulSoup
+from loguru import logger as sdk_logger
 
-from app.core.observability import log_failure
+from app.core.observability import failure_metadata, log_event
 from app.domain.economic_calendar import (
     EconomicCalendarEnrichment,
     EconomicCalendarEnrichmentCandidate,
@@ -24,7 +27,14 @@ SITE_BY_TYPE = {
     "ENERGY": "ENERGYEXCH",
     "CRYPTO": "CRYPTOCRAFT",
 }
+UPSTREAM_HOST_BY_TYPE = {
+    "FOREX": "www.forexfactory.com",
+    "METALS": "www.metalsmine.com",
+    "ENERGY": "www.energyexch.com",
+    "CRYPTO": "www.cryptocraft.com",
+}
 SITE_NUMBER_BY_TYPE = {"FOREX": 1, "METALS": 2, "ENERGY": 3, "CRYPTO": 4}
+BASE_TIMEOUT_SECONDS = 30
 DETAIL_CONCURRENCY = 5
 DETAIL_HEADERS = {
     "User-Agent": "market-calendar-tool (+https://github.com/pavelkrusek/market-calendar-tool)",
@@ -33,6 +43,7 @@ DETAIL_HEADERS = {
 }
 
 logger = logging.getLogger(__name__)
+sdk_logger.disable("market_calendar_tool")
 
 
 class MarketCalendarToolProvider:
@@ -44,22 +55,47 @@ class MarketCalendarToolProvider:
     ) -> list[EconomicCalendarFetchedEvent]:
         if calendar_type not in SITE_BY_TYPE:
             raise ValueError(f"Unsupported economic calendar type: {calendar_type}")
+        started = time.perf_counter()
         try:
             result = await asyncio.to_thread(self._scrape, calendar_type, start, end)
-            return _normalize_events(calendar_type, result)
-        except Exception as exc:
-            log_failure(
+            events = _normalize_events(calendar_type, result)
+            log_event(
                 logger,
-                "economic_calendar_provider_failed",
-                exc,
+                logging.INFO,
+                "economic_calendar_fetch_succeeded",
                 operation="economic_calendar.fetch_events",
                 provider="MARKET_CALENDAR",
-                **{"from": start, "to": end},
+                calendar_type=calendar_type,
+                upstream_host=UPSTREAM_HOST_BY_TYPE[calendar_type],
+                upstream_operation="POST /calendar/apply-settings/1",
+                provider_rows=len(events),
+                timeout_seconds=BASE_TIMEOUT_SECONDS,
+                latency_ms=round((time.perf_counter() - started) * 1000, 3),
+            )
+            return events
+        except Exception as exc:
+            metadata = failure_metadata(exc)
+            metadata.update(
+                {
+                    "calendar_type": calendar_type,
+                    "upstream_host": UPSTREAM_HOST_BY_TYPE[calendar_type],
+                    "upstream_operation": "POST /calendar/apply-settings/1",
+                    "failure_phase": "base_fetch",
+                    "timeout_seconds": BASE_TIMEOUT_SECONDS,
+                    "latency_ms": round((time.perf_counter() - started) * 1000, 3),
+                    "from": start,
+                    "to": end,
+                }
             )
             raise ProviderUnavailableError(
                 "Economic calendar provider is unavailable.",
+                failure_reason=str(metadata["failure_reason"]),
+                retryable=bool(metadata["retryable"]),
                 operation="economic_calendar.fetch_events",
                 provider="MARKET_CALENDAR",
+                request_from=start,
+                request_to=end,
+                diagnostic_fields=metadata,
             ) from exc
 
     async def fetch_event_details(
@@ -68,6 +104,7 @@ class MarketCalendarToolProvider:
     ) -> list[EconomicCalendarEnrichment]:
         if not candidates:
             return []
+        started = time.perf_counter()
         semaphore = asyncio.Semaphore(DETAIL_CONCURRENCY)
         async with aiohttp.ClientSession(headers=DETAIL_HEADERS) as session:
             results = await asyncio.gather(
@@ -76,7 +113,37 @@ class MarketCalendarToolProvider:
                     for candidate in candidates
                 )
             )
-        return [result for result in results if result is not None]
+        enrichments = [result for result, _reason in results if result is not None]
+        reasons = Counter(reason for _result, reason in results if reason is not None)
+        failed_count = len(candidates) - len(enrichments)
+        calendar_types = sorted({candidate.calendar_type for candidate in candidates})
+        upstream_hosts = sorted(
+            {UPSTREAM_HOST_BY_TYPE[candidate.calendar_type] for candidate in candidates}
+        )
+        log_event(
+            logger,
+            logging.WARNING if failed_count else logging.INFO,
+            "economic_calendar_enrichment_completed",
+            operation="economic_calendar.fetch_event_details",
+            provider="MARKET_CALENDAR",
+            calendar_type=calendar_types[0] if len(calendar_types) == 1 else None,
+            upstream_host=upstream_hosts[0] if len(upstream_hosts) == 1 else None,
+            upstream_hosts=upstream_hosts if len(upstream_hosts) > 1 else None,
+            upstream_operation="GET /calendar/details/{site_number}-{event_id}",
+            attempted_count=len(candidates),
+            succeeded_count=len(enrichments),
+            failed_count=failed_count,
+            connection_failure_count=sum(
+                count
+                for reason, count in reasons.items()
+                if reason in {"CONNECTION_FAILED", "CONNECTION_RESET", "TLS_HANDSHAKE_FAILED"}
+            ),
+            invalid_event_count=reasons.get("INVALID_UPSTREAM_EVENT", 0),
+            failure_reasons=sorted(reasons),
+            partial=bool(failed_count),
+            latency_ms=round((time.perf_counter() - started) * 1000, 3),
+        )
+        return enrichments
 
     def _scrape(self, calendar_type: str, start: datetime, end: datetime) -> object:
         module = importlib.import_module("market_calendar_tool")
@@ -102,23 +169,21 @@ class MarketCalendarToolProvider:
         session: aiohttp.ClientSession,
         semaphore: asyncio.Semaphore,
         candidate: EconomicCalendarEnrichmentCandidate,
-    ) -> EconomicCalendarEnrichment | None:
+    ) -> tuple[EconomicCalendarEnrichment | None, str | None]:
         try:
             async with semaphore:
                 async with session.get(_detail_url(candidate)) as response:
                     response.raise_for_status()
                     payload = await response.json()
-            return _normalize_detail(candidate, payload)
+            return _normalize_detail(candidate, payload), None
         except Exception as exc:
-            log_failure(
-                logger,
-                "economic_calendar_detail_failed",
-                exc,
-                level=logging.WARNING,
-                operation="economic_calendar.fetch_event_details",
-                provider="MARKET_CALENDAR",
+            status = getattr(exc, "status", None)
+            reason = (
+                "INVALID_UPSTREAM_EVENT"
+                if status == 400
+                else str(failure_metadata(exc)["failure_reason"])
             )
-            return None
+            return None, reason
 
 
 def _normalize_events(

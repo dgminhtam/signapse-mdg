@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import ssl
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -19,7 +21,9 @@ class FakeSite:
 
 async def test_market_calendar_tool_provider_maps_type_and_normalizes_rows(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.INFO, logger=provider_module.__name__)
     calls: list[dict[str, object]] = []
 
     def scrape_calendar(**kwargs: object) -> object:
@@ -78,6 +82,35 @@ async def test_market_calendar_tool_provider_maps_type_and_normalizes_rows(
     assert events[0].actual_better_worse == "better"
     assert events[0].description is None
     assert events[0].news_url is None
+    success = next(
+        record for record in caplog.records if record.event == "economic_calendar_fetch_succeeded"
+    )
+    assert success.diagnostic_fields["calendar_type"] == "FOREX"
+    assert success.diagnostic_fields["provider_rows"] == 1
+    assert success.diagnostic_fields["timeout_seconds"] == 30
+
+
+async def test_market_calendar_tool_provider_preserves_compact_failure_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_to_thread(func: object, *args: object) -> object:
+        del func, args
+        raise ssl.SSLError("[SSL: UNEXPECTED_EOF_WHILE_READING]")
+
+    monkeypatch.setattr(provider_module.asyncio, "to_thread", fail_to_thread)
+
+    with pytest.raises(provider_module.ProviderUnavailableError) as caught:
+        await MarketCalendarToolProvider().fetch_events(
+            "FOREX",
+            datetime(2026, 9, 9, tzinfo=UTC),
+            datetime(2026, 9, 18, tzinfo=UTC),
+        )
+
+    assert caught.value.failure_reason == "TLS_HANDSHAKE_FAILED"
+    assert caught.value.retryable is True
+    assert caught.value.diagnostic_fields["calendar_type"] == "FOREX"
+    assert caught.value.diagnostic_fields["failure_phase"] == "base_fetch"
+    assert caught.value.diagnostic_fields["root_error_code"] == "UNEXPECTED_EOF_WHILE_READING"
 
 
 async def test_market_calendar_tool_provider_overrides_sdk_timeout(
@@ -162,7 +195,9 @@ async def test_market_calendar_tool_provider_uses_to_thread(
 
 async def test_market_calendar_tool_provider_fetches_only_selected_details_with_limit(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    caplog.set_level(logging.INFO, logger=provider_module.__name__)
     urls: list[str] = []
     active = 0
     max_active = 0
@@ -232,3 +267,13 @@ async def test_market_calendar_tool_provider_fetches_only_selected_details_with_
     assert [result.external_event_id for result in results] == ["1", "2", "4", "5", "6", "7"]
     assert results[0].description == "Description 1"
     assert results[0].news_url == "https://www.forexfactory.com/news/1-story/hit"
+    summary = next(
+        record
+        for record in caplog.records
+        if record.event == "economic_calendar_enrichment_completed"
+    )
+    assert summary.diagnostic_fields["attempted_count"] == 7
+    assert summary.diagnostic_fields["succeeded_count"] == 6
+    assert summary.diagnostic_fields["failed_count"] == 1
+    assert summary.diagnostic_fields["partial"] is True
+    assert "traceback" not in summary.getMessage()

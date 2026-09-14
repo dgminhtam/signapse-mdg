@@ -1,5 +1,7 @@
 import json
 import logging
+import socket
+import ssl
 from datetime import UTC, datetime
 
 import pytest
@@ -83,6 +85,48 @@ def test_timeout_failure_is_retryable() -> None:
             assert classify_failure(cause) == ("TIMEOUT", True)
             assert failure_metadata(error)["failure_reason"] == "TIMEOUT"
             assert failure_metadata(error)["retryable"] is True
+
+
+def test_transport_failure_taxonomy_is_specific() -> None:
+    error = ssl.SSLError("SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING]'))")
+    assert classify_failure(error) == (
+        "TLS_HANDSHAKE_FAILED",
+        True,
+    )
+    metadata = failure_metadata(error)
+    assert metadata["root_exception_type"] == "SSLEOFError"
+    assert metadata["root_error_code"] == "UNEXPECTED_EOF_WHILE_READING"
+    assert classify_failure(socket.gaierror(-2, "Name or service not known")) == (
+        "DNS_RESOLUTION_FAILED",
+        True,
+    )
+
+
+def test_known_failure_can_omit_traceback() -> None:
+    records: list[logging.LogRecord] = []
+
+    class CaptureHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    logger = logging.getLogger("test.observability.compact")
+    handler = CaptureHandler()
+    logger.addHandler(handler)
+    logger.setLevel(logging.WARNING)
+    try:
+        log_failure(
+            logger,
+            "provider_request_failed",
+            ssl.SSLError("[SSL: UNEXPECTED_EOF_WHILE_READING]"),
+            include_traceback=False,
+        )
+    finally:
+        logger.removeHandler(handler)
+
+    assert len(records) == 1
+    payload = json.loads(JsonFormatter().format(records[0]))
+    assert payload["failure_reason"] == "TLS_HANDSHAKE_FAILED"
+    assert "traceback" not in payload
 
 
 def test_upstream_rate_limit_keeps_status_and_taxonomy() -> None:

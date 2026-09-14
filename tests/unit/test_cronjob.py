@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -100,6 +101,21 @@ async def test_run_once_executes_job_and_unknown_name_fails() -> None:
     assert job.calls == 1
     with pytest.raises(KeyError):
         await manager.run_once("missing")
+
+
+@pytest.mark.asyncio
+async def test_run_once_logs_job_lifecycle(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="app.core.cronjob")
+    manager = CronjobManager()
+    manager.register(CountingJob("sync"))
+
+    await manager.run_once("sync")
+
+    events = [record.event for record in caplog.records if record.name == "app.core.cronjob"]
+    assert events == ["cronjob_started", "cronjob_succeeded"]
+    success = caplog.records[-1]
+    assert success.diagnostic_fields["job_name"] == "sync"
+    assert success.diagnostic_fields["duration_ms"] >= 0
 
 
 @pytest.mark.asyncio

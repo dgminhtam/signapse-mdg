@@ -816,22 +816,29 @@ Logs should include:
 
 - stable event name and severity
 - `request_id` for REST/WebSocket work or `job_id` for standalone cron/backfill work
+- job name
 - provider
+- calendar type
+- upstream host and operation
 - provider symbol
 - canonical symbol
 - timeframe
 - request range when relevant
 - public error code when relevant
-- internal `failure_reason`, `retryable`, exception type, upstream status/code, and latency when available
+- internal `failure_reason`, `retryable`, exception type, root error type/code, failure phase,
+  timeout, upstream status/code, and latency when available
+- retry attempt fields (`attempt`, `max_attempts`, and `retry_in_ms`) when retries are used
+- enrichment totals (`attempted_count`, `succeeded_count`, `failed_count`, and `failure_reasons`)
 - provider-backed count diagnostics also include count direction, eligible slots scanned, page and
   logical provider-call counts, persisted/provider/returned row counts, stop reason, and calendar,
   database, and provider elapsed times
 
 Logs are JSON records written to stdout through the standard-library logging system. `LOG_LEVEL`
 defaults to `INFO`. Raw provider payloads, DataFrames, API keys, DSNs, and unrestricted exception
-messages are not part of the diagnostic field contract. High-volume queue-drop and rejected-event
-warnings are limited to one event key per 60 seconds and report `suppressed_count` on the next
-emitted warning.
+messages are not part of the diagnostic field contract. Known operational failures omit full
+tracebacks; unclassified failures may include one. High-volume queue-drop, rejected-event, and
+provider-detail warnings are summarized or limited to one event key per 60 seconds and report
+`suppressed_count` when applicable.
 
 ## Security Boundary
 

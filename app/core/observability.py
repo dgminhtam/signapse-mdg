@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 import re
+import socket
+import ssl
 import sys
 import threading
 import time
@@ -27,11 +29,17 @@ _REQUEST_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar(
 _ALLOWED_FIELDS = {
     "request_id",
     "job_id",
+    "job_name",
     "operation",
     "method",
     "path",
     "status_code",
     "provider",
+    "calendar_type",
+    "upstream_host",
+    "upstream_hosts",
+    "upstream_operation",
+    "failed_operation",
     "provider_symbol",
     "symbol",
     "symbols",
@@ -42,9 +50,17 @@ _ALLOWED_FIELDS = {
     "failure_reason",
     "retryable",
     "exception_type",
+    "root_exception_type",
+    "root_error_code",
     "upstream_status",
     "upstream_code",
     "latency_ms",
+    "duration_ms",
+    "timeout_seconds",
+    "failure_phase",
+    "attempt",
+    "max_attempts",
+    "retry_in_ms",
     "shape",
     "columns",
     "failed_row_timestamp",
@@ -76,11 +92,21 @@ _ALLOWED_FIELDS = {
     "provider_ms",
     "mode",
     "client_id",
+    "attempted_count",
+    "succeeded_count",
+    "failed_count",
+    "connection_failure_count",
+    "invalid_event_count",
+    "failure_reasons",
+    "enrichment_candidates",
+    "enrichment_rows",
 }
 _SENSITIVE_TEXT_PATTERNS = (
     re.compile(r"(?i)(api[_-]?key|access[_-]?token|password|secret)=([^&\s]+)"),
     re.compile(r"(?i)(postgres(?:ql)?(?:\+[^:/\s]+)?://)([^@\s]+)@"),
 )
+_ERROR_CODE_RE = re.compile(r"\[(?:SSL|TLS):\s*([A-Z0-9_]+)\]")
+_EXCEPTION_NAME_RE = re.compile(r"\b([A-Z][A-Za-z0-9]*(?:Error|Exception))\(")
 
 
 def _redact_text(value: str) -> str:
@@ -258,20 +284,35 @@ def log_rate_limited_warning(
 
 def classify_failure(exc: BaseException) -> tuple[str, bool]:
     name = type(exc).__name__.lower()
+    text = str(exc).lower()
+    if isinstance(exc, socket.gaierror) or "name or service not known" in text:
+        return "DNS_RESOLUTION_FAILED", True
+    if isinstance(exc, ssl.SSLError) or "ssl" in name or "tls" in name:
+        return "TLS_HANDSHAKE_FAILED", True
+    if "connecttimeout" in name or "connect timeout" in text:
+        return "CONNECT_TIMEOUT", True
+    if "readtimeout" in name or "read timed out" in text:
+        return "READ_TIMEOUT", True
     if isinstance(exc, (asyncio.TimeoutError, TimeoutError)) or "timeout" in name:
         return "TIMEOUT", True
     status = getattr(exc, "status_code", None)
+    if not isinstance(status, int):
+        status = getattr(exc, "status", None)
     if not isinstance(status, int):
         response = getattr(exc, "response", None)
         status = getattr(response, "status_code", None)
     if status == 429:
         return "RATE_LIMITED", True
+    if isinstance(status, int) and 400 <= status < 500:
+        return "UPSTREAM_HTTP_ERROR", False
     if isinstance(status, int) and status >= 500:
         return "REQUEST_FAILED", True
+    if isinstance(exc, ConnectionResetError) or "connection reset" in text:
+        return "CONNECTION_RESET", True
     if isinstance(exc, (ConnectionError, OSError)) or any(
         marker in name for marker in ("connection", "network", "transport")
     ):
-        return "REQUEST_FAILED", True
+        return "CONNECTION_FAILED", True
     if any(marker in name for marker in ("auth", "credential", "apikey", "keyunavailable")):
         return "AUTH_FAILED", False
     return "REQUEST_FAILED", False
@@ -286,12 +327,19 @@ def failure_metadata(exc: BaseException) -> dict[str, object]:
         reason = inferred_reason
     if cause is not exc and retryable is False and inferred_retryable:
         retryable = True
+    exception_names = _EXCEPTION_NAME_RE.findall(str(cause))
     metadata: dict[str, object] = {
         "failure_reason": reason if isinstance(reason, str) else inferred_reason,
         "retryable": retryable if isinstance(retryable, bool) else inferred_retryable,
         "exception_type": type(cause).__name__,
+        "root_exception_type": exception_names[-1] if exception_names else type(cause).__name__,
     }
+    error_code = _ERROR_CODE_RE.search(str(cause))
+    if error_code is not None:
+        metadata["root_error_code"] = error_code.group(1)
     status = getattr(cause, "status_code", None)
+    if not isinstance(status, int):
+        status = getattr(cause, "status", None)
     if not isinstance(status, int):
         response = getattr(cause, "response", None)
         status = getattr(response, "status_code", None)
@@ -304,6 +352,9 @@ def failure_metadata(exc: BaseException) -> dict[str, object]:
         value = getattr(exc, field, None)
         if value is not None:
             metadata[field] = value
+    details = getattr(exc, "diagnostic_fields", None)
+    if isinstance(details, Mapping):
+        metadata.update({key: value for key, value in details.items() if key in _ALLOWED_FIELDS})
     return metadata
 
 
@@ -314,11 +365,14 @@ def log_failure(
     **fields: object,
 ) -> None:
     level = fields.pop("level", logging.ERROR)
+    include_traceback = fields.pop("include_traceback", True)
+    if not isinstance(include_traceback, bool):
+        include_traceback = True
     if not isinstance(level, int):
         level = logging.ERROR
     metadata = failure_metadata(exc)
     metadata.update(fields)
-    metadata["exc_info"] = True
+    metadata["exc_info"] = include_traceback
     log_event(logger, level, event, **metadata)
 
 

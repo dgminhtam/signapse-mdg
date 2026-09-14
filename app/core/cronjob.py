@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -133,6 +134,7 @@ class CronjobManager:
                 "cronjob_cancelled",
                 operation="cronjob",
                 job_id=uuid4().hex,
+                job_name=name,
             )
             raise
 
@@ -143,7 +145,16 @@ class CronjobManager:
             state.status.running = True
             state.status.last_started_at = self._clock()
         job_id = uuid4().hex
-        token = bind_context(job_id=job_id)
+        token = bind_context(job_id=job_id, job_name=state.job.name)
+        started = time.perf_counter()
+        log_event(
+            logger,
+            logging.INFO,
+            "cronjob_started",
+            operation="cronjob",
+            job_id=job_id,
+            job_name=state.job.name,
+        )
         try:
             await state.job.run_once()
         except asyncio.CancelledError:
@@ -164,6 +175,8 @@ class CronjobManager:
                     "cronjob_failed",
                     operation="cronjob",
                     job_id=job_id,
+                    job_name=state.job.name,
+                    duration_ms=round((time.perf_counter() - started) * 1000, 3),
                     **metadata,
                 )
             else:
@@ -173,6 +186,9 @@ class CronjobManager:
                     exc,
                     operation="cronjob",
                     job_id=job_id,
+                    job_name=state.job.name,
+                    duration_ms=round((time.perf_counter() - started) * 1000, 3),
+                    include_traceback=True,
                 )
         else:
             now = self._clock()
@@ -181,6 +197,15 @@ class CronjobManager:
                 state.status.last_succeeded_at = now
                 state.status.last_error = None
                 state.status.run_count += 1
+            log_event(
+                logger,
+                logging.INFO,
+                "cronjob_succeeded",
+                operation="cronjob",
+                job_id=job_id,
+                job_name=state.job.name,
+                duration_ms=round((time.perf_counter() - started) * 1000, 3),
+            )
         finally:
             async with self._lock:
                 state.status.running = False

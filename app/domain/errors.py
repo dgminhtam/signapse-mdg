@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+
+
 class _DiagnosticUnavailableError(Exception):
     def __init__(
         self,
@@ -14,6 +17,7 @@ class _DiagnosticUnavailableError(Exception):
         request_to: object | None = None,
         failed_row_timestamp: object | None = None,
         failed_row_reason: str | None = None,
+        diagnostic_fields: Mapping[str, object] | None = None,
     ) -> None:
         super().__init__(message)
         self.failure_reason = failure_reason
@@ -27,6 +31,7 @@ class _DiagnosticUnavailableError(Exception):
         self.request_to = request_to
         self.failed_row_timestamp = failed_row_timestamp
         self.failed_row_reason = failed_row_reason
+        self.diagnostic_fields = dict(diagnostic_fields or {})
 
 
 class DatabaseUnavailableError(_DiagnosticUnavailableError):
@@ -97,6 +102,7 @@ class ProviderUnavailableError(_DiagnosticUnavailableError):
         request_to: object | None = None,
         failed_row_timestamp: object | None = None,
         failed_row_reason: str | None = None,
+        diagnostic_fields: Mapping[str, object] | None = None,
     ) -> None:
         super().__init__(
             message,
@@ -111,6 +117,7 @@ class ProviderUnavailableError(_DiagnosticUnavailableError):
             request_to=request_to,
             failed_row_timestamp=failed_row_timestamp,
             failed_row_reason=failed_row_reason,
+            diagnostic_fields=diagnostic_fields,
         )
 
 

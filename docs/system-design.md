@@ -702,13 +702,16 @@ diagnostic fields are:
 
 - stable `event` name and severity
 - `request_id` or `job_id`
-- operation, provider, provider symbol, canonical symbol, timeframe, and request range when relevant
+- operation, job name, provider, calendar type, upstream host/operation, provider symbol,
+  canonical symbol, timeframe, and request range when relevant
 - public error code, internal failure reason, retryability, exception type, upstream status/code,
-  and latency when available
+  root error type/code, failure phase, timeout, and latency when available
 
 Credentials, DSNs, raw provider payloads/DataFrames, and unrestricted exception text are redacted or
-excluded. Queue drops, rejected stream events, and equivalent high-volume warnings are rate-limited
-per event key to one emission per 60 seconds, with `suppressed_count` on the next emitted event.
+excluded. Known operational failures emit compact metadata; full tracebacks are reserved for
+unclassified failures or debug logging. Queue drops, rejected stream events, and equivalent high-volume
+warnings are rate-limited per event key to one emission per 60 seconds, with `suppressed_count` on the
+next emitted event.
 
 Minimum metrics (future instrumentation):
 
@@ -722,12 +725,28 @@ Minimum metrics (future instrumentation):
 Structured log fields:
 
 - `provider`
+- `job_name`
+- `calendar_type`
+- `upstream_host`
+- `upstream_operation`
 - `provider_symbol`
 - `symbol`
 - `timeframe`
 - `from`
 - `to`
 - `error_code`
+- `failure_phase`
+- `root_exception_type`
+- `root_error_code`
+- `timeout_seconds`
+- `duration_ms`
+- `attempt`
+- `max_attempts`
+- `retry_in_ms`
+- `attempted_count`
+- `succeeded_count`
+- `failed_count`
+- `failure_reasons`
 - `request_id`
 - count execution fields: `count_direction`, `eligible_slots_scanned`, `page_count`,
   `provider_call_count`, source row counts, `stop_reason`, and calendar/database/provider elapsed
