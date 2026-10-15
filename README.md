@@ -98,10 +98,13 @@ The API is available at:
 - Supported symbols: <http://127.0.0.1:8000/v1/symbols>
 - Latest quotes: <http://127.0.0.1:8000/v1/quotes?symbols=BTC%2FUSD%2CETH%2FUSD>
 - Historical candles: <http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSD&timeframe=1m&from=2026-06-19T00%3A00%3A00Z&to=2026-06-19T00%3A02%3A00Z>
-- OpenAPI docs: <http://127.0.0.1:8000/docs>
+- Generated HTTP contract: <http://127.0.0.1:8000/openapi.json>
+- OpenAPI docs UI: <http://127.0.0.1:8000/docs>
 
-For external client implementation details, including required fields, response types, WebSocket
-events, and close codes, see [docs/api-contract.md](docs/api-contract.md).
+For HTTP integration, use `/openapi.json` from the producer environment being integrated.
+Apply the [OpenAPI contract rules](docs/api-contract-rules.md) when generating, reviewing, or
+handing off an API; that document records the generation and verification policy. [docs/spec.md](docs/spec.md) retains accepted behavior and API design
+context, plus the canonical WebSocket events and close codes.
 
 Verify the health endpoint from another terminal:
 
@@ -237,6 +240,10 @@ uv run python -m app.backfill_candles --from 2026-06-19T00:00:00Z --to 2026-06-2
 The command requires `DATABASE_URL` and the same provider configuration as `/v1/candles`.
 It reads enabled registry symbols, splits ranges by `MAX_CANDLES_PER_REQUEST`, reuses the existing
 repository-first candle service, fetches only missing ranges, and upserts only complete candles.
+Provider filters match each asset's Default Provider; additional non-default mappings do not
+expand the backfill scope. Unknown/disabled symbols and unsupported timeframes are rejected before
+provider access. Chunk failures report sanitized symbol, timeframe, and range context and produce
+a non-zero exit status; completed writes remain valid for an idempotent rerun.
 
 Optional filters:
 
@@ -309,3 +316,8 @@ database. They are skipped explicitly when it is absent:
 $env:TEST_DATABASE_URL="postgresql+asyncpg://<user>:<password>@<host>:<port>/<test_database>"
 uv run pytest -m integration
 ```
+
+HTTP contract metadata is generated at `/openapi.json`, including query semantics, error responses,
+correlation headers and configured limits. Set `SOURCE_REVISION` to the source revision when building
+or launching an identifiable instance; omitted values are reported as `unknown` in `x-build-revision`.
+This value is supplied by the operator/build and is not deployment verification by itself.

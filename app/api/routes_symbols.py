@@ -1,10 +1,12 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
+from pydantic.json_schema import SkipJsonSchema
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.openapi import DATABASE_UNAVAILABLE_RESPONSE
 from app.db.repositories import PostgresSymbolRepository
 from app.db.session import get_db_session
 from app.domain.symbols import SymbolRepository
@@ -16,25 +18,42 @@ router = APIRouter(prefix="/v1", tags=["symbols"])
 class ProviderMappingResponse(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-    provider: str
-    provider_symbol: str
-    is_default: bool
+    provider: str = Field(
+        description="Case-sensitive Provider Identifier accepted for this symbol."
+    )
+    provider_symbol: str = Field(description="Provider-specific instrument identifier.")
+    is_default: bool = Field(description="Whether this mapping supplies the Default Provider.")
 
 
 class SymbolResponse(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-    symbol: str
-    asset_class: str
-    provider: str
-    provider_symbol: str
-    enabled: bool
-    price_display_decimals: int
-    provider_mappings: list[ProviderMappingResponse] | None = None
+    symbol: str = Field(description="Stable, case-sensitive canonical gateway symbol.")
+    asset_class: str = Field(
+        description="Asset classification from the registry, e.g. CRYPTO or FOREX."
+    )
+    provider: str = Field(
+        description="Default Provider Identifier, not a consolidated data source."
+    )
+    provider_symbol: str = Field(description="Instrument identifier used by the Default Provider.")
+    enabled: bool = Field(
+        description="Whether the registry symbol is enabled; this endpoint lists enabled symbols."
+    )
+    price_display_decimals: int = Field(
+        description="Number of decimal places for public prices, including trailing zeroes.",
+        json_schema_extra={"minimum": 0, "maximum": 18},
+    )
+    # The route omits None; it never sends a nullable providerMappings property.
+    provider_mappings: list[ProviderMappingResponse] | SkipJsonSchema[None] = Field(
+        default=None,
+        description="Supported mappings, default first then provider; omitted when unavailable.",
+    )
 
 
 class SymbolListResponse(BaseModel):
-    symbols: list[SymbolResponse]
+    symbols: list[SymbolResponse] = Field(
+        description="Enabled symbols ordered by canonical symbol."
+    )
 
 
 def get_symbol_repository(
@@ -53,6 +72,46 @@ def get_symbol_service(
     "/symbols",
     response_model=SymbolListResponse,
     response_model_exclude_none=True,
+    summary="List supported symbols and provider mappings",
+    description="Reads the enabled registry, ordered by canonical symbol. Symbols without a usable "
+    "default mapping make the request fail with 503 DATABASE_UNAVAILABLE. "
+    "provider/providerSymbol identify that default; providerMappings "
+    "lists supported overrides when available. Mapping availability is not a live provider health "
+    "guarantee. An empty registry returns an empty symbols array. No client authentication.",
+    responses={
+        200: {
+            "description": "Enabled symbol registry.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "symbols": [
+                            {
+                                "symbol": "BTC/USD",
+                                "assetClass": "CRYPTO",
+                                "provider": "TWELVE_DATA",
+                                "providerSymbol": "BTC/USD",
+                                "enabled": True,
+                                "priceDisplayDecimals": 2,
+                                "providerMappings": [
+                                    {
+                                        "provider": "TWELVE_DATA",
+                                        "providerSymbol": "BTC/USD",
+                                        "isDefault": True,
+                                    },
+                                    {
+                                        "provider": "YFINANCE",
+                                        "providerSymbol": "BTC-USD",
+                                        "isDefault": False,
+                                    },
+                                ],
+                            }
+                        ]
+                    }
+                }
+            },
+        },
+        503: DATABASE_UNAVAILABLE_RESPONSE,
+    },
 )
 async def list_supported_symbols(
     service: Annotated[SymbolService, Depends(get_symbol_service)],

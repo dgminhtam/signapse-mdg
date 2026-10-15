@@ -12,6 +12,7 @@ from app.api.errors import (
     quote_request_error_handler,
     unexpected_error_handler,
 )
+from app.api.openapi import INTERNAL_ERROR_RESPONSE, configure_openapi
 from app.api.routes_candles import router as candles_router
 from app.api.routes_economic_calendar import router as economic_calendar_router
 from app.api.routes_health import router as health_router
@@ -114,6 +115,16 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="Signapse Market Data Gateway",
         version="0.1.0",
+        description=(
+            "Normalized market data HTTP contract. No client authentication is implemented; "
+            "deploy behind the intended network boundary. Prices/volumes are decimal strings "
+            "and timestamps are UTC. x-build-revision identifies the configured producer build; "
+            "unknown does not prove a deployed revision. WebSocket /v1/stream is quote-only and "
+            "is documented separately in the "
+            "[WebSocket contract](https://github.com/signapse-group/signapse-mdg/blob/main/"
+            "docs/spec.md#websocket-stream-contract)."
+        ),
+        responses={500: INTERNAL_ERROR_RESPONSE},
         lifespan=lifespan,
     )
     application.add_middleware(DiagnosticContextMiddleware)
@@ -140,6 +151,7 @@ def create_app() -> FastAPI:
     application.include_router(historical_price_router)
     application.include_router(economic_calendar_router)
     application.include_router(stream_router)
+    configure_openapi(application, settings)
     return application
 
 

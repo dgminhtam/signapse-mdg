@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     database_url: str | None = None
     log_level: str = "INFO"
+    source_revision: str = "unknown"
     database_pool_size: int = Field(default=5, ge=1)
     database_pool_max_overflow: int = Field(default=5, ge=0)
     database_pool_timeout_seconds: float = Field(default=5, gt=0)

@@ -318,6 +318,22 @@ Important constraints:
 - Commodity yfinance mappings are futures or rolling-futures proxies; `XAG/USD` maps to `SI=F`
   rather than a spot silver symbol.
 
+### Economic Calendar Provider
+
+Use the pinned `market-calendar-tool==0.2.2` behind `MarketCalendarToolProvider` for base calendar
+scraping, offloaded with `asyncio.to_thread`. The adapter uses the package's base scraper and
+cleaning helpers without full-window extended scraping; its request-local base timeout is 30
+seconds because this SDK version otherwise hard-codes 10 seconds.
+
+Selected event details use already-installed `aiohttp`, with at most five concurrent requests.
+This direct-protocol exception is required because the package's public extended API fetches
+details for every event, rather than selected event IDs. Persisted daily attempt markers bound
+request volume across restarts. Keeping the private detail URL/JSON handling inside the adapter
+and fixture tests contains upstream format risk; marking attempts before I/O accepts up to a day
+of enrichment delay after a transient failure. Base polling and API reads remain independent of
+detail success. See [refresh lifecycle](system-design.md#economic-calendar-refresh) and
+[persistence rules](spec.md#economic-calendar-persistence).
+
 ## 6. Persistence
 
 ### PostgreSQL
@@ -336,13 +352,14 @@ Initial database objects:
 supported_symbols
 symbol_provider_mappings
 market_data_candles
+economic_calendar_events
 ```
 
 The normalized `symbol_provider_mappings` table stores multiple provider identities per asset and
-an `is_active` flag for the one asset-wide selection shared by quote, candle, stream, and backfill.
-Runtime repositories join canonical `supported_symbols` rows to that active mapping and fail closed
-when it is absent. There is no capability priority, equivalence group, automatic fallback, or
-hard-coded fallback registry.
+an `is_active` flag for its Default Provider. Runtime repositories load every configured mapping;
+requests resolve the default or an explicit Provider Override, while backfill uses the default.
+Missing or ambiguous defaults fail closed. There is no capability priority, equivalence group,
+automatic fallback, or hard-coded fallback registry.
 
 Revision `0019` reconciles the catalog to 24 active defaults plus five inactive alternatives and
 revision `0020` removes the duplicated provider columns from `supported_symbols` after validating
@@ -677,3 +694,10 @@ mypy==2.1.0
 - coverage.py documentation: https://coverage.readthedocs.io/en/latest/
 - Prometheus Python client: https://prometheus.github.io/client_python/
 
+
+## OpenAPI tooling
+
+The existing FastAPI/Pydantic stack generates OpenAPI 3.1 at `/openapi.json`; route `responses`
+and `openapi_extra` document custom errors and raw query parsers. HTTPX ASGITransport tests
+verify generation locally without a live provider or database. No additional runtime dependency
+is required. Apply the [contract rules](api-contract-rules.md) when changing generated metadata.

@@ -3,7 +3,7 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.observability import (
     REQUEST_ID_HEADER,
@@ -25,13 +25,23 @@ logger = logging.getLogger("app.api.errors")
 
 
 class ErrorDetail(BaseModel):
-    code: str
-    message: str
-    details: dict[str, Any] | None = None
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
+    code: str = Field(
+        description="Stable machine-readable code; applicable codes are operation-specific."
+    )
+    message: str = Field(
+        description="Sanitized human-readable explanation; do not branch on this text."
+    )
+    details: dict[str, Any] | None = Field(
+        default=None, description="Error context when available; the key is emitted even when null."
+    )
 
 
 class ErrorResponse(BaseModel):
-    error: ErrorDetail
+    error: ErrorDetail = Field(
+        description="Request-level failure; distinct from quote item errors."
+    )
 
 
 def _error_response(

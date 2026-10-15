@@ -71,11 +71,12 @@ These `YFINANCE` rows are available through `/v1/quotes`, `/v1/candles`, and `/v
 Commodity symbols are futures or rolling-futures proxies, including `XAG/USD -> SI=F`. Yahoo stream
 event coverage is not guaranteed for every accepted symbol.
 
-The registry contains five inactive yfinance alternatives for manual switching:
+The registry contains five additional yfinance mappings available for Provider Override:
 `AAPL`, `BTC-USD`, `ETH-USD`, `EURUSD=X`, and `QQQ`, owned by canonical `AAPL`, `BTC/USD`,
 `ETH/USD`, `EUR/USD`, and `QQQ` respectively. `XAU/USD` has no yfinance alternative because
-`GC=F` is a futures proxy rather than an approved equivalent. Selection is asset-wide and shared
-by quote, candle, and stream; no route-specific selection or fallback exists.
+`GC=F` is a futures proxy rather than an approved equivalent. The active mapping supplies the
+Default Provider; an explicit override selects a configured mapping for that request or subscription
+without mutating the default. Every listed mapping must support the complete market-data surface.
 
 ## 2. Goals
 
@@ -94,7 +95,6 @@ by quote, candle, and stream; no route-specific selection or fallback exists.
 - Public authentication, multi-tenant quota, or billing.
 - Raw tick storage.
 - Support for crypto assets beyond `BTC/USD` and `ETH/USD`.
-- Public market-data routing for FX, commodities, equities, ETFs, or indexes.
 
 ## 4. Architecture
 
@@ -154,7 +154,8 @@ by quote, candle, and stream; no route-specific selection or fallback exists.
 ### FastAPI Application
 
 - Owns process startup, shutdown, dependency wiring, and route registration.
-- Exposes `/health`, `/ready`, `/v1/symbols`, `/v1/quotes`, `/v1/candles`, and `/v1/stream`.
+- Exposes `/health`, `/ready`, `/v1/symbols`, `/v1/quotes`, `/v1/candles`,
+  `/v1/historical-price`, `/v1/economic-calendar`, and `/v1/stream`.
 - Converts validation and service exceptions into stable error responses.
 - Adds bounded `X-Request-ID` correlation to REST responses and WebSocket handshakes; cron and
   backfill executions use `job_id`.
@@ -286,6 +287,42 @@ Recommended initial timeframes:
 - Fans out quote events to matching clients and updates QuoteCache before fanout.
 - Emits quote-only status events such as `CONNECTING`, `SUBSCRIBED`, `STALE`, `RECONNECTING`, and
   `ERROR`; `MARKET_CLOSED` and candle lifecycle state do not exist on this stream.
+
+### Cronjob Manager
+
+- Registers jobs by unique name before or after startup; duplicate names are rejected. Registering
+  an enabled job after startup creates its loop immediately. Disabled jobs have no loop.
+- FastAPI lifespan starts one loop per enabled job and stops it by cancelling and awaiting owned
+  loop tasks. `run_on_start` schedules an immediate background execution; otherwise the loop waits
+  for its first interval. Each loop waits the configured interval between completed executions.
+- Internal `run_once(name)` runs an enabled job on demand, rejects unknown names, and shares the
+  scheduled execution guard. An overlapping execution of the same job is skipped.
+- A failed run is logged and recorded without stopping that job's future loop or other jobs.
+- In-memory status includes name, enabled/running flags, last started/finished/succeeded/failed
+  timestamps, latest error, total run count, and failure count. Completed successes and failures
+  increment the run count; failures also increment the failure count.
+- Execution and status belong to one process. Multiple workers have independent loops; the manager
+  provides no distributed lock, persistent job history, or cross-process exactly-once guarantee.
+
+### Economic Calendar Refresh
+
+When `DATABASE_URL` is configured and `ECONOMIC_CALENDAR_POLL_SECONDS > 0`, lifespan registers
+`economic-calendar-refresh` with `run_on_start=true`. Each run fetches `FOREX`, `METALS`, `ENERGY`,
+and `CRYPTO`, using UTC day boundaries from today minus two days to today plus seven days.
+
+The gateway-owned `MarketCalendarToolProvider` maps those types to ForexFactory, MetalsMine,
+EnergyExch, and CryptoCraft. Blocking base scraping runs in a worker thread without extended
+detail scraping. After base upsert, the repository claims only incomplete events not attempted in
+the current UTC day and commits the attempt marker before fetching their details. Successful
+non-null enrichment is then persisted. Description normalization prefers the `Measures` spec text,
+then the first usable spec text. News normalization selects the first usable `/news/.../hit` link
+and resolves it to an absolute URL; it does not fetch articles or retain raw news HTML.
+
+Upstream refresh failures are isolated by the cronjob manager. Failed individual details leave
+base rows and prior enrichment intact and are not attempted again that UTC day. The read-only
+calendar API continues serving persisted rows even when refresh fails or polling is disabled.
+Persistence and change-tracking rules are defined in
+[Economic calendar persistence](spec.md#economic-calendar-persistence).
 
 ## 6. Data Flow
 
@@ -430,6 +467,7 @@ refreshed. Per-client bounded queues isolate slow consumers; an overloaded clien
 | `GET` | `/v1/quotes` | Latest normalized quotes for one or more symbols. |
 | `GET` | `/v1/candles` | Historical normalized candles for one symbol and timeframe. |
 | `GET` | `/v1/historical-price` | Completed historical price with adaptive resolution. |
+| `GET` | `/v1/economic-calendar` | Read-only persisted calendar events and optional enrichment. |
 
 ### WebSocket
 
@@ -506,6 +544,9 @@ CREATE TABLE supported_symbols (
     asset_class TEXT NOT NULL,
     price_display_decimals SMALLINT NOT NULL
         CHECK (price_display_decimals BETWEEN 0 AND 18),
+    calendar_source TEXT,
+    calendar_name TEXT,
+    calendar_timezone TEXT,
     enabled BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -539,10 +580,30 @@ revision `20260727_0019` seeds 29 mappings for 24 assets: 24 active defaults and
 yfinance alternatives. Revision `20260727_0020` validates exactly one active mapping per canonical
 symbol and removes the legacy provider columns from `supported_symbols`.
 
-Runtime repositories outer-join enabled canonical symbols to their active mapping and fail closed
-when one is missing. The resolved mapping is shared by quote, candle, stream, and backfill without
-automatic fallback. Provider switching changes `is_active` in one transaction and requires no
-legacy mirror write.
+Runtime repositories load enabled canonical symbols with all their configured mappings and fail
+closed when the Default Provider is missing or ambiguous. Market-data requests resolve the default
+or exact Provider Override once; backfill uses the default. Provider switching changes `is_active`
+in one transaction and requires no legacy mirror write. An in-flight operation retains its
+resolved Provider Selection even if the default changes.
+
+Inline calendar metadata is optional and internal. Seeded calendar families are:
+
+| Assets | Source / calendar | Timezone |
+| --- | --- | --- |
+| `BTC/USD`, `ETH/USD` | `internal` / `24/7` | `UTC` |
+| Forex pairs and `XAU/USD` | `pandas_market_calendars` / `FOREX` | `America/New_York` |
+| US stocks, ETFs, and stock indexes | `pandas_market_calendars` / `NYSE` | `America/New_York` |
+| `WTI`, `BRENT`, `NATGAS` | `pandas_market_calendars` / `CMEGlobex_Energy` | `America/New_York` |
+| `XAG/USD` | `pandas_market_calendars` / `CMEGlobex_Metals` | `America/New_York` |
+| `WHEAT`, `CORN` | `pandas_market_calendars` / `CMEGlobex_Grains` | `America/Chicago` |
+| `COFFEE`, `SUGAR` | `pandas_market_calendars` / `ICEUS` | `America/New_York` |
+
+Calendar definitions are local pinned package data; seeds do not populate calendar-session tables
+or require a calendar refresh job. At runtime, inline metadata takes precedence: `24/7` is always
+open, `FOREX` and `XAU/USD` use the weekly Forex policy, and recognized exchange calendars supply
+session dates, opens/closes, and breaks. Missing or unrecognized config falls back to the existing
+WTI or asset-class policy. Historical seed-only restrictions do not disable current routing or
+calendar evaluation.
 
 The historical seed chain first built the 24-asset catalog. Revision `0019` reconciles that catalog
 to the approved matrix above while preserving unknown custom mappings and provider-owned candles.
@@ -622,6 +683,7 @@ ON market_data_candles (provider, provider_symbol, timeframe, open_time);
 | `CANDLE_FORMING_CACHE_TTL_SECONDS` | `5` | Process-local forming snapshot TTL. |
 | `STREAM_IDLE_GRACE_SECONDS` | `5` | Delay before closing unused upstream interests. |
 | `STREAM_FRESHNESS_CHECK_SECONDS` | `1` | Freshness monitor interval. |
+| `ECONOMIC_CALENDAR_POLL_SECONDS` | `300` | Background calendar refresh interval; `0` disables registration. |
 
 ## 11. Error Handling
 
@@ -665,8 +727,9 @@ Multi-symbol quote responses use a per-symbol error list:
 | `DATA_STALE` | `503` | Operation requires fresh data but only stale data exists. |
 | `INTERNAL_ERROR` | `500` | Unexpected server failure. |
 
-Provider and database boundaries log the full chained traceback once with safe context; downstream
-API translation logs only a summary and keeps the public body sanitized. Unexpected exceptions are
+Provider and database boundaries log safe root-cause metadata once; known operational failures
+omit full tracebacks, while unclassified failures may include one. Downstream API translation
+logs only a summary and keeps the public body sanitized. Unexpected exceptions are
 translated to `500 INTERNAL_ERROR`. Every REST response carries `X-Request-ID`; standalone cron and
 backfill runs carry a `job_id` instead.
 
@@ -712,6 +775,11 @@ excluded. Known operational failures emit compact metadata; full tracebacks are 
 unclassified failures or debug logging. Queue drops, rejected stream events, and equivalent high-volume
 warnings are rate-limited per event key to one emission per 60 seconds, with `suppressed_count` on the
 next emitted event.
+
+The failure taxonomy, partial YFINANCE OHLC quarantine diagnostics, and stderr fallback when JSON
+logging setup fails follow the [observability contract](spec.md#observability). Selection logs
+include canonical symbol, provider, provider symbol, and mode `DEFAULT` or `OVERRIDE`. Future
+metrics may label provider and selection mode, but not provider symbol.
 
 Minimum metrics (future instrumentation):
 
@@ -868,3 +936,11 @@ Contract tests:
 - Public exposure later will require auth, quota, rate limits, and stronger abuse controls.
 - Candle backfill logic must avoid duplicate writes and incomplete candle persistence mistakes.
 
+
+## HTTP contract generation
+
+`create_app()` generates OpenAPI from route metadata and API DTOs. A scoped OpenAPI customization
+adds correlation headers, public security metadata, configured quote/candle limits and
+`x-build-revision` from `SOURCE_REVISION`. Query metadata documents the existing custom parsers
+without moving validation into FastAPI binding or changing their HTTP 400 behavior.
+See [contract rules](api-contract-rules.md) for local verification and publication evidence.

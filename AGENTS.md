@@ -4,7 +4,9 @@
 
 This repository contains the FastAPI scaffold and design documentation for the Signapse Market Data Gateway crypto MVP.
 
-- `docs/spec.md` is the product and API contract source of truth.
+- `docs/spec.md` owns accepted product behavior, target API design, and the WebSocket contract.
+- Published `/openapi.json` owns the deployed HTTP contract; `docs/api-contract-rules.md` owns
+  generation, verification, and handoff rules, including how to report existing contract gaps.
 - `docs/system-design.md` describes architecture, components, data flow, persistence, and rollout plan.
 - `docs/tech-stack.md` records stack decisions and implementation tooling.
 
@@ -35,13 +37,19 @@ Use Python 3.14.6, FastAPI 0.137.2, Pydantic 2.13.4, SQLAlchemy 2.0.51 async, an
 
 Use 4-space indentation. Name modules `snake_case.py`, classes `PascalCase`, functions and variables `snake_case`, and constants `UPPER_SNAKE_CASE`. Store price and volume as `Decimal`; serialize API decimals as strings.
 
+## API Contract Guidelines
+
+Before adding, changing, reviewing, or handing off an API, read and apply
+[OpenAPI contract rules](docs/api-contract-rules.md). Update generated HTTP metadata with the
+implementation at the same revision; distinguish local review from verified live publication.
+
 ## Provider Integration Guidelines
 
 When researching a market-data provider, check for an official, actively maintained SDK before designing direct HTTP or WebSocket calls. Prefer the official SDK when it supports the required APIs, Python version, async/concurrency model, timeout controls, and testability.
 
 Keep every SDK behind an adapter in `app/providers/`. Do not expose SDK request models, response models, or exceptions to domain, service, or API layers. Normalize provider data into repository-owned domain models.
 
-Use direct protocol integration only when the SDK is unavailable, incompatible, missing required functionality, or introduces a documented operational risk. Record that exception and its trade-offs in the relevant OpenSpec design or technical decision before implementation.
+Use direct protocol integration only when the SDK is unavailable, incompatible, missing required functionality, or introduces a documented operational risk. Record that exception and its trade-offs in an ADR under `docs/adr/` before implementation.
 
 ## Testing Guidelines
 
@@ -51,13 +59,13 @@ Prioritize registry validation, timeframe mapping, decimal serialization, freshn
 
 ## Commit & Pull Request Guidelines
 
-No usable Git history is available in this workspace, so use concise conventional-style commits:
+Use concise conventional-style commits:
 
 - `docs: add system design`
 - `feat: add quote endpoint`
 - `test: cover Binance kline normalization`
 
-Pull requests should include a summary, linked issue or task, test evidence, and notes for contract or migration changes. For API changes, update `docs/spec.md` and related design docs in the same PR.
+Pull requests should include a summary, linked issue or task, test evidence, and notes for contract or migration changes. For API changes, follow the OpenAPI contract rules and update affected behavior/design references in `docs/spec.md` and related docs in the same PR.
 
 ## Security & Configuration Tips
 
@@ -68,6 +76,11 @@ Do not commit secrets or local `.env` files. Binance public market data does not
 ### Issue tracker
 
 Issues and PRDs live in GitHub Issues; use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+Use the issue's requirements and acceptance checklist to drive implementation. Update `docs/spec.md`
+for accepted behavior and API design, `docs/system-design.md` for behavior and architecture, `docs/tech-stack.md` for tooling,
+and `CONTEXT.md` or `docs/adr/` for terminology and architectural decisions. Complete the relevant
+tests and documentation with the implementation.
 
 ### Triage labels
 

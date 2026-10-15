@@ -2,10 +2,20 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.openapi import (
+    DATABASE_UNAVAILABLE_RESPONSE,
+    PRICE_DESCRIPTION,
+    PROVIDER_PARAMETER,
+    RAW_QUERY_DESCRIPTION,
+    DecimalString,
+    UtcTimestamp,
+    error_response,
+    query_parameter,
+)
 from app.api.serialization import format_datetime, format_price
 from app.cache.quote_cache import QuoteCache
 from app.core.config import Settings, get_settings
@@ -27,20 +37,36 @@ router = APIRouter(prefix="/v1", tags=["quotes"])
 class QuoteResponse(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-    symbol: str
-    price: str
-    received_at: str
+    symbol: str = Field(description="Canonical symbol from the request.")
+    price: DecimalString = Field(description=PRICE_DESCRIPTION)
+    received_at: UtcTimestamp = Field(
+        description="UTC gateway receipt time used for freshness checks."
+    )
 
 
 class QuoteErrorResponse(BaseModel):
-    symbol: str
-    code: str
-    message: str
+    symbol: str = Field(description="Canonical/requested symbol that could not be resolved.")
+    code: str = Field(
+        description="Per-symbol failure; this item does not change the HTTP 200 status.",
+        json_schema_extra={
+            "enum": [
+                "UNSUPPORTED_SYMBOL",
+                "UNSUPPORTED_PROVIDER",
+                "PROVIDER_UNAVAILABLE",
+                "DATA_STALE",
+            ]
+        },
+    )
+    message: str = Field(description="Human-readable explanation; branch on code, not message.")
 
 
 class QuoteListResponse(BaseModel):
-    quotes: list[QuoteResponse]
-    errors: list[QuoteErrorResponse]
+    quotes: list[QuoteResponse] = Field(
+        description="Successful items in deduplicated request order."
+    )
+    errors: list[QuoteErrorResponse] = Field(
+        description="Failed items in deduplicated request order."
+    )
 
 
 @lru_cache
@@ -115,7 +141,62 @@ def get_quote_service(
     )
 
 
-@router.get("/quotes", response_model=QuoteListResponse)
+@router.get(
+    "/quotes",
+    response_model=QuoteListResponse,
+    summary="Get latest quotes with per-symbol failures",
+    description="Returns ordered quotes and errors. Unsupported symbols/mappings, unavailable "
+    "providers and stale cached data are per-symbol errors under HTTP 200, even when every symbol "
+    "fails. Database/registry failure affects the whole request and returns 503. Refresh failure "
+    "may reuse a sufficiently recent quote from the same mapping, never another provider. "
+    + RAW_QUERY_DESCRIPTION,
+    openapi_extra={
+        "parameters": [
+            query_parameter(
+                "symbols",
+                "Comma-separated canonical symbols, case-sensitive. Trim each item, discard empty "
+                "items, deduplicate while preserving first occurrence. At least one nonempty item "
+                "is required; the configured maximum counts distinct symbols after normalization.",
+                {"type": "string", "minLength": 1},
+                required=True,
+                example="BTC/USD,ETH/USD",
+            ),
+            PROVIDER_PARAMETER,
+        ]
+    },
+    responses={
+        200: {
+            "description": "Successful, partial or all-failed quote batch.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "quotes": [
+                            {
+                                "symbol": "BTC/USD",
+                                "price": "104250.12",
+                                "receivedAt": "2026-06-19T10:30:12Z",
+                            }
+                        ],
+                        "errors": [
+                            {
+                                "symbol": "UNKNOWN",
+                                "code": "UNSUPPORTED_SYMBOL",
+                                "message": "Symbol is not supported by this gateway.",
+                            }
+                        ],
+                    }
+                }
+            },
+        },
+        400: error_response(
+            "INVALID_SYMBOLS for missing/empty symbols; TOO_MANY_SYMBOLS for the distinct-symbol "
+            "limit; INVALID_PROVIDER for an empty or repeated provider.",
+            "INVALID_SYMBOLS",
+            "The symbols query parameter is required.",
+        ),
+        503: DATABASE_UNAVAILABLE_RESPONSE,
+    },
+)
 async def get_latest_quotes(
     request: Request,
     service: Annotated[QuoteService, Depends(get_quote_service)],

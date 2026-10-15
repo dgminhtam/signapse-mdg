@@ -1,11 +1,14 @@
 # Signapse Market Data Gateway Crypto MVP
 
-External integration contract: see `docs/api-contract.md` for field-level HTTP and WebSocket
-schemas, required fields, types, error shapes, and close codes.
+HTTP integration uses the producer environment's published `/openapi.json`. The HTTP API Contract
+and Error Contract sections below retain accepted behavior and target design context; they do not
+prove runtime publication or replace missing generated metadata. Apply the
+[OpenAPI contract rules](api-contract-rules.md) for generation, verification and handoff.
+The WebSocket Stream Contract below remains the canonical reference for stream events and close codes.
 
 - Loại tài liệu: Design
 - Độc giả chính: Engineering, product, data/AI
-- Source of truth cho: Contract và kiến trúc mục tiêu của Market Data Gateway crypto MVP
+- Source of truth cho: Behavior được chấp nhận, API/kiến trúc mục tiêu và WebSocket contract của MDG
 - Không phải là: Runtime API đã triển khai, trading system, hay tài liệu chọn provider cho mọi asset class
 
 ## Mục tiêu
@@ -64,12 +67,14 @@ accept a stream symbol without emitting ticks; such interests remain `CONNECTING
 arrives. Commodity mappings are futures or rolling-futures proxies; for example, `XAG/USD` maps to
 `SI=F` rather than spot silver.
 
-Five inactive mappings are available for manual provider switching:
+Five additional Supported Provider mappings are available for request-wide Provider Override:
 `AAPL -> YFINANCE:AAPL`, `BTC/USD -> YFINANCE:BTC-USD`,
 `ETH/USD -> YFINANCE:ETH-USD`, `EUR/USD -> YFINANCE:EURUSD=X`, and
 `QQQ -> YFINANCE:QQQ`. `XAU/USD` is Twelve Data-only; `GC=F` and `XAUUSD=X` are not approved
-alternatives. One asset-wide active mapping serves quote, candle, and stream, with no automatic
-fallback.
+alternatives. The active mapping defines the Default Provider. Each request or subscription resolves
+one immutable Provider Selection, using the default when no override is supplied. Mapping existence
+means verified support for quotes, all public candle timeframes, historical price, and quote
+streaming; temporary provider failures do not change support or trigger automatic fallback.
 
 MVP không hỗ trợ:
 
@@ -143,6 +148,7 @@ MVP nên hỗ trợ các timeframe dùng được với Binance kline:
 | `15m` | `15min` | `15m` | `15m` |
 | `30m` | `30min` | `30m` | `30m` |
 | `1h` | `1h` | `1h` | `1h` |
+| `4h` | `4h` | `4h` | `4h` |
 | `1d` | `1day` | `1d` | `1d` |
 | `1w` | `1week` | `1w` | `1wk` |
 | `1mo` | `1month` | `1M` | `1mo` |
@@ -209,15 +215,23 @@ Response:
       "provider": "TWELVE_DATA",
       "providerSymbol": "BTC/USD",
       "enabled": true,
-      "priceDisplayDecimals": 2
+      "priceDisplayDecimals": 2,
+      "providerMappings": [
+        {"provider": "TWELVE_DATA", "providerSymbol": "BTC/USD", "isDefault": true},
+        {"provider": "YFINANCE", "providerSymbol": "BTC-USD", "isDefault": false}
+      ]
     },
     {
       "symbol": "ETH/USD",
       "assetClass": "CRYPTO",
-      "provider": "TWELVE_DATA",
-      "providerSymbol": "ETH/USD",
+      "provider": "BINANCE_SPOT",
+      "providerSymbol": "ETHUSD",
       "enabled": true,
-      "priceDisplayDecimals": 2
+      "priceDisplayDecimals": 2,
+      "providerMappings": [
+        {"provider": "BINANCE_SPOT", "providerSymbol": "ETHUSD", "isDefault": true},
+        {"provider": "YFINANCE", "providerSymbol": "ETH-USD", "isDefault": false}
+      ]
     }
   ]
 }
@@ -230,7 +244,10 @@ internal `Decimal` values, caches, persistence, and candle volume retain raw pre
 
 `providerMappings` lists every configured mapping for the enabled asset. The default mapping is
 first, followed by remaining provider identifiers in case-sensitive ascending order. Runtime
-provider health is not included in this catalog.
+provider health is not included in this catalog. Each mapping contains exactly `provider`,
+`providerSymbol`, and `isDefault`. Enabled symbols are ordered by canonical symbol ascending;
+the top-level provider fields describe the Default Provider. `priceDisplayDecimals` is an integer
+from 0 through 18 inclusive.
 
 ### Get latest quotes
 
@@ -265,6 +282,8 @@ Semantics:
   that list that provider in `providerMappings`; quote requests keep HTTP `200` partial outcomes
   with per-symbol `UNSUPPORTED_PROVIDER` errors for assets without the mapping.
 - Multi-symbol requests return per-symbol errors for unsupported, stale, or provider-failed symbols.
+- Duplicate symbols are collapsed in first-seen order; each of the `quotes` and `errors` arrays
+  preserves that request order, including when every symbol fails.
 - Request-level errors are reserved for malformed input such as missing or empty `symbols`.
 - Twelve Data cache misses for `BTC/USD`, `ETH/USD`, `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`,
   `XAU/USD`, `AAPL`, `TSLA`, `NVDA`, `MSFT`, `WTI`, `SPY`, and `QQQ` are grouped by their
@@ -388,6 +407,11 @@ Semantics:
   `WHEAT`, `CORN`, `SPX`, `NDX`, and `DJI` are routed through yfinance `download`.
 - Missing or null yfinance volume is serialized as decimal zero because the contract requires
   volume; this means upstream volume is unavailable, not measured zero trading activity.
+- YFINANCE may exclude an isolated row whose only error is an inconsistent OHLC envelope when
+  other eligible rows are valid. It returns the valid rows without repairing, clamping, or
+  synthesizing the excluded row. An all-invalid non-empty payload, duplicate/invalid timestamp,
+  missing required OHLC field, malformed/non-finite number, or negative volume fails the whole
+  provider operation with sanitized `503 PROVIDER_UNAVAILABLE` and internal `INVALID_PAYLOAD`.
 - Missing or null Twelve Data Forex volume is serialized as decimal zero because the contract
   requires volume; this means upstream volume is unavailable, not measured zero trading activity.
 - Forex intraday candles are filtered by the Signapse weekly quote session: Sunday 17:00 inclusive
@@ -490,7 +514,10 @@ Semantics:
   calendar sites or trigger refresh jobs.
 - `from` and `to` are required UTC timestamps and form a half-open range:
   `from <= scheduledAt < to`.
-- Optional CSV filters are `types`, `currencies`, `impact`, and `limit`.
+- Optional CSV filters are `types`, `currencies`, and `impact`; `limit` bounds the result count.
+- `types`, `currencies`, and `impact` are trimmed, uppercased, and deduplicated CSV filters;
+  an explicitly supplied filter with no non-empty values is invalid. `limit` is a single integer,
+  defaults to `1000`, and accepts `1` through `5000` inclusive.
 - `types` accepts `FOREX`, `METALS`, `ENERGY`, and `CRYPTO`.
 - Events are ordered by `scheduledAt`, then `type`, then `key`.
 - `key` is `{type}:{external_event_id}`. Database `id`, `externalEventId`, provider source, and
@@ -502,6 +529,9 @@ Semantics:
   Each run uses non-extended base scraping, preserves stored enrichment when base values are null,
   and requests details only for incomplete events not attempted during the current UTC day.
 - Empty valid ranges return `200` with `events: []`.
+- Missing, invalid, non-UTC, or inverted/equal time boundaries return `400 INVALID_TIME_RANGE`.
+  Invalid filters use `INVALID_TYPES`, `INVALID_CURRENCIES`, or `INVALID_IMPACT`; invalid limits
+  use `INVALID_LIMIT`. Database read failures return sanitized `503 DATABASE_UNAVAILABLE`.
 
 ## WebSocket Stream Contract
 
@@ -610,6 +640,8 @@ Recommended error codes:
 | `INVALID_SYMBOLS` | `400` | The quote symbols parameter is missing or empty. |
 | `TOO_MANY_SYMBOLS` | `400` | A quote request exceeds the configured distinct-symbol limit. |
 | `UNSUPPORTED_SYMBOL` | `400` | Symbol is not in the supported registry. |
+| `INVALID_PROVIDER` | `400` | Provider Override is empty or repeated. |
+| `UNSUPPORTED_PROVIDER` | `400` | Asset has no mapping for that case-sensitive Provider Identifier; quotes use per-symbol errors in HTTP `200`. |
 | `UNSUPPORTED_TIMEFRAME` | `400` | Timeframe is not supported. |
 | `INVALID_TIME_RANGE` | `400` | `from`/`to` is missing, invalid, or too wide. |
 | `INVALID_TYPES` | `400` | Economic calendar `types` contains an unsupported value. |
@@ -636,8 +668,8 @@ MVP can start with in-memory cache because only 2 symbols are supported. Redis s
 
 ## Persistence Model
 
-MVP uses PostgreSQL for the supported-symbol registry and completed candle persistence. Forming
-candle snapshots are process-local and are not shared through PostgreSQL or Redis.
+MVP uses PostgreSQL for the supported-symbol registry, completed candles, and economic calendar
+events. Forming candle snapshots are process-local and are not shared through PostgreSQL or Redis.
 
 Logical model:
 
@@ -646,6 +678,10 @@ supported_symbols
   id
   symbol
   asset_class
+  price_display_decimals
+  calendar_source
+  calendar_name
+  calendar_timezone
   enabled
   created_at
   updated_at
@@ -690,12 +726,13 @@ unique(provider, provider_symbol, timeframe, open_time)
 
 Notes:
 
-- `GET /v1/symbols` joins enabled rows from `supported_symbols` to their active normalized mapping;
-  no hard-coded runtime fallback is used.
+- `GET /v1/symbols` joins enabled rows from `supported_symbols` to all normalized mappings and
+  derives its default fields from the single active mapping; no hard-coded runtime fallback is used.
 - `symbol_provider_mappings` is the sole runtime source of provider identity.
-- Multiple provider mappings can be configured for an asset, but at most one is active. The active
-  mapping is the single provider selection shared by quote, candle, stream, and backfill; there is no
-  per-route selection, aggregation, or provider fallback.
+- Multiple provider mappings can be configured for an asset, but at most one is active. Every
+  enabled asset must have exactly one Default Provider. Requests may select another configured
+  mapping through Provider Override; backfill uses only the default. Reads and cache/stream state
+  stay isolated by Provider Selection, without aggregation or provider fallback.
 - Revision `20260727_0019` seeds 29 mappings for the 24 assets: 24 active defaults and five
   inactive yfinance alternatives. Revision `20260727_0020` validates one active mapping per asset
   and removes the duplicated provider columns from `supported_symbols`.
@@ -710,6 +747,35 @@ Notes:
 - `symbol` stores canonical symbol such as `BTC/USD`.
 - `symbol_provider_mappings.provider_symbol` stores an upstream identifier such as `BTC/USD`.
 - Decimal values should use database decimal/numeric types, not float.
+
+### Economic calendar persistence
+
+`economic_calendar_events` stores the current normalized event state:
+
+| Fields | Storage |
+| --- | --- |
+| `id` | Generated bigint primary key; internal only. |
+| `calendar_type`, `external_event_id`, `name` | Required text. Type is constrained to `FOREX`, `METALS`, `ENERGY`, or `CRYPTO`. |
+| `scheduled_at` | Required timezone-aware timestamp. |
+| `currency`, `impact`, `actual`, `forecast`, `previous`, `revision`, `actual_better_worse`, `revision_better_worse` | Nullable text; upstream values such as `210K` retain their textual form. |
+| `description`, `news_url` | Nullable plain-text enrichment and one absolute related news URL. |
+| `enrichment_attempted_at` | Nullable timezone-aware timestamp; internal daily detail-attempt marker. |
+| `first_seen_at`, `last_seen_at`, `last_changed_at`, `created_at`, `updated_at` | Required timezone-aware audit timestamps. |
+
+Identity is unique on `(calendar_type, external_event_id)`; the same upstream ID may exist in
+different types. Indexes support `scheduled_at`, `(calendar_type, scheduled_at)`, and
+`(currency, scheduled_at)`. Alembic migrations and `EconomicCalendarEventModel` define the schema.
+
+New events initialize the seen/changed timestamps. Repeated observations update `last_seen_at`
+while preserving `first_seen_at`; `last_changed_at` advances only for effective normalized content
+changes, including enrichment. Incoming null enrichment preserves existing values. Neither raw
+provider details nor article content is persisted.
+
+The refresh claims incomplete events in its current window using a short row-locking transaction
+with `SKIP LOCKED`, recording `enrichment_attempted_at` before network access. Only events missing
+`description` or `news_url` with no attempt in the current UTC day qualify. Failed, empty, or
+malformed detail responses retain the base event and existing enrichment and wait until a later
+UTC day for another attempt. API reads never trigger refresh or detail requests.
 
 ## Provider Adapter
 
@@ -840,6 +906,18 @@ tracebacks; unclassified failures may include one. High-volume queue-drop, rejec
 provider-detail warnings are summarized or limited to one event key per 60 seconds and report
 `suppressed_count` when applicable.
 
+Internal failure reasons are `REQUEST_FAILED`, `TIMEOUT`, `RATE_LIMITED`, `AUTH_FAILED`,
+`EMPTY_RESPONSE`, `INVALID_PAYLOAD`, `PROVIDER_NOT_CONFIGURED`, `DATABASE_QUERY_FAILED`, and
+`DATABASE_WRITE_FAILED`. `retryable` describes known transient network, timeout, `429`, or `5xx`
+failures; it does not itself schedule retries. Unknown or permanent failures are not retryable.
+Valid no-data results remain successful; cache fallback after a provider failure is logged as
+`CACHE_FALLBACK_AFTER_PROVIDER_FAILURE` without changing Provider Selection.
+
+Partial YFINANCE OHLC quarantine emits one aggregate `WARNING` with `INVALID_PAYLOAD`,
+`retryable=false`, skipped-row count, and bounded safe timestamps, scalar OHLC values, and reasons.
+Equivalent warnings are rate-limited for 60 seconds; batch-fatal failures use the provider-failure
+boundary. Logging configuration failure falls back to stderr and does not prevent startup.
+
 ## Security Boundary
 
 MVP assumes gateway is private infrastructure, not a public internet product API.
@@ -882,3 +960,12 @@ Authentication and per-client quota are out of scope for the first design. If ga
 - Quote stale threshold should default to 10, 30, or 60 seconds?
 - Is an internal provider-health endpoint needed for per-symbol operations diagnostics?
 
+
+## Generated HTTP contract
+
+All seven HTTP operations publish input metadata, success/error responses, public field aliases,
+UTC timestamp formats, decimal-string schemas and X-Request-ID headers through `/openapi.json`.
+Custom query parsers retain their HTTP 400 envelope; providerMappings is optional and never emitted
+as null, while nullable economic-calendar fields and error.details keep their keys.
+Configured quote/candle limits and cache thresholds are reflected in operation metadata.
+`x-build-revision` reports SOURCE_REVISION (default unknown); local generation does not prove deployment.
