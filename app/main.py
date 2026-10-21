@@ -121,7 +121,7 @@ def create_app() -> FastAPI:
             "and timestamps are UTC. x-build-revision identifies the configured producer build; "
             "unknown does not prove a deployed revision. WebSocket /v1/stream is quote-only and "
             "is documented separately in the "
-            "[WebSocket contract](https://github.com/signapse-group/signapse-mdg/blob/main/"
+            "[WebSocket contract](https://github.com/dgminhtam/signapse-mdg/blob/main/"
             "docs/spec.md#websocket-stream-contract)."
         ),
         responses={500: INTERNAL_ERROR_RESPONSE},
