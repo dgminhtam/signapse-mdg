@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
-      image: ${{ steps.publish.outputs.image }}
+      digest: ${{ steps.publish.outputs.digest }}
     services:
       postgres:
         image: postgres:16-alpine
@@ -67,7 +67,7 @@ jobs:
           docker push "$CI_IMAGE"
           image=$(docker image inspect --format '{{index .RepoDigests 0}}' "$CI_IMAGE")
           [[ "$image" =~ ^dgminhtam/signapse-mdg@sha256:[a-f0-9]{64}$ ]]
-          printf 'image=%s\n' "$image" >> "$GITHUB_OUTPUT"
+          printf 'digest=%s\n' "${image##*@}" >> "$GITHUB_OUTPUT"
       - name: Remove test gateway
         if: always()
         run: docker rm -f mdg-ci >/dev/null 2>&1 || true
@@ -106,7 +106,7 @@ jobs:
         env:
           DEV_SERVER_HOST: ${{ vars.DEV_SERVER_HOST }}
           DEV_SERVER_USER: ${{ vars.DEV_SERVER_USER }}
-          IMAGE: ${{ needs.check.outputs.image }}
+          IMAGE: dgminhtam/signapse-mdg@${{ needs.check.outputs.digest }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
