@@ -5,7 +5,64 @@ PRs targeting `dev` run lint, formatting, Mypy, unit/OpenAPI tests and PostgreSQ
 checks, then build and exercise the runtime image. Pushes to `dev` run those gates, publish
 `dgminhtam/signapse-mdg:sha-<full-commit>` and deploy by immutable registry digest. The exact
 image exercised by the operating checks is pushed without rebuilding it in a later job.
-There is no production deploy trigger. A failed gate stops the remaining jobs.
+Pushes to `main` publish and deploy prod after the same gates. PRs targeting `main`
+run checks without publishing or deploying. A failed gate stops the remaining jobs.
+
+## Production
+
+Prod uses `/opt/signapse/mdg`, Compose project `signapse-prod-mdg`, service `gateway`,
+and the external network `signapse-prod-database`. The reviewed Compose file is
+[`deploy/docker-compose.prod.yml`](../deploy/docker-compose.prod.yml). It preserves the
+existing non-root UID 10001, localhost-only port, DNS, CPU/memory limits, dropped capabilities,
+healthcheck, temporary cache and read-only `/etc/signapse/secrets/mdg-runtime.env` mount.
+Do not replace it with the dev Compose file. Runtime secrets never enter CI or the image.
+
+Required repository variables: `PROD_SERVER_HOST` and `PROD_SERVER_USER`. Required secrets:
+`PROD_SSH_PRIVATE_KEY` and `PROD_SSH_KNOWN_HOSTS`. Registry and Tailscale credentials are
+shared with dev; the Tailscale CI identity must reach prod port 22. Use a dedicated prod CI
+key and strict host-key checking. The current deploy account uses passwordless sudo;
+anyone able to use that key effectively has root access. Keep the key restricted to trusted
+deployment workflows. SSH uploads reviewed files, installs root-owned release copies, and
+runs [`deploy/prod.py`](../deploy/prod.py) under sudo and a server-side deployment lock.
+Registry credentials arrive through stdin, live in a temporary root-only Docker config and
+are removed at normal exit. A killed process can leave temporary files requiring cleanup.
+
+Each main release pulls the published immutable digest and verifies its OCI revision before
+backing up. It then runs `alembic upgrade head`, replaces only the gateway and runs the same
+operating verifier as dev. Short HTTP/WebSocket interruption is accepted. Only after PASS
+are the root Compose and image `.env` updated for subsequent operator commands. On failure,
+the container may already have changed; inspect its actual image and release labels.
+
+### Backup and recovery
+
+Before every prod migration, create a compressed `pg_dump -Fc` of **only `signapse_mdg`**
+under `/var/backups/signapse-mdg/<UTC-time>-<release-sha>/`. This folder is root-only and contains:
+
+- `database.dump`: schema/data snapshot; written as `.partial` until dump and archive-list checks pass.
+- `manifest.json`: release SHA, old image ref/ID, old migration heads and Compose location.
+- `docker-compose.yml` and `compose.env`: previous operator configuration.
+- `COMPLETE`: marks a successfully checked backup, not a proven restore.
+
+An incomplete backup stops deployment before migration. Successful backups older than seven
+days are pruned only after a new successful backup, preserving the newest. Incomplete folders
+are retained for diagnosis and require manual cleanup. The existing daily infrastructure
+configuration backup remains separate; it does not back up the MDG database.
+
+Backups stay on prod, never in GitHub artifacts. They protect against deployment mistakes,
+not server/disk loss. They are live consistent snapshots; restoring loses writes after the
+snapshot. No automatic image rollback, schema downgrade or database restore is performed.
+
+Before enabling this workflow, restore a real backup into a separate temporary PostgreSQL 16
+container with no network or published ports. Check restore exits successfully, migration heads
+and tables can be read, then remove that test container. Never restore a test over prod.
+
+For an incident, first preserve logs and current image/schema identities. If the old image is
+compatible with the current schema, use the manifest's old digest and previous Compose configuration
+for an operator-controlled image recovery. If database recovery is necessary, stop writers,
+select a COMPLETE backup and verify it in a separate database first. Obtain explicit approval
+for the data-loss window and cutover; use `pg_restore --exit-on-error` and reconcile database
+ownership/grants before starting the matching image. Do not blindly rerun migrations from a
+newer image against a restored older schema. Verify readiness, schema and revision after recovery.
 
 ## One-time setup before the first push
 

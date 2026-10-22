@@ -1,0 +1,48 @@
+name: signapse-prod-mdg
+services:
+  gateway:
+    image: ${MDG_IMAGE:?Immutable MDG image required}
+    restart: unless-stopped
+    user: '10001:10001'
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1
+    mem_limit: 768m
+    memswap_limit: 768m
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:size=134217728,mode=1777
+    environment:
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/cache
+      LOG_LEVEL: INFO
+      DATABASE_POOL_SIZE: '5'
+      DATABASE_POOL_MAX_OVERFLOW: '2'
+      DATABASE_POOL_TIMEOUT_SECONDS: '5'
+      ECONOMIC_CALENDAR_POLL_SECONDS: '300'
+    volumes:
+      - type: bind
+        source: /etc/signapse/secrets/mdg-runtime.env
+        target: /app/.env
+        read_only: true
+        bind:
+          create_host_path: false
+    ports: ['127.0.0.1:8000:8000']
+    dns: [1.1.1.1, 1.0.0.1]
+    networks: [database]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=4).close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: '3'
+networks:
+  database:
+    external: true
+    name: signapse-prod-database
