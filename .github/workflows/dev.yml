@@ -1,0 +1,128 @@
+name: MDG dev
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+env:
+  CI_IMAGE: dgminhtam/signapse-mdg:sha-${{ github.sha }}
+
+concurrency:
+  group: mdg-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mdg
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: mdg_ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U mdg -d mdg_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://mdg:ci-only@127.0.0.1:5432/mdg_ci
+      ECONOMIC_CALENDAR_POLL_SECONDS: "0"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.11.22"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .
+      - run: uv run --no-sync mypy app
+      - run: uv run --no-sync pytest --junitxml=test-results/pytest.xml
+      - name: Check the runtime image with an isolated database
+        run: |
+          docker build --build-arg BUILD_REVISION="$GITHUB_SHA" -t "$CI_IMAGE" .
+          docker run --rm --network host -e DATABASE_URL="$TEST_DATABASE_URL" "$CI_IMAGE" alembic upgrade head
+          docker run -d --name mdg-ci --network host -e DATABASE_URL="$TEST_DATABASE_URL" \
+            -e ECONOMIC_CALENDAR_POLL_SECONDS=0 "$CI_IMAGE"
+          docker exec mdg-ci python -m scripts.verify_deployment "$GITHUB_SHA"
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish the exact image that passed operating checks
+        id: publish
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        run: |
+          set -euo pipefail
+          docker push "$CI_IMAGE"
+          image=$(docker image inspect --format '{{index .RepoDigests 0}}' "$CI_IMAGE")
+          [[ "$image" =~ ^dgminhtam/signapse-mdg@sha256:[a-f0-9]{64}$ ]]
+          printf 'digest=%s\n' "${image##*@}" >> "$GITHUB_OUTPUT"
+      - name: Remove test gateway
+        if: always()
+        run: docker rm -f mdg-ci >/dev/null 2>&1 || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results/pytest.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: ${{ vars.DEV_SERVER_HOST }}
+      - name: Configure SSH with verified host keys
+        env:
+          SSH_KEY: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEV_SSH_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/mdg-dev
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/mdg-dev ~/.ssh/known_hosts
+      - name: Migrate, deploy and verify the published image
+        env:
+          DEV_SERVER_HOST: ${{ vars.DEV_SERVER_HOST }}
+          DEV_SERVER_USER: ${{ vars.DEV_SERVER_USER }}
+          IMAGE: dgminhtam/signapse-mdg@${{ needs.check.outputs.digest }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$IMAGE" =~ ^dgminhtam/signapse-mdg@sha256:[a-f0-9]{64}$ ]]
+          [[ "$DOCKERHUB_USERNAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]]
+          target="$DEV_SERVER_USER@$DEV_SERVER_HOST"
+          release="/opt/apps/signapse/mdg/releases/$GITHUB_SHA"
+          ssh_opts=(-i ~/.ssh/mdg-dev -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10)
+          # Expand the validated release path on the runner, not on the server.
+          # shellcheck disable=SC2029
+          ssh "${ssh_opts[@]}" "$target" "mkdir -p '$release'"
+          scp "${ssh_opts[@]}" docker-compose.yml deploy/dev.py "$target:$release/"
+          # Revision and digest above are validated before entering the remote command.
+          # shellcheck disable=SC2029
+          printf '%s' "$DOCKERHUB_TOKEN" | ssh "${ssh_opts[@]}" "$target" \
+            "set -eu; umask 077; export DOCKER_CONFIG='$release/.docker'; mkdir -p '$release/.docker'; trap 'rm -rf -- $release/.docker' EXIT; docker login --username '$DOCKERHUB_USERNAME' --password-stdin; cd /opt/apps/signapse/mdg; flock -w 300 .deploy.lock python3 '$release/dev.py' '$IMAGE' '$GITHUB_SHA'"
+          printf 'Revision: %s\n\nImage: %s\n\nOperating checks: PASS\n' "$GITHUB_SHA" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"

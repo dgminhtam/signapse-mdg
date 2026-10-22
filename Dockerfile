@@ -1,6 +1,10 @@
 FROM ghcr.io/astral-sh/uv:0.11.22 AS uv
 FROM python:3.14.6-slim
 
+ARG BUILD_REVISION=unknown
+ENV SOURCE_REVISION=${BUILD_REVISION}
+LABEL org.opencontainers.image.revision=${BUILD_REVISION}
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
@@ -15,6 +19,7 @@ RUN uv sync --locked --no-dev
 COPY alembic ./alembic
 COPY app ./app
 COPY alembic.ini ./
+COPY scripts ./scripts
 
 EXPOSE 8000
 
