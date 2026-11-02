@@ -31,3 +31,20 @@ async def test_cutover_retains_old_mappings_and_is_idempotent(database_engine):
             )
         ).all()
         assert dict(active) == MAPPINGS
+        assert (
+            await connection.scalar(
+                select(func.count())
+                .select_from(SupportedSymbolModel)
+                .where(SupportedSymbolModel.enabled)
+            )
+            == 22
+        )
+        # Disabled assets retain their previous defaults for rollback/legacy reconstruction.
+        assert (
+            await connection.scalar(
+                select(func.count())
+                .select_from(SymbolProviderMappingModel)
+                .where(SymbolProviderMappingModel.is_active)
+            )
+            == 24
+        )

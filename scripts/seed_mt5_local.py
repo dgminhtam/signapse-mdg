@@ -48,7 +48,15 @@ async def main(expected_database: str = "mdg_mt5_local") -> None:
             if not set(MAPPINGS).issubset({r.symbol for r in rows}):
                 raise ValueError("Run Alembic migrations first")
             await session.execute(update(SupportedSymbolModel).values(enabled=False))
-            await session.execute(update(SymbolProviderMappingModel).values(is_active=False))
+            await session.execute(
+                update(SymbolProviderMappingModel)
+                .where(
+                    SymbolProviderMappingModel.supported_symbol_id.in_(
+                        [row.id for row in rows if row.symbol in MAPPINGS]
+                    )
+                )
+                .values(is_active=False)
+            )
             existing = list(await session.scalars(select(SymbolProviderMappingModel)))
             for row in rows:
                 if row.symbol not in MAPPINGS:
