@@ -5,7 +5,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.cache.candle_cache import CandleCache
 from app.core.observability import log_event
@@ -42,7 +42,6 @@ class CountScanCursor:
         self._page_capacity = max(1, page_capacity)
         self._scan_budget = scan_budget
         self._scanned = 0
-        self._first_page = True
         self._anchor = request.start if request.count_direction == "forward" else request.end
 
     @property
@@ -57,9 +56,7 @@ class CountScanCursor:
         remaining_budget = self._scan_budget - self._scanned
         if remaining_budget <= 0:
             return None
-        page_size = min(self._page_capacity, remaining_budget)
-        if self._first_page:
-            page_size = min(page_size, count)
+        page_size = min(self._page_capacity, remaining_budget, count)
 
         if self._request.count_direction == "forward":
             expected_opens = self._schedule.next_opens(
@@ -78,7 +75,6 @@ class CountScanCursor:
         if not expected_opens:
             return None
 
-        self._first_page = False
         self._scanned += len(expected_opens)
         page_start = expected_opens[0]
         page_end = self._schedule.end_after(expected_opens[-1])
@@ -119,19 +115,19 @@ class CountQueryExecution:
 
         policy = get_market_session_policy(symbol)
         schedule = get_candle_schedule(symbol, timeframe)
+        now = self._clock()
+        mt5 = symbol.provider == "MT5_VANTAGE_DEMO"
+        scan_request = request
+        if mt5 and request.count_direction == "backward":
+            # Include a forming open at now, but never count a future broker bucket.
+            scan_request = replace(request, end=min(request.end, now + timedelta(microseconds=1)))
         cursor = CountScanCursor(
             schedule,
             policy,
-            request,
-            # Cold broker history must not scan years just to fill a weekend gap.
-            page_capacity=(
-                min(self._page_capacity, max(32, count * 2))
-                if symbol.provider == "MT5_VANTAGE_DEMO"
-                else self._page_capacity
-            ),
+            scan_request,
+            page_capacity=self._page_capacity,
             scan_budget=self._scan_budget,
         )
-        now = self._clock()
         current = (
             await self._cache.get(
                 request.symbol,
@@ -155,12 +151,13 @@ class CountQueryExecution:
         database_ms = 0.0
         provider_ms = 0.0
         stop_reason = "error"
+        scan_count = count
 
         try:
             while len(merged) < count:
                 calendar_started = time.perf_counter()
                 try:
-                    page = await asyncio.to_thread(cursor.next_page, count)
+                    page = await asyncio.to_thread(cursor.next_page, scan_count)
                 finally:
                     calendar_ms += (time.perf_counter() - calendar_started) * 1000
                 if page is None:
@@ -194,6 +191,11 @@ class CountQueryExecution:
                 database_ms += page_database_ms
                 provider_ms += page_provider_ms
                 merged.update(page_merged)
+                scan_count = self._page_capacity
+                if mt5:
+                    scan_count = count - len(merged)
+                    if not page_merged:
+                        scan_count = len(page.expected_opens) * 2
 
             if len(merged) >= count:
                 stop_reason = "target"

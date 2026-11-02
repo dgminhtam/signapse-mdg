@@ -170,6 +170,8 @@ def get_candle_request_clock() -> Callable[[], datetime]:
     "an empty array. No synthetic candles, cursor or partial-result metadata are added. "
     "Response boundaries describe the window scanned. Forming candles have complete=false; "
     "completed rows win when openTime coincides. Only completed candles are persisted. "
+    "MT5 backward/latest count scans exclude future opens while retaining the requested cutoff "
+    "and including an already-open forming candle. "
     "Boundaries need not align to timeframe opens; provider timestamps are preserved. "
     "before is unsupported and returns 400 INVALID_TIME_RANGE. Operational failures return 503. "
     + RAW_QUERY_DESCRIPTION,

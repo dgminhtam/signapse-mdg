@@ -10,6 +10,7 @@ from app.domain.candle_schedules import ProviderFetchSection, get_candle_schedul
 from app.domain.candles import Candle, CandleRequest
 from app.domain.errors import CandleRequestError, DatabaseUnavailableError, ProviderUnavailableError
 from app.domain.market_sessions import get_market_session_policy
+from app.domain.mt5_time import from_broker_wall
 from app.domain.symbols import SupportedSymbol
 from app.domain.timeframes import get_timeframe
 from app.services.candles import CandleService, _find_gaps, parse_candle_request
@@ -112,6 +113,94 @@ class FakeProvider:
         del symbol, timeframe, provider_interval
         self.calls.append((start, end, limit))
         return [candle for candle in self.candles if start <= candle.open_time < end]
+
+
+@pytest.mark.parametrize(
+    "now,cutoff,missing",
+    [
+        ("2026-11-02T08:08:00+00:00", "2026-11-09T00:00:00+00:00", False),
+        ("2026-10-31T21:00:00+00:00", "2026-11-09T00:00:00+00:00", False),
+        ("2026-11-02T08:08:00+00:00", "2026-10-25T00:00:00+00:00", False),
+        ("2026-10-31T21:00:00+00:00", "2026-10-31T21:00:00+00:00", False),
+        ("2026-11-02T08:08:00+00:00", "2026-11-09T00:00:00+00:00", True),
+    ],
+)
+@pytest.mark.parametrize("warm", [False, True])
+async def test_mt5_weekly_count_uses_existing_opens_and_only_fills_missing_rows(
+    now: str, cutoff: str, missing: bool, warm: bool
+) -> None:
+    mt5 = SupportedSymbol("XAU/USD", "COMMODITY", "MT5_VANTAGE_DEMO", "XAUUSD", True, 2)
+    clock = datetime.fromisoformat(now)
+    end = datetime.fromisoformat(cutoff)
+    frame = get_timeframe("1w")
+    assert frame is not None
+    schedule = get_candle_schedule(mt5, frame)
+    # Native W1 opens are Sunday broker time; build provider history independently of the scan.
+    native = datetime(2026, 11, 1, tzinfo=UTC)
+    opens = [from_broker_wall(native - timedelta(weeks=i)) for i in range(114)]
+    available = sorted(t for t in opens if t <= clock and t < end)
+    omitted = available[-50] if missing else None
+    candles = [
+        Candle(
+            mt5.symbol,
+            mt5.asset_class,
+            mt5.provider,
+            mt5.provider_symbol,
+            "1w",
+            t,
+            schedule.end_after(t) - timedelta(milliseconds=1),
+            Decimal(10),
+            Decimal(11),
+            Decimal(9),
+            Decimal(10),
+            Decimal(0),
+            schedule.end_after(t) <= clock,
+        )
+        for t in available
+        if t != omitted
+    ]
+    provider = FakeProvider(candles)
+    repository = FakeRepository([c for c in candles if warm and c.complete], symbol=mt5)
+    cache = CandleCache()
+    for candle in candles:
+        if warm and not candle.complete:
+            await cache.put(candle, stored_at=clock)
+    service = CandleService(repository, provider, cache, clock=lambda: clock)
+    request = CandleRequest(mt5.symbol, "1w", end, end, count=110, count_direction="backward")
+
+    result = await service.get_candles(request)
+
+    assert [c.open_time for c in result.candles] == [t for t in available if t != omitted][-110:]
+    assert len(result.candles) == 110 and result.end == end
+    expected_calls = (2 - int(warm)) if missing else int(not warm)
+    assert len(provider.calls) == expected_calls
+    if provider.calls:
+        assert provider.calls[0][0] == available[-110]
+    if missing:
+        assert result.start == available[-111]
+        if not warm:
+            assert provider.calls[1][0] == available[-111]
+            assert provider.calls[1][1] == available[-110]
+    if clock in available:
+        assert result.candles[-1].open_time == clock and not result.candles[-1].complete
+
+
+async def test_mt5_count_expands_empty_pages_within_scan_budget() -> None:
+    mt5 = SupportedSymbol("XAU/USD", "COMMODITY", "MT5_VANTAGE_DEMO", "XAUUSD", True, 2)
+    now = datetime(2026, 11, 2, 8, tzinfo=UTC)
+    provider = FakeProvider()
+    service = CandleService(
+        FakeRepository(symbol=mt5), provider, clock=lambda: now, count_scan_budget=7
+    )
+    result = await service.get_candles(
+        CandleRequest(mt5.symbol, "1m", now, now, count=1, count_direction="backward")
+    )
+    assert result.candles == [] and result.end == now
+    assert [round((end - start).total_seconds() / 60) for start, end, _ in provider.calls] == [
+        1,
+        2,
+        4,
+    ]
 
 
 def test_parse_candle_request_accepts_aligned_half_open_range() -> None:
