@@ -37,9 +37,10 @@ using the terminal's already-allowlisted hostname `mdg-tcp-smoke.test`.
    dev-signapse-mdg`. This explicitly guarded operator step enables the agreed 22
    symbols and switches their default mappings in one transaction. No schema downgrade
    or candle deletion is performed. Do not point test fixtures at this database.
-6. Create the activation marker, then run the release `dev.py` with the published MDG
-   digest, full commit and MT5 digest using the deployment lock. It validates both image
-   revision labels and runs the existing migration/HTTP/build checks.
+6. Create the activation marker, then rerun only the successful dev Actions run's
+   `deploy` job. This reuses the checked images/digests and supplies the temporary registry
+   login through the existing pipeline. The release `dev.py` validates both revision labels
+   and runs the existing migration/HTTP/build checks under the deployment lock.
 7. Verify the running terminal image ID, resource limits, broker login/Service connection,
    fresh REST and WebSocket XAU/USD prices, all 22 × 9 candle requests, and persistent
    state after a terminal restart. Read the live `/openapi.json` build revision.
