@@ -403,6 +403,9 @@ identity and mapping remain internal. Response `to` is always present. Exact-ran
 and backward/latest-count responses keep their requested or captured cutoff; a forward-count
 response moves `to` to the last page boundary actually scanned. For count mode, `from`/`to`
 therefore describe the consumed Candle History Window, not unused page capacity.
+MT5 backward count scans cap candidate opens at captured current time while retaining the public
+cutoff. MT5 pages shrink to the remaining row count and grow only after empty pages, within the
+existing capacity and scan budget, so one missing weekly row does not trigger years of history.
 Provider open timestamps remain authoritative. Binance uses the epoch-aligned schedule; verified
 WTI/SPY/QQQ hourly Twelve Data rows and NYSE hourly YFinance rows use a minute-30 schedule, while
 their shorter intervals remain epoch-aligned and daily values use date labels. Recognized Twelve

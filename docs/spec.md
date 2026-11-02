@@ -377,6 +377,10 @@ Semantics:
   contains no more than the requested `count` and the provider-safe page capacity; later pages are
   derived only when earlier pages did not supply enough unique rows, up to the same internal scan
   budget. A fully persisted page makes no provider request.
+- MT5 backward/latest `count` scans exclude opens after captured current time, even when `to`
+  is in the future; an open exactly at current time remains eligible when it is before `to`.
+  The response retains the requested cutoff. Follow-up MT5 pages target the remaining row count;
+  empty pages grow progressively within the page capacity and existing scan budget to cross gaps.
 - When a count page is incomplete, MDG makes one logical contiguous request through the immutable
   selected Provider Mapping, even when the window crosses a closed session. The selected adapter
   may split that logical window into provider-native range-limited requests; Count Query Execution
