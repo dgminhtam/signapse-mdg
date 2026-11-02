@@ -296,6 +296,9 @@ response is self-contained and uses the process-local five-second forming-cache 
 
 ## Development Checks
 
+Local MT5 transport experiment: [TCP smoke test and results](docs/mt5-tcp-smoke.md).
+Direct MT5 integration: [local runbook and verification](docs/mt5-local-integration.md).
+
 CI/CD dev is defined in [the dev workflow](.github/workflows/dev.yml). Pull requests to `dev`
 run checks; pushes to `dev` publish and deploy only after checks pass. Server setup, secrets,
 revision verification and manual recovery are covered in [the deployment runbook](docs/deploy-docker.md).

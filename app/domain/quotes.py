@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from typing import Protocol
@@ -17,6 +17,7 @@ class Quote:
     provider_time: datetime | None
     received_at: datetime
     stale: bool = False
+    freshness_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +38,7 @@ class QuoteResult:
 class ProviderQuoteBatch:
     prices: dict[str, Decimal]
     unavailable_symbols: frozenset[str]
+    quote_metadata: dict[tuple[str, str], Quote] = field(default_factory=dict)
 
 
 class ProviderSymbolQuoteProvider(Protocol):

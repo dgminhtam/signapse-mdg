@@ -149,6 +149,9 @@ WTI_ENERGY_SESSION = WtiEnergySessionPolicy()
 
 
 def get_market_session_policy(symbol: SupportedSymbol) -> MarketSessionPolicy:
+    if symbol.provider == "MT5_VANTAGE_DEMO":
+        # Native broker bars determine gaps; another provider's calendar must not discard them.
+        return ALWAYS_OPEN_SESSION
     if symbol.calendar_source == INTERNAL_CALENDAR_SOURCE:
         if symbol.calendar_name == ALWAYS_OPEN_CALENDAR_NAME:
             return ALWAYS_OPEN_SESSION

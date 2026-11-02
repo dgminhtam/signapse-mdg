@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.mt5_dependency import get_mt5_provider
 from app.api.openapi import (
     MARKET_DATA_UNAVAILABLE_RESPONSE,
     PRICE_DESCRIPTION,
@@ -31,6 +32,8 @@ from app.domain.candles import CandleProvider, CandleRepository, CandleResult
 from app.domain.errors import CandleRequestError, ProviderSelectionError
 from app.domain.timeframes import TIMEFRAMES
 from app.providers.binance_spot import build_binance_spot_candle_provider
+from app.providers.mt5 import PROVIDER as MT5_PROVIDER
+from app.providers.mt5 import MT5Provider
 from app.providers.twelvedata_market_data import build_twelvedata_market_data_provider
 from app.providers.yfinance_market_data import build_yfinance_candle_provider
 from app.services.candle_provider_router import CandleProviderRouter
@@ -92,6 +95,7 @@ def get_yfinance_candle_provider(timeout_seconds: float) -> CandleProvider:
 
 def get_candle_provider(
     settings: Annotated[Settings, Depends(get_settings)],
+    mt5: Annotated[MT5Provider | None, Depends(get_mt5_provider)] = None,
 ) -> CandleProvider:
     providers = {
         "BINANCE_SPOT": get_binance_candle_provider(
@@ -109,6 +113,8 @@ def get_candle_provider(
             settings.twelvedata_rest_base_url,
             settings.provider_http_timeout_seconds,
         )
+    if mt5 is not None:
+        providers[MT5_PROVIDER] = mt5
     return CandleProviderRouter(providers)
 
 

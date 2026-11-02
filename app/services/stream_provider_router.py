@@ -27,6 +27,10 @@ class MultiProviderStreamProvider:
         self._interest_providers: dict[StreamInterest, str] = {}
         self._lock = asyncio.Lock()
 
+    async def start_provider(self, name: str) -> None:
+        """Start forwarding an always-on push feed before the first subscriber."""
+        self._ensure_forwarding(name, self._providers[name])
+
     async def subscribe_quote(self, symbol: SupportedSymbol) -> None:
         provider = self._provider_for(symbol)
         async with self._lock:

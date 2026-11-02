@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from app.cache.quote_cache import QuoteCache
@@ -185,6 +186,12 @@ class QuoteService:
                 provider_time=None,
                 received_at=received_at,
             )
+            quote_metadata = batch.quote_metadata.get((item.provider, item.provider_symbol))
+            if quote_metadata is not None:
+                quote = replace(quote_metadata, symbol=item.symbol, asset_class=item.asset_class)
+                if self._cache.age_seconds(quote, received_at) > self._stale_after_seconds:
+                    errors[item.symbol] = QuoteError(item.symbol, "DATA_STALE", DATA_STALE_MESSAGE)
+                    continue
             refreshed.append(quote)
             resolved[item.symbol] = quote
         await self._cache.put_many(refreshed)

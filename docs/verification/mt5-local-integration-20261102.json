@@ -1,0 +1,2049 @@
+{
+  "at": "2026-11-02T07:11:16.896720+00:00",
+  "matrix": [
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 760.23,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:09:00Z",
+      "lastOpen": "2026-11-02T07:11:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 148.42,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 66.52,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 59.31,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 13424.61,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 766.99,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 514.64,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 315.63,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 355.18,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 380.11,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:09:00Z",
+      "lastOpen": "2026-11-02T07:11:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 66.47,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 58.73,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 56.56,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 56.81,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 62.35,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 84.2,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 35.13,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 44.39,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 341.7,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:09:00Z",
+      "lastOpen": "2026-11-02T07:11:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 67.9,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 64.31,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 48.81,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 55.46,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 74.81,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 76.53,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 33.77,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 46.46,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 339.17,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:09:00Z",
+      "lastOpen": "2026-11-02T07:11:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 87.96,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 75.95,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 57.43,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 57.04,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 65.01,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 86.91,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 45.66,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 46.81,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 56.26,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:09:00Z",
+      "lastOpen": "2026-11-02T07:11:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 196.49,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 123.98,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 81.68,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 3172.65,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 187.42,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 169.44,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 154.48,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 121.77,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 509.79,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:09:00Z",
+      "lastOpen": "2026-11-02T07:11:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 94.22,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 91.36,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 80.59,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 64.69,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 65.77,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 90.36,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 49.99,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 66.47,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 2758.21,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:57:00Z",
+      "lastOpen": "2026-10-30T19:59:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 660.54,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:45:00Z",
+      "lastOpen": "2026-10-30T19:55:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 265.76,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:15:00Z",
+      "lastOpen": "2026-10-30T19:45:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 166.34,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T18:30:00Z",
+      "lastOpen": "2026-10-30T19:30:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 701.33,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T17:00:00Z",
+      "lastOpen": "2026-10-30T19:00:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 106.54,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-29T17:00:00Z",
+      "lastOpen": "2026-10-30T17:00:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 115.09,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-27T21:00:00Z",
+      "lastOpen": "2026-10-29T21:00:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 147.9,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-10T21:00:00Z",
+      "lastOpen": "2026-10-24T21:00:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 149.75,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-07-31T21:00:00Z",
+      "lastOpen": "2026-09-30T21:00:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 3035.93,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:57:00Z",
+      "lastOpen": "2026-10-30T19:59:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 595.65,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:45:00Z",
+      "lastOpen": "2026-10-30T19:55:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 370.89,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:15:00Z",
+      "lastOpen": "2026-10-30T19:45:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 231.5,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T18:30:00Z",
+      "lastOpen": "2026-10-30T19:30:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 897.99,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T17:00:00Z",
+      "lastOpen": "2026-10-30T19:00:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 113.52,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-29T17:00:00Z",
+      "lastOpen": "2026-10-30T17:00:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 99.08,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-27T21:00:00Z",
+      "lastOpen": "2026-10-29T21:00:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 95.04,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-10T21:00:00Z",
+      "lastOpen": "2026-10-24T21:00:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 117.78,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-07-31T21:00:00Z",
+      "lastOpen": "2026-09-30T21:00:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 3030.87,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:57:00Z",
+      "lastOpen": "2026-10-30T19:59:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 560.71,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:45:00Z",
+      "lastOpen": "2026-10-30T19:55:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 248.98,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:15:00Z",
+      "lastOpen": "2026-10-30T19:45:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 131.4,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T18:30:00Z",
+      "lastOpen": "2026-10-30T19:30:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 1224.15,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T17:00:00Z",
+      "lastOpen": "2026-10-30T19:00:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 190.76,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-29T17:00:00Z",
+      "lastOpen": "2026-10-30T17:00:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 154.54,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-27T21:00:00Z",
+      "lastOpen": "2026-10-29T21:00:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 127.26,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-10T21:00:00Z",
+      "lastOpen": "2026-10-24T21:00:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 121.61,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-07-31T21:00:00Z",
+      "lastOpen": "2026-09-30T21:00:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 2807.51,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:57:00Z",
+      "lastOpen": "2026-10-30T19:59:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 539.57,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:45:00Z",
+      "lastOpen": "2026-10-30T19:55:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 235.42,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:15:00Z",
+      "lastOpen": "2026-10-30T19:45:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 132.49,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T18:30:00Z",
+      "lastOpen": "2026-10-30T19:30:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 2360.29,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T17:00:00Z",
+      "lastOpen": "2026-10-30T19:00:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 224.9,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-29T17:00:00Z",
+      "lastOpen": "2026-10-30T17:00:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 270.82,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-27T21:00:00Z",
+      "lastOpen": "2026-10-29T21:00:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 107.86,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-10T21:00:00Z",
+      "lastOpen": "2026-10-24T21:00:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 147.55,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-07-31T21:00:00Z",
+      "lastOpen": "2026-09-30T21:00:00Z"
+    },
+    {
+      "symbol": "BTC/USD",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 882.22,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:10:00Z",
+      "lastOpen": "2026-11-02T07:12:00Z"
+    },
+    {
+      "symbol": "BTC/USD",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 72.68,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "BTC/USD",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 69.34,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "BTC/USD",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 65.91,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "BTC/USD",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 74.92,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "BTC/USD",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 118.51,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "BTC/USD",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 75.99,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "BTC/USD",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 76.11,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "BTC/USD",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 95.55,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "ETH/USD",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 1271.46,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:10:00Z",
+      "lastOpen": "2026-11-02T07:12:00Z"
+    },
+    {
+      "symbol": "ETH/USD",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 265.13,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "ETH/USD",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 129.25,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "ETH/USD",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 114.42,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "ETH/USD",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 106.49,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "ETH/USD",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 89.83,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "ETH/USD",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 71.91,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "ETH/USD",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 111.79,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "ETH/USD",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 96.3,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 3014.17,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:57:00Z",
+      "lastOpen": "2026-10-30T19:59:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 633.76,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:45:00Z",
+      "lastOpen": "2026-10-30T19:55:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 249.41,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:15:00Z",
+      "lastOpen": "2026-10-30T19:45:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 180.73,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T18:30:00Z",
+      "lastOpen": "2026-10-30T19:30:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 1023.22,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T17:00:00Z",
+      "lastOpen": "2026-10-30T19:00:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 132.7,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-29T17:00:00Z",
+      "lastOpen": "2026-10-30T17:00:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 123.21,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-27T21:00:00Z",
+      "lastOpen": "2026-10-29T21:00:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 108.89,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-10T21:00:00Z",
+      "lastOpen": "2026-10-24T21:00:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 99.93,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-07-31T21:00:00Z",
+      "lastOpen": "2026-09-30T21:00:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 3074.48,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:57:00Z",
+      "lastOpen": "2026-10-30T19:59:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 777.17,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:45:00Z",
+      "lastOpen": "2026-10-30T19:55:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 659.0,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T19:15:00Z",
+      "lastOpen": "2026-10-30T19:45:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 180.59,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T18:30:00Z",
+      "lastOpen": "2026-10-30T19:30:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 1170.32,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T17:00:00Z",
+      "lastOpen": "2026-10-30T19:00:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 423.16,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-29T17:00:00Z",
+      "lastOpen": "2026-10-30T17:00:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 276.43,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-27T21:00:00Z",
+      "lastOpen": "2026-10-29T21:00:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 131.61,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-10T21:00:00Z",
+      "lastOpen": "2026-10-24T21:00:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 177.14,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-07-31T21:00:00Z",
+      "lastOpen": "2026-09-30T21:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 783.52,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:10:00Z",
+      "lastOpen": "2026-11-02T07:12:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 73.98,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 95.06,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 67.88,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 79.46,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 94.31,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 120.65,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 63.11,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 91.28,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 617.95,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:10:00Z",
+      "lastOpen": "2026-11-02T07:12:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 78.29,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 103.45,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 69.57,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 92.66,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 66.45,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 86.12,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 63.05,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 46.57,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 382.56,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:10:00Z",
+      "lastOpen": "2026-11-02T07:12:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 71.01,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 95.78,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 106.7,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 71.98,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 98.25,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 119.33,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 54.01,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 47.15,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 4015.45,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T17:27:00Z",
+      "lastOpen": "2026-10-30T17:29:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 721.86,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T17:15:00Z",
+      "lastOpen": "2026-10-30T17:25:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 538.94,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T16:45:00Z",
+      "lastOpen": "2026-10-30T17:15:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 212.29,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T16:00:00Z",
+      "lastOpen": "2026-10-30T17:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 806.14,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T15:00:00Z",
+      "lastOpen": "2026-10-30T17:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 175.67,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T09:00:00Z",
+      "lastOpen": "2026-10-30T17:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 178.35,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-27T21:00:00Z",
+      "lastOpen": "2026-10-29T21:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 107.82,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-10T21:00:00Z",
+      "lastOpen": "2026-10-24T21:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 129.67,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-07-31T21:00:00Z",
+      "lastOpen": "2026-09-30T21:00:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 3235.36,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T16:57:00Z",
+      "lastOpen": "2026-10-30T16:59:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 742.99,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T16:45:00Z",
+      "lastOpen": "2026-10-30T16:55:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 231.91,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T16:15:00Z",
+      "lastOpen": "2026-10-30T16:45:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 132.99,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T15:30:00Z",
+      "lastOpen": "2026-10-30T16:30:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 1123.48,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T14:00:00Z",
+      "lastOpen": "2026-10-30T16:00:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 341.28,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-30T05:00:00Z",
+      "lastOpen": "2026-10-30T13:00:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 246.17,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-27T21:00:00Z",
+      "lastOpen": "2026-10-29T21:00:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 127.01,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-10T21:00:00Z",
+      "lastOpen": "2026-10-24T21:00:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 91.88,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-07-31T21:00:00Z",
+      "lastOpen": "2026-09-30T21:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 456.81,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:10:00Z",
+      "lastOpen": "2026-11-02T07:12:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 94.57,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:45:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 46.85,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 50.31,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 54.28,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 65.65,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 92.94,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 54.89,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 44.62,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 565.78,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:10:00Z",
+      "lastOpen": "2026-11-02T07:12:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 61.38,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 64.34,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 64.98,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 58.04,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 53.14,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 81.2,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 33.0,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 47.27,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "1m",
+      "status": 200,
+      "ms": 435.65,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:10:00Z",
+      "lastOpen": "2026-11-02T07:12:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "5m",
+      "status": 200,
+      "ms": 86.18,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T07:00:00Z",
+      "lastOpen": "2026-11-02T07:10:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "15m",
+      "status": 200,
+      "ms": 96.59,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:30:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "30m",
+      "status": 200,
+      "ms": 89.95,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T06:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "1h",
+      "status": 200,
+      "ms": 58.08,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-02T05:00:00Z",
+      "lastOpen": "2026-11-02T07:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "4h",
+      "status": 200,
+      "ms": 79.68,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-11-01T22:00:00Z",
+      "lastOpen": "2026-11-02T06:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "1d",
+      "status": 200,
+      "ms": 98.22,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-28T21:00:00Z",
+      "lastOpen": "2026-11-01T22:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "1w",
+      "status": 200,
+      "ms": 77.78,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "1mo",
+      "status": 200,
+      "ms": 105.96,
+      "count": 3,
+      "valid": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    }
+  ],
+  "registryCount": 22,
+  "quotesBeforeWebSocket": {
+    "quotes": [
+      {
+        "symbol": "XAU/USD",
+        "price": "3906.76",
+        "receivedAt": "2026-11-02T07:11:17.463183Z"
+      },
+      {
+        "symbol": "EUR/USD",
+        "price": "1.11857",
+        "receivedAt": "2026-11-02T07:11:17.125287Z"
+      },
+      {
+        "symbol": "NATGAS",
+        "price": "2.644",
+        "receivedAt": "2026-11-02T07:11:05.287689Z"
+      }
+    ],
+    "errors": []
+  },
+  "websocket": [
+    {
+      "type": "status",
+      "state": "CONNECTING",
+      "symbols": [
+        "XAU/USD"
+      ],
+      "channels": [
+        "quote"
+      ],
+      "observedAt": "2026-11-02T07:11:17.646984Z"
+    },
+    {
+      "type": "quote",
+      "symbol": "XAU/USD",
+      "price": "3906.76",
+      "receivedAt": "2026-11-02T07:11:17.463183Z"
+    },
+    {
+      "type": "status",
+      "state": "SUBSCRIBED",
+      "symbols": [
+        "XAU/USD"
+      ],
+      "channels": [
+        "quote"
+      ],
+      "observedAt": "2026-11-02T07:11:17.647675Z"
+    },
+    {
+      "type": "quote",
+      "symbol": "XAU/USD",
+      "price": "3906.74",
+      "receivedAt": "2026-11-02T07:11:17.684320Z"
+    },
+    {
+      "type": "quote",
+      "symbol": "XAU/USD",
+      "price": "3906.62",
+      "receivedAt": "2026-11-02T07:11:17.986304Z"
+    }
+  ],
+  "passed": true
+}

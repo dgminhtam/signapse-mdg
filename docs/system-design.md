@@ -1,5 +1,15 @@
 # Signapse Market Data Gateway Crypto MVP - System Design
 
+## Local MT5 integration
+
+The accepted local architecture adds `MT5_VANTAGE_DEMO` as a disabled-by-default
+provider. A chart-independent MQL5 Service opens an authenticated private TCP
+connection directly to the FastAPI process; no sidecar is added. Tick ingestion
+starts without downstream subscriptions and reuses the existing quote cache and
+WebSocket fanout. Candle requests use the same connection and existing candle
+repository, preserving broker-native bucket boundaries after UTC conversion.
+See [local runbook and evidence](mt5-local-integration.md) and [ADR 0004](adr/0004-direct-mt5-local-provider.md).
+
 ## Request-scoped provider selection
 
 An asset may have multiple normalized provider mappings, with exactly one default mapping. The
@@ -260,7 +270,8 @@ Recommended initial timeframes:
 
 - Stores latest quote per canonical symbol in memory.
 - Applies `QUOTE_CACHE_TTL_SECONDS` for HTTP quote cache reuse.
-- Marks quotes stale when `receivedAt` is older than `QUOTE_STALE_AFTER_SECONDS`.
+- Marks quotes stale after `QUOTE_STALE_AFTER_SECONDS`; MT5 also retains broker
+  event time so snapshot/replay receipt cannot make an old quote fresh.
 - May be replaced by Redis later without changing API DTOs.
 
 ### Candle Cache and Repository

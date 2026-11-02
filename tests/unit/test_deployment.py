@@ -97,6 +97,41 @@ def test_deploy_rejects_mutable_or_unidentified_builds(image: str, revision: str
         dev.deploy(image, revision)
 
 
+def test_activated_mt5_requires_private_provisioning(
+    docker: tuple[Mock, Mock], tmp_path: Path
+) -> None:
+    (tmp_path / "mt5").mkdir()
+    (tmp_path / "mt5" / "enabled").touch()
+    with pytest.raises(ValueError, match="runtime digest"):
+        dev.deploy(IMAGE, REVISION)
+    with pytest.raises(ValueError, match="private MT5 token"):
+        dev.deploy(IMAGE, REVISION, IMAGE)
+    docker[0].assert_not_called()
+
+
+def test_activated_mt5_deploys_both_reviewed_images(
+    docker: tuple[Mock, Mock], tmp_path: Path
+) -> None:
+    run, output = docker
+    runtime = "dgminhtam/signapse-mdg@sha256:" + "c" * 64
+    (tmp_path / "mt5").mkdir()
+    (tmp_path / "mt5" / "enabled").touch()
+    (tmp_path / "mt5" / "token.txt").write_text("private")
+    metadata = json.dumps(
+        [{"Id": "image-id", "Config": {"Labels": {"org.opencontainers.image.revision": REVISION}}}]
+    )
+    output.side_effect = [f"{IMAGE}\n{runtime}", metadata, metadata, "gateway-id", "image-id"]
+    dev.deploy(IMAGE, REVISION, runtime)
+    commands = [call.args[0] for call in run.call_args_list]
+    assert any(command[-2:] == ["pull", "terminal"] for command in commands)
+    assert any(
+        command[-5:] == ["up", "-d", "--no-deps", "--force-recreate", "terminal"]
+        for command in commands
+    )
+    assert "mt5-compose.yml" in " ".join(commands[0])
+    assert run.call_args.kwargs["env"]["MT5_IMAGE"] == runtime
+
+
 @pytest.mark.parametrize(
     "path,bad",
     [

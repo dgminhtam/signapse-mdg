@@ -14,7 +14,7 @@ class QuoteCache:
 
     async def get_many(
         self,
-        symbols: Sequence[SupportedSymbol | str],
+        symbols: Sequence[SupportedSymbol | Quote | str],
     ) -> dict[str, Quote]:
         async with self._lock:
             result: dict[str, Quote] = {}
@@ -31,11 +31,22 @@ class QuoteCache:
 
     async def put_many(self, quotes: list[Quote]) -> None:
         async with self._lock:
-            self._quotes.update({_cache_key(quote): quote for quote in quotes})
+            for quote in quotes:
+                key = _cache_key(quote)
+                previous = self._quotes.get(key)
+                if quote.freshness_at is not None and previous is not None:
+                    if quote.received_at <= previous.received_at:
+                        continue
+                    if (
+                        previous.freshness_at is not None
+                        and quote.freshness_at < previous.freshness_at
+                    ):
+                        continue
+                self._quotes[key] = quote
 
     @staticmethod
     def age_seconds(quote: Quote, now: datetime) -> float:
-        return max(0.0, (now - quote.received_at).total_seconds())
+        return max(0.0, (now - (quote.freshness_at or quote.received_at)).total_seconds())
 
 
 def _cache_key(value: SupportedSymbol | Quote) -> tuple[str, str, str]:

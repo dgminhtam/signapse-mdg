@@ -252,7 +252,17 @@ class StreamManager:
                 events.task_done()
 
     async def _handle_quote(self, event: StreamQuote) -> None:
+        if event.quote.freshness_at is not None:
+            cached = (await self._quote_cache.get_many([event.quote])).get(event.quote.symbol)
+            if cached is not None and cached.received_at > event.quote.received_at:
+                return
         await self._quote_cache.put_many([event.quote])
+        if event.quote.freshness_at is not None:
+            if (
+                self._quote_cache.age_seconds(event.quote, self._clock())
+                > self._stale_after_seconds
+            ):
+                return
         await self._mark_fresh_and_fanout(event.interest, event)
 
     async def _mark_fresh_and_fanout(
@@ -261,6 +271,8 @@ class StreamManager:
         event: DownstreamEvent,
     ) -> None:
         now = self._clock()
+        if isinstance(event, StreamQuote) and event.quote.freshness_at is not None:
+            now = event.quote.freshness_at
         async with self._lock:
             state = self._interests.get(interest)
             if state is None:
