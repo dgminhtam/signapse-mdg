@@ -1,0 +1,42 @@
+# Activated by dev.py only after the operator provisions mt5/enabled and the private volume.
+services:
+  gateway:
+    environment:
+      MT5_ENABLED: "true"
+      MT5_TOKEN_FILE: /run/mt5-token
+    volumes:
+      - ${MDG_MT5_DIR:?}/token.txt:/run/mt5-token:ro
+    networks:
+      mt5:
+        aliases: [mdg-tcp-smoke.test]
+  terminal:
+    image: ${MT5_IMAGE:?Use the published runtime digest}
+    restart: unless-stopped
+    init: true
+    cpus: 1.0
+    mem_limit: 2g
+    stop_grace_period: 30s
+    shm_size: 256mb
+    tmpfs: [/tmp]
+    logging:
+      options:
+        max-size: 5m
+        max-file: "2"
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f '[t]erminal64.exe' >/dev/null && curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 180s
+    volumes:
+      - terminal-home:/home/mt5
+    ports:
+      - "127.0.0.1:6085:6080"
+    networks: [mt5]
+networks:
+  mt5:
+    driver: bridge
+volumes:
+  terminal-home:
+    external: true
+    name: mdg-mt5-terminal-home

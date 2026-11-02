@@ -7,6 +7,10 @@ checks, then build and exercise the runtime image. Pushes to `dev` run those gat
 image exercised by the operating checks is pushed without rebuilding it in a later job.
 There is no production deploy trigger. A failed gate stops the remaining jobs.
 
+MT5's account-free Wine image is built at the same revision and published by digest.
+The [MT5 cutover runbook](mt5-dev-deployment.md) owns its private volume migration and
+activation. Once activated, subsequent dev deployments update both images together.
+
 ## One-time setup before the first push
 
 These are operator prerequisites, not actions performed by editing this repository:

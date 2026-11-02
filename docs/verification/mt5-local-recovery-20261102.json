@@ -1,0 +1,45 @@
+{
+  "at": "2026-11-02T07:12:44.821492+00:00",
+  "whileTerminalPaused": {
+    "quote": {
+      "quotes": [],
+      "errors": [
+        {
+          "symbol": "XAU/USD",
+          "code": "DATA_STALE",
+          "message": "The latest quote is stale."
+        }
+      ]
+    },
+    "websocketStates": [
+      "SUBSCRIBED",
+      "RECONNECTING"
+    ],
+    "persistedCandlesServed": true
+  },
+  "afterUnpause": {
+    "symbol": "XAU/USD",
+    "price": "3907.09",
+    "receivedAt": "2026-11-02T07:13:21.972490Z"
+  },
+  "unpauseRecoverySeconds": 1.08,
+  "mdg-mt5-local-gateway-1": {
+    "recoverySeconds": 24.0,
+    "quote": {
+      "symbol": "XAU/USD",
+      "price": "3906.68",
+      "receivedAt": "2026-11-02T07:13:45.821451Z"
+    },
+    "persistedCandlesUnchanged": true
+  },
+  "mt5-provider-local-terminal-1": {
+    "recoverySeconds": 36.42,
+    "quote": {
+      "symbol": "XAU/USD",
+      "price": "3906.73",
+      "receivedAt": "2026-11-02T07:14:22.431344Z"
+    },
+    "persistedCandlesUnchanged": true
+  },
+  "passed": true
+}

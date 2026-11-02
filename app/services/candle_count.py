@@ -123,7 +123,12 @@ class CountQueryExecution:
             schedule,
             policy,
             request,
-            page_capacity=self._page_capacity,
+            # Cold broker history must not scan years just to fill a weekend gap.
+            page_capacity=(
+                min(self._page_capacity, max(32, count * 2))
+                if symbol.provider == "MT5_VANTAGE_DEMO"
+                else self._page_capacity
+            ),
             scan_budget=self._scan_budget,
         )
         now = self._clock()

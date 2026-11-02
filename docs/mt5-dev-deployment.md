@@ -1,0 +1,58 @@
+# MT5 runtime on dev
+
+The user authorized local → PR into `dev` → merge → server cutover on 2026-11-02.
+The 22 accepted assets replace dev's default provider mappings; CORN and DJI remain
+disabled. Existing mappings and provider-keyed candle history are retained, not deleted.
+The local verification is recorded in [the local runbook](mt5-local-integration.md).
+
+## Release and private state
+
+CI builds and checks both MDG and the Wine runtime from the same revision. Both images
+are published to the existing private registry repository and deployed by digest.
+MT5's MQL5 Service source is included in the runtime image and compiled at startup.
+No login, password, token, installer or terminal data is included in Git or either image.
+
+The existing [dev pipeline](deploy-docker.md) deploys MDG alone until the operator creates
+`/opt/apps/signapse/mdg/mt5/enabled`. Once enabled, it also applies
+[`mt5-compose.yml`](../deploy/mt5-compose.yml) and recreates the terminal with the
+matching release digest. MDG's private override keeps its existing bindings and DNS.
+The terminal has 1 CPU, 2 GiB RAM, a persistent external volume
+`mdg-mt5-terminal-home` and a browser desktop bound only to `127.0.0.1:6085`.
+TCP 9001 is not published. The Docker bridge provides the private connection to MDG
+using the terminal's already-allowlisted hostname `mdg-tcp-smoke.test`.
+
+## First cutover
+
+1. Inspect architecture, space, running gateway, database and bindings. Back up the MDG
+   database and private environment/override before changing mappings.
+2. Merge the reviewed PR and let CI deploy the new MDG with MT5 still disabled.
+3. Stop the local terminal cleanly. Archive its entire `/home/mt5` volume (Wine prefix,
+   broker login, symbols, history and registered Service), verify archive checksum, and
+   transfer it over verified SSH. Keep archive/state outside Git with owner-only access.
+   Import into the external volume with UID/GID 10001, preserving file ownership.
+   A new server instance may require broker reauthentication; verify rather than assume.
+4. Copy the private shared token to `mt5/token.txt` (mode 600). Confirm it matches the
+   terminal's `MQL5/Files/MarketDataToken.txt`; do not display its contents.
+5. Use the newly deployed image to run `python -m scripts.seed_mt5_local --database
+   dev-signapse-mdg`. This explicitly guarded operator step enables the agreed 22
+   symbols and switches their default mappings in one transaction. No schema downgrade
+   or candle deletion is performed. Do not point test fixtures at this database.
+6. Create the activation marker, then run the release `dev.py` with the published MDG
+   digest, full commit and MT5 digest using the deployment lock. It validates both image
+   revision labels and runs the existing migration/HTTP/build checks.
+7. Verify the running terminal image ID, resource limits, broker login/Service connection,
+   fresh REST and WebSocket XAU/USD prices, all 22 × 9 candle requests, and persistent
+   state after a terminal restart. Read the live `/openapi.json` build revision.
+   Save sanitized evidence under `docs/verification/`.
+
+## Recovery and limits
+
+Stop the terminal and remove the activation marker to disable the additional runtime.
+Restore the backed-up symbol/default mapping rows and private override/environment
+before deploying the compatible previous MDG digest. Do not delete the volume or
+restore/drop the shared database as a routine rollback. Retain the local runtime volume
+until server verification passes; leave local MT5 stopped after successful migration.
+
+The account is a Vantage demo account. Prices are broker quotes/CFDs and may differ
+from underlying exchanges. Current tick delivery is a polling snapshot, not a lossless
+tick archive. Long soak testing and a measured one-second latency SLO remain unverified.

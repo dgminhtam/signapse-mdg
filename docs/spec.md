@@ -1,5 +1,10 @@
 # Signapse Market Data Gateway Crypto MVP
 
+Local MT5 behavior and its verified scope are recorded in the
+[MT5 integration runbook](mt5-local-integration.md). Public HTTP response shapes
+and the quote-only WebSocket contract remain unchanged. MT5 is disabled by
+default; experimental mappings are seeded only into the dedicated local database.
+
 HTTP integration uses the producer environment's published `/openapi.json`. The HTTP API Contract
 and Error Contract sections below retain accepted behavior and target design context; they do not
 prove runtime publication or replace missing generated metadata. Apply the
@@ -276,7 +281,9 @@ Semantics:
 - `symbol` is the canonical gateway symbol; provider identity and mapping remain internal.
 - `price` is the latest trade/market price rounded with `ROUND_HALF_UP` and padded to the symbol's
   exact `priceDisplayDecimals`.
-- `receivedAt` is the gateway receive/snapshot timestamp.
+- `receivedAt` is the gateway receive/snapshot timestamp. For the local MT5 feed,
+  repeated REST reads preserve the original receipt time; freshness also checks
+  normalized broker event time, so a replay or heartbeat cannot refresh old data.
 - Asset class, provider metadata, volume, provider time, and freshness state are not exposed.
 - `provider` is optional, request-wide, and case-sensitive. It selects a mapping only for assets
   that list that provider in `providerMappings`; quote requests keep HTTP `200` partial outcomes

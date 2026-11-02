@@ -1,0 +1,127 @@
+{
+  "passed": true,
+  "rejectedClients": 1,
+  "sessions": [
+    {
+      "hello": {
+        "type": "hello",
+        "server": "VantageMarkets-Demo",
+        "build": 6286,
+        "service": true,
+        "algoTrading": false
+      },
+      "samples": 40,
+      "firstTick": {
+        "type": "tick",
+        "symbol": "XAUUSD",
+        "connected": true,
+        "timeMscRaw": 1793603019100,
+        "bid": "3902.27",
+        "ask": "3902.49"
+      },
+      "lastTick": {
+        "type": "tick",
+        "symbol": "XAUUSD",
+        "connected": true,
+        "timeMscRaw": 1793603029400,
+        "bid": "3902.20",
+        "ask": "3902.42"
+      },
+      "rates": {
+        "type": "rates",
+        "error": 0,
+        "bars": [
+          {
+            "timeRaw": 1793602800,
+            "o": "3901.06",
+            "h": "3903.20",
+            "l": "3901.05",
+            "c": "3902.88"
+          },
+          {
+            "timeRaw": 1793602860,
+            "o": "3902.88",
+            "h": "3902.89",
+            "l": "3901.78",
+            "c": "3902.13"
+          },
+          {
+            "timeRaw": 1793602920,
+            "o": "3902.08",
+            "h": "3903.60",
+            "l": "3901.81",
+            "c": "3902.97"
+          }
+        ]
+      },
+      "pingRoundTripMsIncludingFragmentDelay": 68.31
+    },
+    {
+      "hello": {
+        "type": "hello",
+        "server": "VantageMarkets-Demo",
+        "build": 6286,
+        "service": true,
+        "algoTrading": false
+      },
+      "samples": 40,
+      "firstTick": {
+        "type": "tick",
+        "symbol": "XAUUSD",
+        "connected": true,
+        "timeMscRaw": 1793603029531,
+        "bid": "3902.22",
+        "ask": "3902.43"
+      },
+      "lastTick": {
+        "type": "tick",
+        "symbol": "XAUUSD",
+        "connected": true,
+        "timeMscRaw": 1793603040079,
+        "bid": "3902.69",
+        "ask": "3902.90"
+      },
+      "rates": {
+        "type": "rates",
+        "error": 0,
+        "bars": [
+          {
+            "timeRaw": 1793602800,
+            "o": "3901.06",
+            "h": "3903.20",
+            "l": "3901.05",
+            "c": "3902.88"
+          },
+          {
+            "timeRaw": 1793602860,
+            "o": "3902.88",
+            "h": "3902.89",
+            "l": "3901.78",
+            "c": "3902.13"
+          },
+          {
+            "timeRaw": 1793602920,
+            "o": "3902.08",
+            "h": "3903.60",
+            "l": "3901.81",
+            "c": "3902.97"
+          }
+        ]
+      },
+      "pingRoundTripMsIncludingFragmentDelay": 65.15
+    }
+  ],
+  "verification": {
+    "dateUtc": "2026-11-02T05:03:20Z",
+    "branch": "codex/mt5-tcp-smoke",
+    "baseRevision": "a85c2be2b43e52ff9f3bfaaacb121d2004544706",
+    "application": "MDG create_app and lifespan + uvicorn in same process as TCP probe; app source bind-mounted from branch",
+    "dependencyImage": "dgminhtam/signapse-mdg:sha-43cff281ea05fe3c996f36787018f8c9101888be",
+    "health": "HTTP 200 status UP",
+    "openapi": "HTTP 200; x-build-revision matches baseRevision",
+    "mt5ContainerCpu": 1,
+    "mt5ContainerMemoryGiB": 2,
+    "compiler": "0 errors, 0 warnings",
+    "publicProviderRegistered": false
+  }
+}

@@ -230,6 +230,10 @@ def get_candle_schedule(
     symbol: SupportedSymbol,
     timeframe: Timeframe,
 ) -> CandleSchedule:
+    if symbol.provider == "MT5_VANTAGE_DEMO":
+        from app.domain.mt5_schedule import BrokerCandleSchedule
+
+        return BrokerCandleSchedule(timeframe)
     if timeframe.calendar_month:
         return CalendarMonthCandleSchedule()
     offset = timedelta(0)

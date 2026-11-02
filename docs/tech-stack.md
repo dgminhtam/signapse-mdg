@@ -697,6 +697,11 @@ mypy==2.1.0
 
 ## OpenAPI tooling
 
+The local MT5 adapter uses Python standard-library asyncio TCP plus a native
+MQL5 Service on Wine/Xvfb. It adds no runtime dependency. This always-on push
+feed is the exception to subscription-driven upstream WebSockets; the older
+providers retain their existing lifecycle. See [ADR 0004](adr/0004-direct-mt5-local-provider.md).
+
 The existing FastAPI/Pydantic stack generates OpenAPI 3.1 at `/openapi.json`; route `responses`
 and `openapi_extra` document custom errors and raw query parsers. HTTPX ASGITransport tests
 verify generation locally without a live provider or database. No additional runtime dependency

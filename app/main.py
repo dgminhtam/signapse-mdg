@@ -24,7 +24,7 @@ from app.api.routes_symbols import router as symbols_router
 from app.core.config import get_settings
 from app.core.cronjob import CronjobManager
 from app.core.observability import DiagnosticContextMiddleware, configure_logging
-from app.db.repositories import PostgresEconomicCalendarRepository
+from app.db.repositories import PostgresEconomicCalendarRepository, PostgresSymbolRepository
 from app.db.session import build_session_factory
 from app.domain.errors import (
     CandleRequestError,
@@ -34,8 +34,11 @@ from app.domain.errors import (
     ProviderUnavailableError,
     QuoteRequestError,
 )
+from app.domain.streams import MarketStreamProvider
 from app.providers.binance_spot_stream import build_binance_spot_stream_provider
 from app.providers.market_calendar_tool import MarketCalendarToolProvider
+from app.providers.mt5 import PROVIDER as MT5_PROVIDER
+from app.providers.mt5 import MT5Provider
 from app.providers.twelvedata_market_data_stream import (
     build_twelvedata_market_data_stream_provider,
 )
@@ -79,12 +82,39 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         queue_capacity=settings.stream_provider_queue_capacity,
         reconnect_delay_seconds=settings.provider_ws_reconnect_delay_seconds,
     )
+    providers: dict[str, MarketStreamProvider] = {
+        "BINANCE_SPOT": binance_provider,
+        "TWELVE_DATA": twelvedata_provider,
+        "YFINANCE": yfinance_provider,
+    }
+    mt5: MT5Provider | None = None
+    if settings.mt5_enabled:
+        if database is None or settings.mt5_token_file is None:
+            raise ValueError("MT5 requires DATABASE_URL and MT5_TOKEN_FILE")
+        try:
+            async with database[1]() as session:
+                registry = await PostgresSymbolRepository(session).list_enabled()
+            symbols = [
+                s.with_mapping(m)
+                for s in registry
+                for m in s.mappings
+                if m.provider == MT5_PROVIDER
+            ]
+            mt5 = MT5Provider(
+                symbols,
+                token_file=settings.mt5_token_file,
+                host=settings.mt5_tcp_host,
+                port=settings.mt5_tcp_port,
+                timeout_seconds=settings.mt5_request_timeout_seconds,
+                queue_capacity=settings.stream_provider_queue_capacity,
+            )
+            providers[MT5_PROVIDER] = mt5
+        except Exception:
+            await database[0].dispose()
+            raise
+    application.state.mt5_provider = mt5
     provider = MultiProviderStreamProvider(
-        {
-            "BINANCE_SPOT": binance_provider,
-            "TWELVE_DATA": twelvedata_provider,
-            "YFINANCE": yfinance_provider,
-        },
+        providers,
         queue_capacity=settings.stream_provider_queue_capacity,
     )
     manager = StreamManager(
@@ -101,12 +131,18 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     application.state.twelvedata_market_data_stream_provider = twelvedata_provider
     application.state.yfinance_market_data_stream_provider = yfinance_provider
     application.state.cronjob_manager = cronjob_manager
-    await cronjob_manager.start()
-    yield
-    await cronjob_manager.stop()
-    await manager.stop()
-    if database is not None:
-        await database[0].dispose()
+    try:
+        if mt5 is not None:
+            await mt5.start()
+            await provider.start_provider(MT5_PROVIDER)
+            await manager.start()
+        await cronjob_manager.start()
+        yield
+    finally:
+        await cronjob_manager.stop()
+        await manager.stop()
+        if database is not None:
+            await database[0].dispose()
 
 
 def create_app() -> FastAPI:
