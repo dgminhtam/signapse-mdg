@@ -346,10 +346,11 @@ class MT5Provider:
     async def close(self) -> None:
         if self._server is not None:
             self._server.close()
-            await self._server.wait_closed()
         if self._writer is not None:
             self._writer.close()
         tasks = list(self._clients)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if self._server is not None:
+            await self._server.wait_closed()

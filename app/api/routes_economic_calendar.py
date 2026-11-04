@@ -32,8 +32,12 @@ router = APIRouter(prefix="/v1", tags=["economic-calendar"])
 class EconomicCalendarEventResponse(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
 
-    key: str = Field(description="Stable type:external_event_id identifier.")
-    type: str = Field(description="Calendar category, e.g. FOREX, METALS, ENERGY or CRYPTO.")
+    key: str = Field(
+        description="Stable type:external_event_id identifier; MT5 suffix is mt5:occurrenceId."
+    )
+    type: str = Field(
+        description="MT5 macro events use FOREX; other categories retain legacy data."
+    )
     name: str = Field(description="Upstream event name.")
     currency: str | None = Field(description="Normalized upstream currency; null when unavailable.")
     impact: str | None = Field(description="Upstream impact label; null when unavailable.")
@@ -41,7 +45,9 @@ class EconomicCalendarEventResponse(BaseModel):
     actual: str | None = Field(description="Reported actual value as upstream text, nullable.")
     forecast: str | None = Field(description="Forecast value as upstream text, nullable.")
     previous: str | None = Field(description="Previous value as upstream text, nullable.")
-    revision: str | None = Field(description="Revision as upstream text, nullable.")
+    revision: str | None = Field(
+        description="Revised previous value as text, nullable; not the MT5 revision counter."
+    )
     actual_better_worse: str | None = Field(
         description="Upstream assessment of actual versus forecast, nullable."
     )
@@ -91,7 +97,7 @@ def get_economic_calendar_service(
     "/economic-calendar",
     response_model=EconomicCalendarResponse,
     summary="Read persisted economic calendar events",
-    description="Reads persisted events only; does not scrape upstream or trigger a refresh. "
+    description="Reads persisted events only; does not query MT5 or trigger a refresh. "
     "Required UTC bounds satisfy from < to and select from <= scheduledAt < to. "
     "Events are ordered by scheduledAt, type and external event identifier (the suffix of key). "
     "CSV filters trim, uppercase, discard empty items and deduplicate; an explicitly empty "

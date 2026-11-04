@@ -533,12 +533,18 @@ Semantics:
 - Events are ordered by `scheduledAt`, then `type`, then `key`.
 - `key` is `{type}:{external_event_id}`. Database `id`, `externalEventId`, provider source, and
   upstream site fields are not exposed.
-- `description` and `newsUrl` are nullable enrichment fields from upstream event details. `newsUrl`
-  is a single related article redirect URL for downstream article retrieval; raw news HTML, article
-  content, and history rows are not exposed.
-- The refresh keeps the configured polling cadence (`300` seconds in production) for base values.
-  Each run uses non-extended base scraping, preserves stored enrichment when base values are null,
-  and requests details only for incomplete events not attempted during the current UTC day.
+- MT5 is the active macro source, mapped to FOREX only. Other types retain readable
+  legacy rows. New key is `FOREX:mt5:<occurrenceId>`; old IDs/rows are retained and
+  never automatically merged across sources.
+- previous retains the original previous value; revision is revised previous,
+  not the native revision counter. Numbers retain native digits, K/M/B/T and percent
+  suffixes. Unavailable values remain null.
+- New MT5 description, newsUrl and both better/worse assessments are null. Existing
+  legacy enrichment is retained; publisher source_url is not a related article URL.
+- The default refresh cadence remains 300 seconds. Dedicated CalendarService RPCs
+  read at most seven days each and stage the whole window before persistence.
+  Native/metadata/timeout/partial errors do not persist earlier pages. No scraper
+  or detail enrichment fallback remains; GET never queries the terminal.
 - Empty valid ranges return `200` with `events: []`.
 - Missing, invalid, non-UTC, or inverted/equal time boundaries return `400 INVALID_TIME_RANGE`.
   Invalid filters use `INVALID_TYPES`, `INVALID_CURRENCIES`, or `INVALID_IMPACT`; invalid limits
@@ -782,11 +788,9 @@ while preserving `first_seen_at`; `last_changed_at` advances only for effective 
 changes, including enrichment. Incoming null enrichment preserves existing values. Neither raw
 provider details nor article content is persisted.
 
-The refresh claims incomplete events in its current window using a short row-locking transaction
-with `SKIP LOCKED`, recording `enrichment_attempted_at` before network access. Only events missing
-`description` or `news_url` with no attempt in the current UTC day qualify. Failed, empty, or
-malformed detail responses retain the base event and existing enrichment and wait until a later
-UTC day for another attempt. API reads never trigger refresh or detail requests.
+The active MT5 refresh does not claim detail enrichment. Legacy enrichment columns
+and repository behavior remain available for historical rows. API reads never trigger
+provider calls. See [ADR 0005](adr/0005-mt5-economic-calendar.md).
 
 ## Provider Adapter
 
@@ -828,7 +832,7 @@ Recommended stack:
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation; synchronous REST calls are offloaded from the event loop. |
 | yfinance provider dependency | yfinance 1.6.0 | Open-source Yahoo Finance wrapper used for latest quotes, historical candles, and asynchronous price streaming on planned commodities and indexes. |
-| Economic calendar dependency | market-calendar-tool 0.2.2 | Scrapes ForexFactory, MetalsMine, EnergyExch, and CryptoCraft calendar rows for persistence. |
+| Economic calendar source | Native MQL5 CalendarService | Dedicated authenticated TCP connection, validated macro releases and persistence; no web scraping dependency. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration testing only. |
 | Database | PostgreSQL 18.4 | Reuse relational persistence for candle cache. |
 | DB driver | asyncpg 0.31.0 | Async PostgreSQL driver. |
@@ -874,7 +878,10 @@ Binance public market-data endpoints do not require API keys. `TWELVEDATA_API_KE
 Twelve Data key setting; one key or comma-separated keys are both valid. Twelve Data keys are
 optional at application startup, for crypto-only requests, and for fully persisted Forex candle
 reads; live Twelve Data quote or candle refreshes require at least one key.
-`ECONOMIC_CALENDAR_POLL_SECONDS=0` disables the in-process economic calendar refresh cronjob.
+`ECONOMIC_CALENDAR_POLL_SECONDS=0` disables the calendar listener and refresh job.
+When enabled with a database, MT5_TOKEN_FILE is required. Calendar uses
+MT5_CALENDAR_TCP_PORT=9002 and MT5_CALENDAR_TIMEOUT_SECONDS=60; match the MQL
+Service port. Quote TCP remains on 9001.
 
 ## Observability
 
@@ -905,7 +912,7 @@ Logs should include:
 - internal `failure_reason`, `retryable`, exception type, root error type/code, failure phase,
   timeout, upstream status/code, and latency when available
 - retry attempt fields (`attempt`, `max_attempts`, and `retry_in_ms`) when retries are used
-- enrichment totals (`attempted_count`, `succeeded_count`, `failed_count`, and `failure_reasons`)
+- calendar refresh totals (`provider_rows`, `latency_ms`) and structured job failures
 - provider-backed count diagnostics also include count direction, eligible slots scanned, page and
   logical provider-call counts, persisted/provider/returned row counts, stop reason, and calendar,
   database, and provider elapsed times

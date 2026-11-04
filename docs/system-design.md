@@ -317,23 +317,23 @@ Recommended initial timeframes:
 
 ### Economic Calendar Refresh
 
-When `DATABASE_URL` is configured and `ECONOMIC_CALENDAR_POLL_SECONDS > 0`, lifespan registers
-`economic-calendar-refresh` with `run_on_start=true`. Each run fetches `FOREX`, `METALS`, `ENERGY`,
-and `CRYPTO`, using UTC day boundaries from today minus two days to today plus seven days.
+When DATABASE_URL is configured and ECONOMIC_CALENDAR_POLL_SECONDS > 0, lifespan
+starts a dedicated MT5CalendarProvider listener and registers economic-calendar-refresh
+with run_on_start=true. MT5_TOKEN_FILE is required. Default calendar port 9002 is
+separate from quote port 9001; both MQL5 Services share one MT5/Wine terminal.
 
-The gateway-owned `MarketCalendarToolProvider` maps those types to ForexFactory, MetalsMine,
-EnergyExch, and CryptoCraft. Blocking base scraping runs in a worker thread without extended
-detail scraping. After base upsert, the repository claims only incomplete events not attempted in
-the current UTC day and commits the attempt marker before fetching their details. Successful
-non-null enrichment is then persisted. Description normalization prefers the `Measures` spec text,
-then the first usable spec text. News normalization selects the first usable `/news/.../hit` link
-and resolves it to an absolute URL; it does not fetch articles or retain raw news HTML.
+Each run reads FOREX macro data from UTC today minus two days through today plus
+seven days. Bounded seven-day RPCs stage the complete window before one upsert.
+Authentication, role, clock, correlation ID, row totals, native errors, duplicate
+occurrences and numeric metadata are validated. Partial/failed windows do not
+persist their earlier pages. Calendar session-offset conversion is separate from
+historical quote/candle clocks; offset changes during an RPC are rejected.
 
-Upstream refresh failures are isolated by the cronjob manager. Failed individual details leave
-base rows and prior enrichment intact and are not attempted again that UTC day. The read-only
-calendar API continues serving persisted rows even when refresh fails or polling is disabled.
-Persistence and change-tracking rules are defined in
-[Economic calendar persistence](spec.md#economic-calendar-persistence).
+MT5 IDs are namespaced, unavailable fields stay null, legacy data remains readable.
+There is no scraper/enrichment fallback. Calendar disconnects/deadlines fail the job
+without closing quote connections. GET continues serving persisted rows during an
+outage. See [ADR 0005](adr/0005-mt5-economic-calendar.md) and
+[persistence](spec.md#economic-calendar-persistence).
 
 ## 6. Data Flow
 

@@ -101,8 +101,3 @@ class EconomicCalendarProvider(Protocol):
         start: datetime,
         end: datetime,
     ) -> list[EconomicCalendarFetchedEvent]: ...
-
-    async def fetch_event_details(
-        self,
-        candidates: list[EconomicCalendarEnrichmentCandidate],
-    ) -> list[EconomicCalendarEnrichment]: ...

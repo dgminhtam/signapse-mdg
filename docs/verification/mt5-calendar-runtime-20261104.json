@@ -1,0 +1,48 @@
+{
+  "observedAt": "2026-11-04T09:37:03.7184834+00:00",
+  "scope": "local-only PoC; original local MT5/gateway/database containers stayed stopped; no server, DB or trading operations",
+  "gitBase": "ef62137584124f59b1bd14aba48093e8a4952e2a",
+  "gitBranch": "codex/mt5-calendar-poc",
+  "sourceState": "uncommitted PoC in isolated worktree",
+  "dockerContext": "desktop-linux",
+  "terminalImageId": "sha256:588c0eab2611dc60c8c14008a0ee8aba901d1cbd47e63fb86c8645f003f38199",
+  "collectorImageId": "sha256:e6675d49f67d3de2a177ce5a0a524aa31f702850e338c6c52ce28229c934b767",
+  "terminalLimits": {
+    "cpu": 1,
+    "memoryBytes": 2147483648
+  },
+  "volumeIsolation": {
+    "clone": "mdg-calendar-poc-terminal-home",
+    "sourceMountedReadOnlyDuringClone": true,
+    "source": "mt5-provider-local_terminal-home"
+  },
+  "compile": {
+    "errors": 0,
+    "elapsedMs": 1494,
+    "warnings": 0
+  },
+  "verification": {
+    "finalCollectorExit": 0,
+    "ruffFormat": "passed",
+    "ruffCheck": "passed",
+    "nativeQueries": 6,
+    "pytestPassed": 8
+  },
+  "cleanup": {
+    "originalDatabase": "exited",
+    "originalGateway": "exited",
+    "pocCollector": "exited",
+    "originalTerminal": "exited",
+    "pocTerminal": "exited",
+    "keycloak": "running"
+  },
+  "incidents": [
+    "Docker daemon restarted during initial unbounded volume copy; stopped original volume was mounted read-only. Recopy succeeded with 128 MiB memory cap. Previously running Keycloak restarted after PoC cleanup.",
+    "Initial collector waited for persistent peer during shutdown; fixed and covered by real TCP regression. Initial raw observations retained; final run completed normally."
+  ],
+  "files": {
+    "mqlSHA256": "ae7e712d2a86591123b149e46a1c719680cb8da74a5d4c8fb36dcd347768e6b7",
+    "resultSHA256": "fbbf9a1194d7d158a8029ca7bd9dcb49bd343916e6e520f4f2de271c192f1e84",
+    "collectorSHA256": "b741744de5e4c1a403743b1a9bdf7c7e2c8b3c9dfb8346fe6f65a37565f53393"
+  }
+}
