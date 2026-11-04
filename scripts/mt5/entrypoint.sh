@@ -59,17 +59,18 @@ if [[ ! -f "$HOME/.mdg-writable-config" ]]; then
 fi
 mkdir -p "$terminal_dir/MQL5/Services" "$terminal_dir/MQL5/Files"
 cp /opt/mt5/mql5/*.mq5 "$terminal_dir/MQL5/Services/"
-echo 'Compiling the read-only market-data Service.'
-# MetaEditor through Wine silently skips this compile when its source path contains spaces.
-cp "$terminal_dir/MQL5/Services/MarketDataService.mq5" "$WINEPREFIX/drive_c/MarketDataService.mq5"
-rm -f "$WINEPREFIX/drive_c/MarketDataService.ex5" "$WINEPREFIX/drive_c/compile.log"
-wine "$terminal_dir/metaeditor64.exe" /portable '/compile:C:\MarketDataService.mq5' '/log:C:\compile.log' >"$HOME/compile-runtime.log" 2>&1 || true
-if ! test -s "$WINEPREFIX/drive_c/MarketDataService.ex5"; then
-  cat "$HOME/compile-runtime.log" >&2
-  test ! -f "$WINEPREFIX/drive_c/compile.log" || iconv -f UTF-16LE -t UTF-8 "$WINEPREFIX/drive_c/compile.log" >&2
-  exit 1
+for service in MarketDataService CalendarService; do
+  cp "$terminal_dir/MQL5/Services/$service.mq5" "$WINEPREFIX/drive_c/$service.mq5"
+  rm -f "$WINEPREFIX/drive_c/$service.ex5" "$WINEPREFIX/drive_c/$service-compile.log"
+  wine "$terminal_dir/metaeditor64.exe" /portable "/compile:C:\\$service.mq5" "/log:C:\\$service-compile.log" >"$HOME/$service-compile-runtime.log" 2>&1 || true
+  test -s "$WINEPREFIX/drive_c/$service.ex5"
+  cp "$WINEPREFIX/drive_c/$service.ex5" "$terminal_dir/MQL5/Services/$service.ex5"
+done
+services="$terminal_dir/Config/services.ini"
+if ! test -s "$services"; then printf '\377\376' > "$services"; fi
+if ! iconv -f UTF-16LE -t UTF-8 "$services" | grep -F 'name=CalendarService' >/dev/null; then
+  printf '\n<service>\nname=CalendarService\npath=Services\\CalendarService.ex5\nexpertmode=0\nenabled=1\n<inputs>\nReceiverHost=mdg-tcp-smoke.test\nReceiverPort=9002\n</inputs>\n</service>\n' | iconv -f UTF-8 -t UTF-16LE >> "$services"
 fi
-cp "$WINEPREFIX/drive_c/MarketDataService.ex5" "$terminal_dir/MQL5/Services/MarketDataService.ex5"
 echo 'Starting MT5 in portable mode; automated trading is disabled by config.'
 wine "$terminal" /portable >/tmp/mt5-runtime.log 2>&1 &
 wait $!

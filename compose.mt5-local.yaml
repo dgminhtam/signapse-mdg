@@ -20,7 +20,7 @@ services:
     environment:
       PYTHONPATH: /app
       DATABASE_URL: postgresql+asyncpg://mdg_local@database:5432/mdg_mt5_local
-      ECONOMIC_CALENDAR_POLL_SECONDS: 0
+      ECONOMIC_CALENDAR_POLL_SECONDS: 300
       MT5_ENABLED: true
       MT5_TOKEN_FILE: /run/mt5-token
       LOG_LEVEL: WARNING

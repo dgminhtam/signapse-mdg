@@ -36,9 +36,9 @@ from app.domain.errors import (
 )
 from app.domain.streams import MarketStreamProvider
 from app.providers.binance_spot_stream import build_binance_spot_stream_provider
-from app.providers.market_calendar_tool import MarketCalendarToolProvider
 from app.providers.mt5 import PROVIDER as MT5_PROVIDER
 from app.providers.mt5 import MT5Provider
+from app.providers.mt5_calendar import MT5CalendarProvider
 from app.providers.twelvedata_market_data_stream import (
     build_twelvedata_market_data_stream_provider,
 )
@@ -58,16 +58,29 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     cronjob_manager = CronjobManager()
     database = build_session_factory(settings)
+    calendar: MT5CalendarProvider | None = None
     if database is not None and settings.economic_calendar_poll_seconds > 0:
+        if settings.mt5_token_file is None:
+            raise ValueError(
+                "Calendar refresh requires MT5_TOKEN_FILE; set poll seconds to 0 to disable"
+            )
+        if settings.mt5_calendar_tcp_port == settings.mt5_tcp_port and settings.mt5_enabled:
+            raise ValueError("Quote and calendar listeners require separate ports")
+        calendar = MT5CalendarProvider(
+            token_file=settings.mt5_token_file,
+            host=settings.mt5_tcp_host,
+            port=settings.mt5_calendar_tcp_port,
+            timeout_seconds=settings.mt5_calendar_timeout_seconds,
+        )
         cronjob_manager.register(
             EconomicCalendarFetchCronjob(
                 EconomicCalendarRefreshService(
-                    provider=MarketCalendarToolProvider(),
-                    repository=PostgresEconomicCalendarRepository(database[1]),
+                    provider=calendar, repository=PostgresEconomicCalendarRepository(database[1])
                 ),
                 interval_seconds=settings.economic_calendar_poll_seconds,
             )
         )
+    application.state.mt5_calendar_provider = calendar
     binance_provider = build_binance_spot_stream_provider(
         settings.binance_ws_base_url,
         settings.provider_ws_reconnect_delay_seconds,
@@ -136,10 +149,14 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
             await mt5.start()
             await provider.start_provider(MT5_PROVIDER)
             await manager.start()
+        if calendar is not None:
+            await calendar.start()
         await cronjob_manager.start()
         yield
     finally:
         await cronjob_manager.stop()
+        if calendar is not None:
+            await calendar.close()
         await manager.stop()
         if database is not None:
             await database[0].dispose()

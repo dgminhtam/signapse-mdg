@@ -1,0 +1,238 @@
+{
+  "purpose": "Public references for the isolated MT5 economic-calendar PoC; not production acceptance",
+  "weekTimezone": "Asia/Ho_Chi_Minh",
+  "method": "Unauthenticated GET of direct MetaQuotes indicator HTML. UTC scheduledAt comes from data-date Unix milliseconds; values come from the matching last/next release row. Agency pages were inspected independently.",
+  "notes": [
+    "Forecasts are MetaQuotes forecasts, not forecasts confirmed by BLS or BEA.",
+    "Numeric values retain displayed scale; multiply by valueUnit.scale for base counts. Percent values remain percentage points, not fractions.",
+    "Blank future actuals are null; forecasts can change after observation.",
+    "agencyConfirmedFields identifies independently checked fields. Website and terminal share the MetaQuotes provider.",
+    "US DST ended 2026-11-01: 08:30 Eastern maps to 12:30 UTC before and 13:30 UTC after. This does not establish the broker server timezone or its DST rules."
+  ],
+  "dstReferenceUrl": "https://www.nist.gov/pml/time-and-frequency-division/popular-links/daylight-saving-time-dst",
+  "weekRanges": [
+    {
+      "week": "last",
+      "from": "2026-10-25T17:00:00Z",
+      "to": "2026-11-01T17:00:00Z"
+    },
+    {
+      "week": "current",
+      "from": "2026-11-01T17:00:00Z",
+      "to": "2026-11-08T17:00:00Z"
+    },
+    {
+      "week": "next",
+      "from": "2026-11-08T17:00:00Z",
+      "to": "2026-11-15T17:00:00Z"
+    }
+  ],
+  "samples": [
+    {
+      "id": "pce-mm-sep-2026",
+      "week": "last",
+      "indicator": "United States PCE Price Index m/m",
+      "currency": "USD",
+      "referencePeriod": "September 2026",
+      "scheduledAt": "2026-10-29T12:30:00Z",
+      "actual": 0.5,
+      "forecast": 0.4,
+      "previous": 0.3,
+      "valueUnit": {
+        "kind": "percent",
+        "scale": 1,
+        "description": "Percent change from preceding month"
+      },
+      "displayValues": {
+        "actual": "0.5%",
+        "forecast": "0.4%",
+        "previous": "0.3%"
+      },
+      "metaQuotesUrl": "https://www.mql5.com/en/economic-calendar/united-states/pce-price-index-mm",
+      "primaryAgencyUrl": "https://www.bea.gov/news/2026/personal-income-and-outlays-september-2026",
+      "agencyConfirmedFields": [
+        "scheduledAt",
+        "actual",
+        "previous"
+      ],
+      "observedAt": "2026-11-04T09:32:02Z"
+    },
+    {
+      "id": "eci-qq-q3-2026",
+      "week": "last",
+      "indicator": "United States Employment Cost Index q/q",
+      "currency": "USD",
+      "referencePeriod": "Q3 2026",
+      "scheduledAt": "2026-10-30T12:30:00Z",
+      "actual": 0.8,
+      "forecast": 0.8,
+      "previous": 0.9,
+      "valueUnit": {
+        "kind": "percent",
+        "scale": 1,
+        "description": "Seasonally adjusted percent change from preceding quarter"
+      },
+      "displayValues": {
+        "actual": "0.8%",
+        "forecast": "0.8%",
+        "previous": "0.9%"
+      },
+      "metaQuotesUrl": "https://www.mql5.com/en/economic-calendar/united-states/employment-cost-index-qq",
+      "primaryAgencyUrl": "https://www.bls.gov/news.release/archives/eci_10302026.htm",
+      "agencyConfirmedFields": [
+        "scheduledAt",
+        "actual"
+      ],
+      "observedAt": "2026-11-04T09:32:03Z"
+    },
+    {
+      "id": "jolts-sep-2026",
+      "week": "current",
+      "indicator": "United States JOLTS Job Openings",
+      "currency": "USD",
+      "referencePeriod": "September 2026",
+      "scheduledAt": "2026-11-03T15:00:00Z",
+      "actual": 7.523,
+      "forecast": 6.779,
+      "previous": 7.19,
+      "valueUnit": {
+        "kind": "job_openings",
+        "scale": 1000000,
+        "description": "Millions of seasonally adjusted job openings"
+      },
+      "displayValues": {
+        "actual": "7.523 M",
+        "forecast": "6.779 M",
+        "previous": "7.190 M"
+      },
+      "metaQuotesUrl": "https://www.mql5.com/en/economic-calendar/united-states/jolts-job-openings",
+      "primaryAgencyUrl": "https://www.bls.gov/news.release/archives/jolts_11032026.htm",
+      "agencyConfirmedFields": [
+        "scheduledAt",
+        "actual",
+        "previous"
+      ],
+      "observedAt": "2026-11-04T09:32:03Z"
+    },
+    {
+      "id": "productivity-qq-q3-2026",
+      "week": "current",
+      "indicator": "United States Nonfarm Productivity q/q",
+      "currency": "USD",
+      "referencePeriod": "Q3 2026 preliminary",
+      "scheduledAt": "2026-11-05T13:30:00Z",
+      "actual": null,
+      "forecast": 1.9,
+      "previous": 1.4,
+      "valueUnit": {
+        "kind": "percent",
+        "scale": 1,
+        "description": "Annualized seasonally adjusted percent change from preceding quarter"
+      },
+      "displayValues": {
+        "actual": "",
+        "forecast": "1.9%",
+        "previous": "1.4%"
+      },
+      "metaQuotesUrl": "https://www.mql5.com/en/economic-calendar/united-states/nonfarm-productivity-qq",
+      "primaryAgencyUrl": "https://www.bls.gov/schedule/2026/11_sched.htm",
+      "agencyConfirmedFields": [
+        "scheduledAt"
+      ],
+      "observedAt": "2026-11-04T09:32:04Z"
+    },
+    {
+      "id": "nfp-oct-2026",
+      "week": "current",
+      "indicator": "United States Nonfarm Payrolls",
+      "currency": "USD",
+      "referencePeriod": "October 2026",
+      "scheduledAt": "2026-11-06T13:30:00Z",
+      "actual": null,
+      "forecast": 55,
+      "previous": 29,
+      "valueUnit": {
+        "kind": "jobs",
+        "scale": 1000,
+        "description": "Thousands of jobs, monthly change in total nonfarm payroll employment"
+      },
+      "displayValues": {
+        "actual": "",
+        "forecast": "55 K",
+        "previous": "29 K"
+      },
+      "metaQuotesUrl": "https://www.mql5.com/en/economic-calendar/united-states/nonfarm-payrolls",
+      "primaryAgencyUrl": "https://www.bls.gov/schedule/2026/11_sched.htm",
+      "agencyConfirmedFields": [
+        "scheduledAt"
+      ],
+      "observedAt": "2026-11-04T09:32:04Z"
+    },
+    {
+      "id": "cpi-mm-oct-2026",
+      "week": "next",
+      "indicator": "United States Consumer Price Index m/m",
+      "currency": "USD",
+      "referencePeriod": "October 2026",
+      "scheduledAt": "2026-11-10T13:30:00Z",
+      "actual": null,
+      "forecast": 0.5,
+      "previous": 0.6,
+      "valueUnit": {
+        "kind": "percent",
+        "scale": 1,
+        "description": "Seasonally adjusted percent change from preceding month"
+      },
+      "displayValues": {
+        "actual": "",
+        "forecast": "0.5%",
+        "previous": "0.6%"
+      },
+      "metaQuotesUrl": "https://www.mql5.com/en/economic-calendar/united-states/consumer-price-index-mm",
+      "primaryAgencyUrl": "https://www.bls.gov/schedule/2026/11_sched.htm",
+      "agencyConfirmedFields": [
+        "scheduledAt"
+      ],
+      "observedAt": "2026-11-04T09:32:05Z"
+    },
+    {
+      "id": "ppi-mm-oct-2026",
+      "week": "next",
+      "indicator": "United States Producer Price Index m/m",
+      "currency": "USD",
+      "referencePeriod": "October 2026",
+      "scheduledAt": "2026-11-13T13:30:00Z",
+      "actual": null,
+      "forecast": 0.4,
+      "previous": 1.3,
+      "valueUnit": {
+        "kind": "percent",
+        "scale": 1,
+        "description": "Seasonally adjusted percent change from preceding month"
+      },
+      "displayValues": {
+        "actual": "",
+        "forecast": "0.4%",
+        "previous": "1.3%"
+      },
+      "metaQuotesUrl": "https://www.mql5.com/en/economic-calendar/united-states/producer-price-index-mm",
+      "primaryAgencyUrl": "https://www.bls.gov/schedule/2026/11_sched.htm",
+      "agencyConfirmedFields": [
+        "scheduledAt"
+      ],
+      "observedAt": "2026-11-04T09:32:05Z"
+    }
+  ],
+  "comparison": {
+    "status": "completed_local_poc_compared",
+    "artifact": "mt5-calendar-comparison-20261104.json",
+    "summary": {
+      "samplesMatched": 7,
+      "timeExact": 7,
+      "actualExactIncludingNulls": 7,
+      "forecastExactIncludingNulls": 7,
+      "previousDirectExact": 6,
+      "previousDisplayExactUsingRevision": 7
+    }
+  }
+}

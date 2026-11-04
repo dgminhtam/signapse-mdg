@@ -113,49 +113,16 @@ async def test_refresh_service_fetches_fixed_window_and_types() -> None:
     assert all(call[1] == datetime(2026, 7, 8, tzinfo=UTC) for call in provider.calls)
     assert all(call[2] == datetime(2026, 7, 17, tzinfo=UTC) for call in provider.calls)
     assert [event.calendar_type for event in repository.upserted] == list(CALENDAR_TYPES)
-    assert repository.claims == [
-        (
-            datetime(2026, 7, 8, tzinfo=UTC),
-            datetime(2026, 7, 17, tzinfo=UTC),
-            datetime(2026, 7, 10, 15, 45, tzinfo=UTC),
-        )
-    ]
+    assert repository.claims == []
     assert provider.detail_calls == []
 
 
-async def test_refresh_service_enriches_claimed_candidates_after_base_upsert() -> None:
-    actions: list[str] = []
-    candidate = EconomicCalendarEnrichmentCandidate("FOREX", "123")
-    detail = EconomicCalendarEnrichment(
-        calendar_type="FOREX",
-        external_event_id="123",
-        description="Description",
-        news_url=None,
-    )
-    provider = FakeProvider([detail], actions)
-    repository = FakeRepository([candidate], actions)
-    service = EconomicCalendarRefreshService(
-        provider,
-        repository,
-        clock=lambda: datetime(2026, 7, 11, 1, tzinfo=UTC),
-    )
-
-    await service.refresh()
-
-    assert actions == ["upsert", "claim", "fetch_details", "update"]
-    assert provider.detail_calls == [[candidate]]
-    assert repository.enrichments == [detail]
-
-
-async def test_refresh_service_keeps_claim_after_empty_detail_result() -> None:
-    candidate = EconomicCalendarEnrichmentCandidate("FOREX", "123")
+async def test_refresh_does_not_request_missing_mt5_descriptions() -> None:
     provider = FakeProvider()
-    repository = FakeRepository([candidate])
-    service = EconomicCalendarRefreshService(provider, repository)
-
-    await service.refresh()
-
-    assert provider.detail_calls == [[candidate]]
+    repository = FakeRepository([EconomicCalendarEnrichmentCandidate("FOREX", "old")])
+    await EconomicCalendarRefreshService(provider, repository).refresh()
+    assert provider.detail_calls == []
+    assert repository.claims == []
     assert repository.enrichments == []
 
 

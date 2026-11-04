@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -5,6 +7,18 @@ import app.main as main_module
 from app.core.config import Settings
 from app.core.cronjob import Cronjob
 from tests.unit.test_stream_lifespan import LifespanProvider
+
+
+class FakeCalendar:
+    def __init__(self, **kwargs):
+        self.started = False
+        self.closed = False
+
+    async def start(self):
+        self.started = True
+
+    async def close(self):
+        self.closed = True
 
 
 class FakeEngine:
@@ -51,10 +65,15 @@ def test_lifespan_registers_economic_calendar_cronjob_when_enabled(
 ) -> None:
     engine = FakeEngine()
     _stub_stream_providers(monkeypatch)
+    monkeypatch.setattr(main_module, "MT5CalendarProvider", FakeCalendar)
     monkeypatch.setattr(
         main_module,
         "get_settings",
-        lambda: Settings(database_url="postgresql+asyncpg://db", economic_calendar_poll_seconds=12),
+        lambda: Settings(
+            database_url="postgresql+asyncpg://db",
+            economic_calendar_poll_seconds=12,
+            mt5_token_file=Path("synthetic"),
+        ),
     )
     monkeypatch.setattr(main_module, "build_session_factory", lambda settings: (engine, object()))
     monkeypatch.setattr(main_module, "EconomicCalendarFetchCronjob", FakeEconomicCalendarCronjob)
@@ -68,6 +87,8 @@ def test_lifespan_registers_economic_calendar_cronjob_when_enabled(
         ]
 
     assert engine.disposed is True
+    assert application.state.mt5_calendar_provider.started
+    assert application.state.mt5_calendar_provider.closed
 
 
 def test_lifespan_skips_economic_calendar_cronjob_when_poll_seconds_zero(

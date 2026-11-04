@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     mt5_enabled: bool = False
     mt5_tcp_host: str = "0.0.0.0"
     mt5_tcp_port: int = Field(default=9001, ge=1, le=65535)
+    mt5_calendar_tcp_port: int = Field(default=9002, ge=1, le=65535)
+    mt5_calendar_timeout_seconds: float = Field(default=60, gt=0)
     mt5_token_file: Path | None = None
     mt5_request_timeout_seconds: float = Field(default=15, gt=0)
 

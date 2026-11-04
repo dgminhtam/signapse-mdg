@@ -15,7 +15,7 @@ RUN dpkg --add-architecture i386 \
 RUN useradd --create-home --uid 10001 --shell /bin/bash mt5 \
     && mkdir -p /opt/mt5
 COPY --chmod=755 entrypoint.sh /opt/mt5/entrypoint.sh
-COPY MarketDataService.mq5 /opt/mt5/mql5/MarketDataService.mq5
+COPY MarketDataService.mq5 CalendarService.mq5 /opt/mt5/mql5/
 USER mt5
 ENV HOME=/home/mt5 WINEPREFIX=/home/mt5/.wine WINEARCH=win64 DISPLAY=:99 WINEDEBUG=-all
 WORKDIR /home/mt5
