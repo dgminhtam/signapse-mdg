@@ -33,7 +33,7 @@ async def main(output: Path, base_url: str = "http://127.0.0.1:18081") -> None:
             await client.get("/v1/symbols", params={"includeProviderMappings": "true"})
         ).json()
         names = {item["symbol"] for item in registry["symbols"]}
-        assert names == set(MAPPINGS), names
+        assert names == set(MAPPINGS) | {"BTC/USDT", "ETH/USDT"}, names
         result["registryCount"] = len(names)
         quote = (
             await client.get("/v1/quotes", params={"symbols": "XAU/USD,EUR/USD,NATGAS"})

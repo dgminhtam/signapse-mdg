@@ -1,5 +1,10 @@
 # Asset Coverage
 
+Crypto cutover (2026-11-05): the only crypto mappings are `BTC/USDT -> BINANCE_SPOT:BTCUSDT`
+and `ETH/USDT -> BINANCE_SPOT:ETHUSDT`, 24/7 UTC, price display decimals 2.
+USD alternatives are retired; earlier provider experiment descriptions are historical.
+See [cutover runbook](crypto-usdt-cutover.md).
+
 - Trạng thái tài liệu: `Current Coverage` cho nhóm "Đang hỗ trợ"; `Planned Coverage` cho nhóm "Chưa hỗ trợ"
 - Độc giả chính: Product, QA, business, operations, stakeholder
 
@@ -42,8 +47,8 @@ Signapse đang chia asset theo các nhóm sản phẩm sau:
 | US Stock | Tesla | `TSLA` | 2 |
 | US Stock | NVIDIA | `NVDA` | 2 |
 | US Stock | Microsoft | `MSFT` | 2 |
-| Crypto | Bitcoin / US Dollar | `BTC/USD` | 2 |
-| Crypto | Ethereum / US Dollar | `ETH/USD` | 2 |
+| Crypto | Bitcoin / Tether | `BTC/USDT` | 2 |
+| Crypto | Ethereum / Tether | `ETH/USDT` | 2 |
 | ETF | SPDR S&P 500 ETF Trust | `SPY` | 2 |
 | ETF | Invesco QQQ Trust | `QQQ` | 2 |
 
@@ -63,11 +68,7 @@ Các asset dưới đây nằm trong phạm vi mong muốn nhưng chưa được
 - MDG dùng `priceDisplayDecimals` để round `ROUND_HALF_UP` và pad giá public tại HTTP/WebSocket
   serialization boundary. Provider, domain, cache, candle aggregation và database vẫn giữ raw
   `Decimal`; candle volume không dùng price precision.
-- Default provider hiện tại: Twelve Data cho `AAPL`, `BTC/USD`, `EUR/USD`, `QQQ`, `XAU/USD`;
-  Binance Spot cho `ETH/USD`; YFINANCE cho 18 asset còn lại. Quote stream và REST candle của một
-  asset đều dùng cùng default provider và không fallback.
-- Năm mapping YFINANCE bổ sung nhưng không active là `AAPL`, `BTC-USD`, `ETH-USD`, `EURUSD=X` và
-  `QQQ`. `XAU/USD` chỉ dùng Twelve Data; không seed `GC=F` hoặc `XAUUSD=X`.
+- Crypto hiện dùng Binance Spot: `BTC/USDT -> BTCUSDT`, `ETH/USDT -> ETHUSDT`, không có USD provider override. Default của các nhóm khác giữ nguyên.
 - Các mapping hàng hóa qua `YFINANCE` là futures hoặc rolling-futures proxy; riêng `XAG/USD` dùng provider symbol `SI=F`, không phải spot silver trực tiếp.
 - Quote YFINANCE dùng `regularMarketPrice`; `receivedAt` là thời điểm gateway nhận snapshot, không phải provider trade time. Candle YFINANCE dùng yfinance `download`; missing/null volume được normalize thành decimal zero vì candle contract yêu cầu volume. Quote WebSocket dùng một `AsyncWebSocket` lazy dùng chung, chỉ phát quote và giữ symbol đã subscribe nhưng chưa có tick ở trạng thái `CONNECTING`, không fallback. Đơn vị giá futures được giữ theo Yahoo Finance vì public contract chưa có trường unit.
 - Một asset chỉ nên được coi là "đang hỗ trợ" khi Signapse có thể nhận diện asset đó trong catalog, cho phép chọn vào watchlist và dùng nhất quán trong các surface phân tích liên quan.

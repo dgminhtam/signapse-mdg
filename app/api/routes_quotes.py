@@ -166,7 +166,7 @@ def get_quote_service(
                 "is required; the configured maximum counts distinct symbols after normalization.",
                 {"type": "string", "minLength": 1},
                 required=True,
-                example="BTC/USD,ETH/USD",
+                example="BTC/USDT,ETH/USDT",
             ),
             PROVIDER_PARAMETER,
         ]
@@ -179,7 +179,7 @@ def get_quote_service(
                     "example": {
                         "quotes": [
                             {
-                                "symbol": "BTC/USD",
+                                "symbol": "BTC/USDT",
                                 "price": "104250.12",
                                 "receivedAt": "2026-06-19T10:30:12Z",
                             }

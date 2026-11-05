@@ -12,6 +12,9 @@ from app.domain.errors import DatabaseUnavailableError
 
 pytestmark = pytest.mark.integration
 
+# Exercise the historical registry and its migrations at their original boundary.
+MIGRATION_TARGET = "20260727_0020"
+
 
 async def _switch_btc_to_yfinance(database_engine: AsyncEngine) -> None:
     async with database_engine.begin() as connection:
@@ -220,7 +223,7 @@ async def test_contract_downgrade_reconstructs_current_active_mapping(
         ).one()
 
     assert legacy == ("YFINANCE", "BTC-USD")
-    await to_thread(command.upgrade, config, "head")
+    await to_thread(command.upgrade, config, MIGRATION_TARGET)
 
 
 async def test_contract_upgrade_aborts_before_drop_when_mapping_is_missing(
@@ -242,7 +245,7 @@ async def test_contract_upgrade_aborts_before_drop_when_mapping_is_missing(
         )
 
     with pytest.raises(RuntimeError, match="exactly one active provider mapping"):
-        await to_thread(command.upgrade, config, "head")
+        await to_thread(command.upgrade, config, MIGRATION_TARGET)
 
     async with database_engine.connect() as connection:
         columns = await connection.run_sync(
@@ -254,4 +257,4 @@ async def test_contract_upgrade_aborts_before_drop_when_mapping_is_missing(
     assert {"provider", "provider_symbol"} <= columns
 
     await _activate_btc_twelvedata(database_engine)
-    await to_thread(command.upgrade, config, "head")
+    await to_thread(command.upgrade, config, MIGRATION_TARGET)

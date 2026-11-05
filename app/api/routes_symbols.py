@@ -86,22 +86,17 @@ def get_symbol_service(
                     "example": {
                         "symbols": [
                             {
-                                "symbol": "BTC/USD",
+                                "symbol": "BTC/USDT",
                                 "assetClass": "CRYPTO",
-                                "provider": "TWELVE_DATA",
-                                "providerSymbol": "BTC/USD",
+                                "provider": "BINANCE_SPOT",
+                                "providerSymbol": "BTCUSDT",
                                 "enabled": True,
                                 "priceDisplayDecimals": 2,
                                 "providerMappings": [
                                     {
-                                        "provider": "TWELVE_DATA",
-                                        "providerSymbol": "BTC/USD",
+                                        "provider": "BINANCE_SPOT",
+                                        "providerSymbol": "BTCUSDT",
                                         "isDefault": True,
-                                    },
-                                    {
-                                        "provider": "YFINANCE",
-                                        "providerSymbol": "BTC-USD",
-                                        "isDefault": False,
                                     },
                                 ],
                             }
