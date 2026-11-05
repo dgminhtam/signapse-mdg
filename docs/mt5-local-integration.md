@@ -1,5 +1,10 @@
 # MT5 → MDG: tích hợp và kiểm thử local
 
+Crypto mapping update 2026-11-05: USD crypto references in this earlier verification/integration
+record are historical. Current crypto uses Binance Spot `BTC/USDT -> BTCUSDT` and
+`ETH/USDT -> ETHUSDT`; MT5 is not a provider override for either pair.
+See [current cutover](crypto-usdt-cutover.md).
+
 Ngày 2026-11-02 · nhánh `codex/mt5-tcp-smoke`, tách từ `dev` tại
 `a85c2be2b43e52ff9f3bfaaacb121d2004544706`. Đây là snapshot kiểm chứng local
 trước PR; việc chuyển runtime lên dev theo [runbook riêng](mt5-dev-deployment.md).

@@ -12,7 +12,7 @@ from app.db.session import _build_database
 
 
 @pytest.fixture
-def migrated_database_url() -> Iterator[str]:
+def migrated_database_url(request: pytest.FixtureRequest) -> Iterator[str]:
     database_url = os.getenv("TEST_DATABASE_URL")
     if not database_url:
         pytest.skip("TEST_DATABASE_URL is not configured; PostgreSQL integration tests skipped.")
@@ -23,7 +23,7 @@ def migrated_database_url() -> Iterator[str]:
 
     config = Config("alembic.ini")
     command.downgrade(config, "base")
-    command.upgrade(config, "head")
+    command.upgrade(config, getattr(request.module, "MIGRATION_TARGET", "head"))
     yield database_url
     command.downgrade(config, "base")
 

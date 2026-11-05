@@ -154,7 +154,7 @@ async def test_every_registry_mapping_passes_market_data_surface_smoke_matrix(
     symbols = await _registry_symbols(database_engine)
     cases = _mapping_cases(symbols)
     assert len(symbols) == 24
-    assert len(cases) == 29
+    assert len(cases) == 27
 
     symbol_repository = RegistryRepository(symbols)
     quote_provider = MatrixQuoteProvider()

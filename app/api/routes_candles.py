@@ -221,7 +221,7 @@ def get_candle_request_clock() -> Callable[[], datetime]:
             "content": {
                 "application/json": {
                     "example": {
-                        "symbol": "BTC/USD",
+                        "symbol": "BTC/USDT",
                         "timeframe": "1h",
                         "from": "2026-06-19T00:00:00Z",
                         "to": "2026-06-19T01:00:00Z",

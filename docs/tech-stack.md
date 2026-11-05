@@ -1,5 +1,10 @@
 # Signapse Market Data Gateway Crypto MVP - Tech Stack Research
 
+Crypto mapping update 2026-11-05: USD crypto references in this earlier verification/integration
+record are historical. Current crypto uses Binance Spot `BTC/USDT -> BTCUSDT` and
+`ETH/USDT -> ETHUSDT`; MT5 is not a provider override for either pair.
+See [current cutover](crypto-usdt-cutover.md).
+
 Date: 2026-06-19
 
 This document records the recommended technology stack for the crypto MVP described in `docs/spec.md` and refined in `docs/system-design.md`.
