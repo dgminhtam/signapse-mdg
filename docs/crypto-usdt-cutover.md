@@ -25,5 +25,13 @@ an unrelated symbol still works. Restart/reseed must preserve USDT routing.
 
 MT5 seed/verification retains the two Binance crypto entries and configures
 only the twenty non-crypto MT5 mappings. No automatic fallback is introduced.
+The terminal's persistent `MQL5/Files/MarketDataSymbols.txt` must also contain
+exactly the provider symbols from `scripts.seed_mt5_local.MAPPINGS`. Back up
+that file, remove only `BTCUSD` and `ETHUSD`, preserve ownership/permissions
+and restart the terminal under the deployment lock. The Service reads the
+file at startup; replacing its image does not replace this volume-backed
+configuration. An outdated 22-symbol list fails the gateway's exact-set
+handshake and disconnects all MT5 instruments. Confirm a fresh XAU/USD quote
+after restart; do not relax handshake validation.
 Keep dated evidence and applied migrations as history; do not rewrite them
 to claim that an earlier run verified USDT.
