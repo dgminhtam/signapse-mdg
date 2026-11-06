@@ -57,7 +57,7 @@ def test_configures_credentials_both_services_and_private_files(terminal, env):
     assert "ReceiverPort=9001" in services and "ReceiverPort=9002" in services
     files = terminal / "MQL5" / "Files"
     assert (files / "MarketDataToken.txt").read_text() == env["MT5_TOKEN"]
-    assert len((files / "MarketDataSymbols.txt").read_text().split(",")) == 22
+    assert len((files / "MarketDataSymbols.txt").read_text().split(",")) == 20
     for path in (common_path, terminal / "Config" / "services.ini", *files.iterdir()):
         if __import__("os").name != "nt":
             assert stat.S_IMODE(path.stat().st_mode) == 0o600

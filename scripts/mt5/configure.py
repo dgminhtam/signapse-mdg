@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 DEFAULT_SYMBOLS = (
-    "EURUSD,GBPUSD,USDJPY,AUDUSD,XAUUSD,XAGUSD,AAPL,TSLA,NVIDIA,MSFT,BTCUSD,ETHUSD,"
+    "EURUSD,GBPUSD,USDJPY,AUDUSD,XAUUSD,XAGUSD,AAPL,TSLA,NVIDIA,MSFT,"
     "SPY,QQQ,USOUSD,UKOUSD,NG-Cr,Coffee-Cr,Sugar-Cr,Wheat-Cr,SP500.r,NAS100.r"
 )
 SERVICE_NAMES = ("MarketDataService", "CalendarService")
@@ -53,7 +53,7 @@ def configure(terminal_dir: Path, env: Mapping[str, str]) -> None:
     if not re.fullmatch(r"[!-~]{32,256}", token):
         raise ValueError("MT5_TOKEN requires 32-256 printable non-whitespace ASCII characters")
     if len(set(symbols)) != len(symbols) or set(symbols) != set(DEFAULT_SYMBOLS.split(",")):
-        raise ValueError("MT5_SYMBOLS must match all 22 gateway broker mappings exactly")
+        raise ValueError("MT5_SYMBOLS must match all 20 gateway broker mappings exactly")
 
     common_path = terminal_dir / "Config" / "common.ini"
     common = configparser.ConfigParser(interpolation=None, strict=False)
