@@ -1,0 +1,14 @@
+{
+  "accountFree": true,
+  "leanRuntime": true,
+  "services": {
+    "MarketDataService": {
+      "bytes": 21874,
+      "sha256": "915e2f6c9b663d7e2365fdf55cf7d68de1331f616376faf2ec1a9ef36adf75b7"
+    },
+    "CalendarService": {
+      "bytes": 25396,
+      "sha256": "7ef59df9100500be269f718af7166987bb8d3e056446e98d17af57189f3e274c"
+    }
+  }
+}

@@ -305,6 +305,9 @@ response is self-contained and uses the process-local five-second forming-cache 
 Local MT5 transport experiment: [TCP smoke test and results](docs/mt5-tcp-smoke.md).
 Direct MT5 integration: [local runbook and verification](docs/mt5-local-integration.md).
 Native economic calendar: [local integration and verification](docs/mt5-calendar-integration.md).
+Fresh-machine MT5/MDG Compose bundle: [configuration and startup](docs/mt5-compose.md).
+Local MT5 CPU/RAM investigation: [measurements and remaining limits](docs/mt5-runtime-performance.md).
+Dev MT5 rollout: [2026-11-06 verification and rollback](docs/mt5-dev-cpu-20261106.md).
 
 CI/CD dev is defined in [the dev workflow](.github/workflows/dev.yml). Pull requests to `dev`
 run checks; pushes to `dev` publish and deploy only after checks pass. Server setup, secrets,

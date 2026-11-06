@@ -53,6 +53,7 @@ jobs:
         run: |
           docker build --build-arg BUILD_REVISION="$GITHUB_SHA" -t "$MT5_CI_IMAGE" scripts/mt5
           docker run --rm --entrypoint bash "$MT5_CI_IMAGE" -n /opt/mt5/entrypoint.sh
+          docker run --rm -i --entrypoint python3 "$MT5_CI_IMAGE" - < scripts/mt5/verify_image.py
       - name: Check the runtime image with an isolated database
         run: |
           docker build --build-arg BUILD_REVISION="$GITHUB_SHA" -t "$CI_IMAGE" .

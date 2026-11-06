@@ -1,0 +1,14 @@
+{
+  "removedIncompleteBackups": [
+    {
+      "name": "terminal-home.incomplete.tar.gz",
+      "bytes": 2005663744
+    },
+    {
+      "name": "terminal-home-second.incomplete.tar.gz",
+      "bytes": 12825395200
+    }
+  ],
+  "validBackupRetained": "/opt/apps/signapse/mdg/backups/mt5-cpu-20261106-7e2322b850ae/terminal-config-services.tar.gz",
+  "originalVolumeRetained": true
+}

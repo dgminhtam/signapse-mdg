@@ -1,0 +1,105 @@
+{
+  "startedAt": "2026-11-06T06:57:33.493850+00:00",
+  "release": "mt5-cpu-20261106-7e2322b850ae",
+  "terminalOnly": true,
+  "before": {
+    "id": "8a833d29bd9d483a6851268fd648c39173443e95b37eb2cf42e651ffa845a515",
+    "imageId": "sha256:68097d23f60408f35f343572ad391a05f9296029211e1c64d759fddbd7fbe8dc",
+    "imageRef": "dgminhtam/signapse-mdg@sha256:68097d23f60408f35f343572ad391a05f9296029211e1c64d759fddbd7fbe8dc",
+    "startedAt": "2026-11-06T06:55:32.630856208Z",
+    "status": "running",
+    "oomKilled": false,
+    "restartCount": 0,
+    "memoryLimitBytes": 2147483648,
+    "nanoCPUs": 1000000000,
+    "ports": {
+      "6080/tcp": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "6085"
+        }
+      ]
+    },
+    "volumeNames": [
+      "mdg-mt5-terminal-home"
+    ]
+  },
+  "gatewayBefore": {
+    "id": "aa6b08aca9eced659e33675e34e17acec79ad7240556cd54606db0d5d2f826bb",
+    "imageId": "sha256:44b0a4411a1d811707519c22759374bd4568fce3bf863b76230fc2aad888be85",
+    "imageRef": "dgminhtam/signapse-mdg@sha256:44b0a4411a1d811707519c22759374bd4568fce3bf863b76230fc2aad888be85",
+    "startedAt": "2026-11-05T05:21:51.841599914Z",
+    "status": "running",
+    "oomKilled": false,
+    "restartCount": 0,
+    "memoryLimitBytes": 0,
+    "nanoCPUs": 0,
+    "ports": {
+      "8000/tcp": [
+        {
+          "HostIp": "100.113.56.38",
+          "HostPort": "8000"
+        },
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "8000"
+        }
+      ]
+    },
+    "volumeNames": []
+  },
+  "previousComposeFiles": [
+    "/opt/apps/signapse/mdg/releases/9ca69a5b696d923453507c09478ddaef024bb75f/docker-compose.yml",
+    "/opt/apps/signapse/mdg/docker-compose.override.yml",
+    "/opt/apps/signapse/mdg/releases/9ca69a5b696d923453507c09478ddaef024bb75f/mt5-compose.yml"
+  ],
+  "sourceManifest": {
+    "imageId": "sha256:7e2322b850aeada9495633b490dc70233f00f0bdef986d224c7c9f681fa8c6cf",
+    "sizeBytes": 6874581232,
+    "revisionLabel": "5986885-mt5-cpu-local",
+    "baseRevision": "5986885f70e7c3c1cda2dc72b60c6ded1e5aa0b9",
+    "sourceWorkingTree": true,
+    "sourceHashes": {
+      "scripts/mt5/calendar-poc-entrypoint.sh": "be9063ef040897c2d341436ce6177a59d82ab1997ffa552b73fee2b759026767",
+      "scripts/mt5/CalendarService.mq5": "92e30f28e1e790c186a7b2b748fc87dff70cff77b717253b274e92b7a29fcee8",
+      "scripts/mt5/compile.sh": "a848b2161cc80b1855504259506770fe55bf8ef687b643134c07fb5a14473c8e",
+      "scripts/mt5/configure.py": "297f21a7583982c992ab22aca9bd915c4a17aacff4a4f23ba54026a78902ac82",
+      "scripts/mt5/Dockerfile": "5f94bbdacf0ed69413368ef20dd6d64637e82f6ba6b69983e158329a6b6a550f",
+      "scripts/mt5/entrypoint.sh": "5927df0ac0f25027dcd6030aa06f7c5aebd1f28ddd96ea1085c1199bee7443e4",
+      "scripts/mt5/factory-common.ini": "bdac6220d7962e563938a0adc4d58c91147d51d35eab4311e4f0f102d676a87c",
+      "scripts/mt5/factory.sh": "20f21e6830eb55064a037e7f81fa5d1b358da3620e3d483f18c0db7b0c57ec42",
+      "scripts/mt5/FileSharingCheck.mq5": "9047cf2ae2815341f6d8d04d1f729fd7634f7b27dd28ecb8c1ab54af212e1f87",
+      "scripts/mt5/install.sh": "4dc262d65a3a6b851b07bd8b6dd9b81833a4739f9bad657ddd8291cb66ed38a8",
+      "scripts/mt5/MarketDataService.mq5": "5e557e77441b28d1b31e895ef5d74b358a2c79fdc3f8b93f67c2165d45b00b05",
+      "scripts/mt5/prepare_factory.py": "6f8995ed58cfebdf17fd8032e6b43be2e9c3c32042bc082edd8077ec72a2cd00",
+      "scripts/mt5/profile_runtime.py": "b4752fca029033731afade7cdda46d65b647cf72a85ff1fa90455d4e9f36bddc",
+      "scripts/mt5/runtime_ui.py": "c9501f255920779b03446b913fe3c2e5f500b2923279521d3680b97c53508371",
+      "scripts/mt5/TcpSmoke.mq5": "34ec981a442fa405d589199b609b571db6b103d83197ec050409d4df0fb2f8d9",
+      "scripts/mt5/verify_image.py": "3037883f45ed30ee10b0fe531a2594f3bb02c53988fb7dbc749566f37bae01b3",
+      "compose.mt5.yaml": "73bd9cf427a02532541ac5494528d0530ca804e175640c6df2b0d53e8e66f949",
+      ".env.mt5.example": "e93f11a133a9830a17244ba5ae7b09d05b57aa68d2bbe7a47075dfa4257cb178",
+      "deploy/mt5-compose.yml": "c726d7520d3b8d54cdd923af73936899139f63f655128bda6ea661bbdb18a160",
+      "docs/mt5-runtime-performance.md": "fba6795d831db1a322d0205c0e0baa638fea887ae230117381887f875ac3fbaf",
+      "docs/verification/mt5-cpu-runtime-20261105.json": "a757d4f655d51d4265ec9e1b62e9681e060a855f176d7bc14dfc89bd964118be",
+      "tests/unit/test_mt5_runtime_ui.py": "1dbddcd941cf469156211bc95eb4022decebefe5b013a502bb515edd6f65324c",
+      "tests/unit/test_mt5_factory.py": "894b4a21ff194a601872a00d30179981b83ecab71cc3fde3f7ef193894d16427",
+      "tests/unit/test_mt5_bootstrap_config.py": "e799013351b7d90cf695121b0b7d63882a94c037374423faaa0fdd4b189f1c95"
+    },
+    "archives": {
+      "mt5-image.tar.gz": {
+        "bytes": 1849416874,
+        "sha256": "d50395767b1c2e2e249b07b1be5ccf510eb3816b491f83c51165d5cec0831cd8"
+      },
+      "source-snapshot.tar.gz": {
+        "bytes": 30970,
+        "sha256": "48e7621e11d24fe5bb2e7bd1af97341b33a280eb8507c19b2ac3f9b5bbc3da8b"
+      }
+    }
+  },
+  "oldWindowCloseRequested": true,
+  "passed": false,
+  "errorType": "CalledProcessError",
+  "rollbackStarted": true,
+  "operatorAbortedFullBackup": true,
+  "reason": "26.8GB volume, 21GB tick cache; only config/services and Wine registry need backup for this terminal-only change"
+}
