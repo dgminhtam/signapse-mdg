@@ -1,5 +1,10 @@
 # Signapse Market Data Gateway Crypto MVP
 
+Crypto cutover (2026-11-05): the only crypto mappings are `BTC/USDT -> BINANCE_SPOT:BTCUSDT`
+and `ETH/USDT -> BINANCE_SPOT:ETHUSDT`, 24/7 UTC, price display decimals 2.
+USD alternatives are retired; earlier provider experiment descriptions are historical.
+See [cutover runbook](crypto-usdt-cutover.md).
+
 Local MT5 behavior and its verified scope are recorded in the
 [MT5 integration runbook](mt5-local-integration.md). Public HTTP response shapes
 and the quote-only WebSocket contract remain unchanged. MT5 is disabled by
@@ -41,8 +46,8 @@ Registry hiện chứa các asset được hỗ trợ hoặc đã được seed 
 
 | Canonical symbol | Asset class | Provider | Provider symbol | Status |
 | --- | --- | --- | --- | --- |
-| `BTC/USD` | `CRYPTO` | `TWELVE_DATA` | `BTC/USD` | Supported |
-| `ETH/USD` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSD` | Supported |
+| `BTC/USDT` | `CRYPTO` | `BINANCE_SPOT` | `BTCUSDT` | Supported |
+| `ETH/USDT` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSDT` | Supported |
 | `EUR/USD` | `FOREX` | `TWELVE_DATA` | `EUR/USD` | Supported |
 | `GBP/USD` | `FOREX` | `YFINANCE` | `GBPUSD=X` | Supported |
 | `USD/JPY` | `FOREX` | `YFINANCE` | `JPY=X` | Supported |
@@ -72,9 +77,8 @@ accept a stream symbol without emitting ticks; such interests remain `CONNECTING
 arrives. Commodity mappings are futures or rolling-futures proxies; for example, `XAG/USD` maps to
 `SI=F` rather than spot silver.
 
-Five additional Supported Provider mappings are available for request-wide Provider Override:
-`AAPL -> YFINANCE:AAPL`, `BTC/USD -> YFINANCE:BTC-USD`,
-`ETH/USD -> YFINANCE:ETH-USD`, `EUR/USD -> YFINANCE:EURUSD=X`, and
+Three additional Supported Provider mappings are available for request-wide Provider Override:
+`AAPL -> YFINANCE:AAPL`, `EUR/USD -> YFINANCE:EURUSD=X`, and
 `QQQ -> YFINANCE:QQQ`. `XAU/USD` is Twelve Data-only; `GC=F` and `XAUUSD=X` are not approved
 alternatives. The active mapping defines the Default Provider. Each request or subscription resolves
 one immutable Provider Selection, using the default when no override is supplied. Mapping existence
@@ -83,7 +87,7 @@ streaming; temporary provider failures do not change support or trigger automati
 
 MVP không hỗ trợ:
 
-- crypto ngoài `BTC/USD` và `ETH/USD`
+- crypto ngoài `BTC/USDT` và `ETH/USDT`
 - synthetic basket price hoặc consolidated global price
 - exchange aggregation across nhiều sàn
 - trading, order book depth, hoặc execution
@@ -99,7 +103,7 @@ Gateway phải được thiết kế như một service contract độc lập. C
 
 ### Canonical symbol stable, provider symbol replaceable
 
-Client dùng canonical symbol như `BTC/USD`. Provider adapter chịu trách nhiệm map sang provider symbol như `BTC/USD` hoặc `BTCUSD`.
+Client dùng canonical symbol như `BTC/USDT`. Provider adapter maps it to Binance Spot `BTCUSDT`.
 
 Nếu sau này provider đổi từ Binance sang nguồn khác, contract bên ngoài không nên đổi.
 
@@ -215,27 +219,25 @@ Response:
 {
   "symbols": [
     {
-      "symbol": "BTC/USD",
+      "symbol": "BTC/USDT",
       "assetClass": "CRYPTO",
-      "provider": "TWELVE_DATA",
-      "providerSymbol": "BTC/USD",
+      "provider": "BINANCE_SPOT",
+      "providerSymbol": "BTCUSDT",
       "enabled": true,
       "priceDisplayDecimals": 2,
       "providerMappings": [
-        {"provider": "TWELVE_DATA", "providerSymbol": "BTC/USD", "isDefault": true},
-        {"provider": "YFINANCE", "providerSymbol": "BTC-USD", "isDefault": false}
+        {"provider": "BINANCE_SPOT", "providerSymbol": "BTCUSDT", "isDefault": true}
       ]
     },
     {
-      "symbol": "ETH/USD",
+      "symbol": "ETH/USDT",
       "assetClass": "CRYPTO",
       "provider": "BINANCE_SPOT",
-      "providerSymbol": "ETHUSD",
+      "providerSymbol": "ETHUSDT",
       "enabled": true,
       "priceDisplayDecimals": 2,
       "providerMappings": [
-        {"provider": "BINANCE_SPOT", "providerSymbol": "ETHUSD", "isDefault": true},
-        {"provider": "YFINANCE", "providerSymbol": "ETH-USD", "isDefault": false}
+        {"provider": "BINANCE_SPOT", "providerSymbol": "ETHUSDT", "isDefault": true}
       ]
     }
   ]
@@ -257,7 +259,7 @@ from 0 through 18 inclusive.
 ### Get latest quotes
 
 ```http
-GET /v1/quotes?symbols=BTC/USD,ETH/USD
+GET /v1/quotes?symbols=BTC/USDT,ETH/USDT
 ```
 
 Response:
@@ -266,7 +268,7 @@ Response:
 {
   "quotes": [
     {
-      "symbol": "BTC/USD",
+      "symbol": "BTC/USDT",
       "price": "104250.12",
       "receivedAt": "2026-06-19T10:30:01Z"
     }
@@ -292,7 +294,7 @@ Semantics:
 - Duplicate symbols are collapsed in first-seen order; each of the `quotes` and `errors` arrays
   preserves that request order, including when every symbol fails.
 - Request-level errors are reserved for malformed input such as missing or empty `symbols`.
-- Twelve Data cache misses for `BTC/USD`, `ETH/USD`, `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`,
+- Twelve Data cache misses for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`,
   `XAU/USD`, `AAPL`, `TSLA`, `NVDA`, `MSFT`, `WTI`, `SPY`, and `QQQ` are grouped by their
   persisted `TWELVE_DATA` mapping and fetched
   through the Twelve Data SDK.
@@ -308,14 +310,14 @@ Semantics:
 ### Get candles
 
 ```http
-GET /v1/candles?symbol=BTC/USD&timeframe=1m&from=2026-06-19T00:00:00Z&to=2026-06-19T01:00:00Z
+GET /v1/candles?symbol=BTC/USDT&timeframe=1m&from=2026-06-19T00:00:00Z&to=2026-06-19T01:00:00Z
 ```
 
 Response:
 
 ```json
 {
-  "symbol": "BTC/USD",
+  "symbol": "BTC/USDT",
   "timeframe": "1m",
   "from": "2026-06-19T00:00:00Z",
   "to": "2026-06-19T01:00:00Z",
@@ -445,14 +447,14 @@ Semantics:
 ### Get historical price
 
 ```http
-GET /v1/historical-price?symbol=BTC/USD&at=2026-06-19T10:30:12Z
+GET /v1/historical-price?symbol=BTC/USDT&at=2026-06-19T10:30:12Z
 ```
 
 Response:
 
 ```json
 {
-  "symbol": "BTC/USD",
+  "symbol": "BTC/USDT",
   "price": "104250.12",
   "pricedAt": "2026-06-19T10:30:00Z",
   "resolution": "1m"
@@ -555,9 +557,9 @@ Semantics:
 ### Subscribe
 
 ```text
-WS /v1/stream?symbols=BTC/USD,ETH/USD
-WS /v1/stream?symbols=BTC/USD,EUR/USD&provider=TWELVE_DATA
-WS /v1/stream?symbols=BTC/USD,EUR/USD,XAG/USD
+WS /v1/stream?symbols=BTC/USDT,ETH/USDT
+WS /v1/stream?symbols=AAPL,EUR/USD&provider=TWELVE_DATA
+WS /v1/stream?symbols=BTC/USDT,EUR/USD,XAG/USD
 ```
 
 The quote stream requires `symbols` and accepts at most one optional, case-sensitive, request-wide
@@ -582,7 +584,7 @@ initial quote snapshot; clients needing an initial value use `GET /v1/quotes`.
 ```json
 {
   "type": "quote",
-  "symbol": "BTC/USD",
+  "symbol": "BTC/USDT",
   "price": "104250.12",
   "receivedAt": "2026-06-19T10:30:01Z"
 }
@@ -594,7 +596,7 @@ initial quote snapshot; clients needing an initial value use `GET /v1/quotes`.
 {
   "type": "status",
   "state": "SUBSCRIBED",
-  "symbols": ["BTC/USD", "ETH/USD"],
+  "symbols": ["BTC/USDT", "ETH/USDT"],
   "channels": ["quote"],
   "observedAt": "2026-06-19T10:30:01Z"
 }
@@ -619,7 +621,7 @@ or candle persistence handoff.
 ### Candle snapshots are REST-only
 
 ```http
-GET /v1/candles?symbol=BTC/USD&timeframe=1m&limit=1
+GET /v1/candles?symbol=BTC/USDT&timeframe=1m&limit=1
 ```
 
 The candle response shape is unchanged. `limit=1` returns the latest eligible forming candle with
@@ -761,8 +763,8 @@ Notes:
   24 active defaults and five inactive alternatives before resuming provider-selection writes.
 - Switching provider starts a new provider-owned candle history. Existing candle rows retain their
   recorded provider identity and are never relabeled.
-- `symbol` stores canonical symbol such as `BTC/USD`.
-- `symbol_provider_mappings.provider_symbol` stores an upstream identifier such as `BTC/USD`.
+- `symbol` stores canonical symbol such as `BTC/USDT`.
+- `symbol_provider_mappings.provider_symbol` stores an upstream identifier such as `BTC/USDT`.
 - Decimal values should use database decimal/numeric types, not float.
 
 ### Economic calendar persistence
@@ -813,8 +815,8 @@ Responsibilities:
 Binance stream names should be lowercase:
 
 ```text
-btcusd@ticker
-ethusd@ticker
+btcusdt@ticker
+ethusdt@ticker
 ```
 
 Gateway must handle Binance WebSocket reconnect and resubscribe behavior. Binance WebSocket connections are not a durable queue.
@@ -963,8 +965,8 @@ Authentication and per-client quota are out of scope for the first design. If ga
 
 ## Resolved MVP Decisions
 
-- Canonical symbols remain `BTC/USD` and `ETH/USD`.
-- `BTC/USD` and `ETH/USD` provider symbols are `BTC/USD` and `ETH/USD` for Twelve Data.
+- Canonical symbols remain `BTC/USDT` and `ETH/USDT`.
+- Their Binance Spot provider symbols are `BTCUSDT` and `ETHUSDT`.
 - The initial consumer is one internal Java backend service.
 - The gateway remains internal-only for the MVP, but design should allow future public exposure.
 - Multi-symbol quote responses return per-symbol errors instead of failing the full request.

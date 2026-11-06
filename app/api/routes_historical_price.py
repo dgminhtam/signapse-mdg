@@ -78,7 +78,7 @@ def get_historical_price_service(
             "content": {
                 "application/json": {
                     "example": {
-                        "symbol": "BTC/USD",
+                        "symbol": "BTC/USDT",
                         "price": "104250.12",
                         "pricedAt": "2026-06-19T10:29:00Z",
                         "resolution": "1m",

@@ -1,5 +1,10 @@
 # Provider Support Verification
 
+Crypto mapping update 2026-11-05: USD crypto references in this earlier verification/integration
+record are historical. Current crypto uses Binance Spot `BTC/USDT -> BTCUSDT` and
+`ETH/USDT -> ETHUSDT`; MT5 is not a provider override for either pair.
+See [current cutover](crypto-usdt-cutover.md).
+
 Ngày verify: `2026-07-27`
 
 Phạm vi: 24 asset trong catalog, chỉ kiểm tra provider đang được đặt làm mặc định. Không kiểm tra

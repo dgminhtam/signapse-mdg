@@ -1,5 +1,10 @@
 # MT5 runtime on dev
 
+Crypto cutover 2026-11-05 supersedes the two USD crypto mappings in the
+original rollout below. MT5 now serves twenty non-crypto symbols; BTC/USDT
+and ETH/USDT use Binance Spot. Update the persistent terminal symbol file
+as well as the registry, following [the cutover runbook](crypto-usdt-cutover.md).
+
 The user authorized local → PR into `dev` → merge → server cutover on 2026-11-02.
 The 22 accepted assets replace dev's default provider mappings; CORN and DJI remain
 disabled. Existing mappings and provider-keyed candle history are retained, not deleted.

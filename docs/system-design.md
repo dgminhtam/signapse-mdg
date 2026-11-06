@@ -1,5 +1,10 @@
 # Signapse Market Data Gateway Crypto MVP - System Design
 
+Crypto cutover (2026-11-05): the only crypto mappings are `BTC/USDT -> BINANCE_SPOT:BTCUSDT`
+and `ETH/USDT -> BINANCE_SPOT:ETHUSDT`, 24/7 UTC, price display decimals 2.
+USD alternatives are retired; earlier provider experiment descriptions are historical.
+See [cutover runbook](crypto-usdt-cutover.md).
+
 ## Local MT5 integration
 
 The accepted local architecture adds `MT5_VANTAGE_DEMO` as a disabled-by-default
@@ -37,8 +42,8 @@ Market Data Gateway is an independent service that exposes normalized market dat
 
 | Canonical symbol | Asset class | Provider | Provider symbol |
 | --- | --- | --- | --- |
-| `BTC/USD` | `CRYPTO` | `TWELVE_DATA` | `BTC/USD` |
-| `ETH/USD` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSD` |
+| `BTC/USDT` | `CRYPTO` | `BINANCE_SPOT` | `BTCUSDT` |
+| `ETH/USDT` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSDT` |
 
 The gateway contract is provider-agnostic for clients. Provider-specific details stay inside the registry and adapter layer.
 
@@ -82,8 +87,8 @@ Commodity symbols are futures or rolling-futures proxies, including `XAG/USD -> 
 event coverage is not guaranteed for every accepted symbol.
 
 The registry contains five additional yfinance mappings available for Provider Override:
-`AAPL`, `BTC-USD`, `ETH-USD`, `EURUSD=X`, and `QQQ`, owned by canonical `AAPL`, `BTC/USD`,
-`ETH/USD`, `EUR/USD`, and `QQQ` respectively. `XAU/USD` has no yfinance alternative because
+`AAPL`, `BTC-USD`, `ETH-USD`, `EURUSD=X`, and `QQQ`, owned by canonical `AAPL`, `BTC/USDT`,
+`ETH/USDT`, `EUR/USD`, and `QQQ` respectively. `XAU/USD` has no yfinance alternative because
 `GC=F` is a futures proxy rather than an approved equivalent. The active mapping supplies the
 Default Provider; an explicit override selects a configured mapping for that request or subscription
 without mutating the default. Every listed mapping must support the complete market-data surface.
@@ -104,7 +109,7 @@ without mutating the default. Every listed mapping must support the complete mar
 - Multi-provider aggregation or automatic fallback.
 - Public authentication, multi-tenant quota, or billing.
 - Raw tick storage.
-- Support for crypto assets beyond `BTC/USD` and `ETH/USD`.
+- Support for crypto assets beyond `BTC/USDT` and `ETH/USDT`.
 
 ## 4. Architecture
 
@@ -181,8 +186,8 @@ without mutating the default. Every listed mapping must support the complete mar
 Recommended initial registry:
 
 ```python
-BTC/USD -> TWELVE_DATA:BTC/USD
-ETH/USD -> TWELVE_DATA:ETH/USD
+BTC/USDT -> BINANCE_SPOT:BTCUSDT
+ETH/USDT -> BINANCE_SPOT:ETHUSDT
 ```
 
 Recommended initial timeframes:
@@ -340,7 +345,7 @@ outage. See [ADR 0005](adr/0005-mt5-economic-calendar.md) and
 ### Latest Quote HTTP Flow
 
 ```text
-Client -> GET /v1/quotes?symbols=BTC/USD,EUR/USD
+Client -> GET /v1/quotes?symbols=BTC/USDT,EUR/USD
   -> API validates query shape
   -> Symbol Registry validates every symbol
   -> Market Data Service checks Quote Cache
@@ -449,7 +454,7 @@ therefore remains provider-agnostic to clients while making its coarser precisio
 ### WebSocket Stream Flow
 
 ```text
-Client -> WS /v1/stream?symbols=BTC/USD,EUR/USD[&provider=...]
+Client -> WS /v1/stream?symbols=BTC/USDT,EUR/USD[&provider=...]
   -> API rejects any present timeframe query with 1008 TIMEFRAME_NOT_ALLOWED
   -> API validates symbols, Provider Override, registry rows, and selected mappings
   -> Stream Manager registers one quote interest per canonical symbol/mapping
@@ -494,10 +499,10 @@ refreshed. Per-client bounded queues isolate slow consumers; an overloaded clien
 ### Symbol Definition
 
 ```text
-symbol: canonical symbol, e.g. BTC/USD
+symbol: canonical symbol, e.g. BTC/USDT
 asset_class: CRYPTO
 provider: TWELVE_DATA
-provider_symbol: provider symbol, e.g. BTC/USD
+provider_symbol: provider symbol, e.g. BTC/USDT
 enabled: boolean
 ```
 
@@ -604,7 +609,7 @@ Inline calendar metadata is optional and internal. Seeded calendar families are:
 
 | Assets | Source / calendar | Timezone |
 | --- | --- | --- |
-| `BTC/USD`, `ETH/USD` | `internal` / `24/7` | `UTC` |
+| `BTC/USDT`, `ETH/USDT` | `internal` / `24/7` | `UTC` |
 | Forex pairs and `XAU/USD` | `pandas_market_calendars` / `FOREX` | `America/New_York` |
 | US stocks, ETFs, and stock indexes | `pandas_market_calendars` / `NYSE` | `America/New_York` |
 | `WTI`, `BRENT`, `NATGAS` | `pandas_market_calendars` / `CMEGlobex_Energy` | `America/New_York` |
@@ -934,7 +939,7 @@ Contract tests:
 
 | Decision | Default for MVP | Notes |
 | --- | --- | --- |
-| Provider symbol | `BTC/USD` / `ETH/USD` | Canonical symbols remain `BTC/USD` and `ETH/USD`; Twelve Data serves both required pairs. |
+| Provider symbol | `BTC/USDT` / `ETH/USDT` | Canonical symbols are `BTC/USDT` and `ETH/USDT`; Binance Spot serves both pairs. |
 | Stale threshold | 30 seconds | Make configurable through `QUOTE_STALE_AFTER_SECONDS`. |
 | Candle retention | No automatic deletion | Add retention only once product requirement is known. |
 | Partial quote response | Per-symbol errors | Return successful quotes and symbol-level errors in the same response. |

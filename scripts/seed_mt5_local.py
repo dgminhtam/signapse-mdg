@@ -1,4 +1,4 @@
-"""Activate the accepted 22 MT5 mappings; dev cutover requires an explicit database guard."""
+"""Activate the accepted 20 MT5 mappings; dev cutover requires an explicit database guard."""
 
 import argparse
 import asyncio
@@ -21,8 +21,6 @@ MAPPINGS = {
     "TSLA": "TSLA",
     "NVDA": "NVIDIA",
     "MSFT": "MSFT",
-    "BTC/USD": "BTCUSD",
-    "ETH/USD": "ETHUSD",
     "SPY": "SPY",
     "QQQ": "QQQ",
     "WTI": "USOUSD",
@@ -47,7 +45,11 @@ async def main(expected_database: str = "mdg_mt5_local") -> None:
             rows = list(await session.scalars(select(SupportedSymbolModel)))
             if not set(MAPPINGS).issubset({r.symbol for r in rows}):
                 raise ValueError("Run Alembic migrations first")
-            await session.execute(update(SupportedSymbolModel).values(enabled=False))
+            await session.execute(
+                update(SupportedSymbolModel)
+                .where(SupportedSymbolModel.symbol.notin_(("BTC/USDT", "ETH/USDT")))
+                .values(enabled=False)
+            )
             await session.execute(
                 update(SymbolProviderMappingModel)
                 .where(
