@@ -1,0 +1,51 @@
+{
+  "at": "2026-11-05T09:48:57.561292+00:00",
+  "requests": [
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1m",
+      "attempt": 1,
+      "status": 200,
+      "ms": 2133.48,
+      "count": 1000,
+      "validOHLC": true,
+      "firstOpen": "2026-11-04T17:07:00Z",
+      "lastOpen": "2026-11-05T09:48:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1h",
+      "attempt": 1,
+      "status": 200,
+      "ms": 1334.83,
+      "count": 1000,
+      "validOHLC": true,
+      "firstOpen": "2026-09-04T19:00:00Z",
+      "lastOpen": "2026-11-05T09:00:00Z"
+    },
+    {
+      "symbol": "BTC/USD",
+      "timeframe": "1m",
+      "attempt": 1,
+      "status": 200,
+      "ms": 1674.29,
+      "count": 1000,
+      "validOHLC": true,
+      "firstOpen": "2026-11-04T17:10:00Z",
+      "lastOpen": "2026-11-05T09:49:00Z"
+    }
+  ],
+  "passed": true,
+  "quoteEvents": {
+    "XAU/USD": 149,
+    "EUR/USD": 41,
+    "BTC/USD": 56
+  },
+  "streamStatuses": [
+    "CONNECTING",
+    "SUBSCRIBED"
+  ],
+  "calendarCount": 334,
+  "calendarRefreshedAt": "2026-11-05T09:49:25.354281Z",
+  "completedAt": "2026-11-05T09:49:43.375644+00:00"
+}

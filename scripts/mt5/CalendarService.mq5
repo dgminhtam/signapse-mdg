@@ -137,16 +137,18 @@ bool CalendarSelfCheck()
 
 void OnStart()
 {
-   if(!CalendarSelfCheck()) return;
+   if(!CalendarSelfCheck()) { Print("CalendarService: self-check failed"); return; }
    while(!IsStopped() && !TerminalInfoInteger(TERMINAL_CONNECTED)) Sleep(1000);
-   if(AccountInfoString(ACCOUNT_SERVER)!="VantageMarkets-Demo" || TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) return;
-   int f=FileOpen("MarketDataToken.txt",FILE_READ|FILE_TXT|FILE_ANSI,0,CP_UTF8);
-   if(f==INVALID_HANDLE) return;
+   if(AccountInfoString(ACCOUNT_SERVER)!="VantageMarkets-Demo" || TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
+   { Print("CalendarService: unexpected broker or Algo Trading enabled"); return; }
+   int f=FileOpen("MarketDataToken.txt",FILE_READ|FILE_TXT|FILE_ANSI|FILE_SHARE_READ,0,CP_UTF8);
+   if(f==INVALID_HANDLE) { PrintFormat("CalendarService: token file open failed (%d)",GetLastError()); return; }
    string token=FileReadString(f); FileClose(f);
-   if(StringLen(token)<32) return;
+   if(StringLen(token)<32) { Print("CalendarService: invalid token length"); return; }
    while(!IsStopped())
    {
-      if(AccountInfoString(ACCOUNT_SERVER)!="VantageMarkets-Demo" || TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) return;
+      if(AccountInfoString(ACCOUNT_SERVER)!="VantageMarkets-Demo" || TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
+      { Print("CalendarService: unexpected broker or Algo Trading enabled"); return; }
       int socket=SocketCreate();
       if(socket==INVALID_HANDLE) { Sleep(1000); continue; }
       if(!SocketConnect(socket,ReceiverHost,ReceiverPort,2000)) { SocketClose(socket); Sleep(1000); continue; }
@@ -156,7 +158,8 @@ void OnStart()
       string buffer=""; ulong next_status=0;
       while(active && !IsStopped() && SocketIsConnected(socket))
       {
-         if(AccountInfoString(ACCOUNT_SERVER)!="VantageMarkets-Demo" || TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) return;
+         if(AccountInfoString(ACCOUNT_SERVER)!="VantageMarkets-Demo" || TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
+         { Print("CalendarService: unexpected broker or Algo Trading enabled"); return; }
          uint available=SocketIsReadable(socket);
          if(available>4096) break;
          if(available>0)
@@ -179,7 +182,7 @@ void OnStart()
             active=active && SendLine(socket,TerminalInfoInteger(TERMINAL_CONNECTED) ? "{\"type\":\"status\",\"connected\":true}" : "{\"type\":\"status\",\"connected\":false}");
             next_status=GetTickCount64()+1000;
          }
-         Sleep(20);
+         Sleep(50);
       }
       SocketClose(socket); Sleep(1000);
    }

@@ -1,0 +1,248 @@
+{
+  "at": "2026-11-05T08:32:34.991992+00:00",
+  "baseRevision": "5986885f70e7c3c1cda2dc72b60c6ded1e5aa0b9",
+  "branch": "codex/mt5-lean",
+  "workingTree": true,
+  "localOnly": true,
+  "images": [
+    {
+      "tag": "signapse-mt5:lean-local",
+      "id": "sha256:3d3b90d756c88e7e38e41970fefa810bbd69cc58dc0950ec9f8a3210491ffcd7",
+      "sizeBytes": 6874561032,
+      "revision": "5986885-mt5-lean-local",
+      "credentialEnvironmentPresent": false
+    },
+    {
+      "tag": "signapse-mdg:mt5-compose-local",
+      "id": "sha256:fbb05cdad7703d5b7847025665fb8a2c4ab04abace46d9a16c4daecd3fb4eb6e",
+      "sizeBytes": 937189939,
+      "revision": "5986885-mt5-lean-local",
+      "credentialEnvironmentPresent": false
+    }
+  ],
+  "containers": [
+    {
+      "name": "/mdg-mt5-lean-20261105d-terminal-1",
+      "id": "5aacac6dd32b28b1c2fc8299eb43ca77b87655af13cfbf330f7441332feef481",
+      "imageId": "sha256:3d3b90d756c88e7e38e41970fefa810bbd69cc58dc0950ec9f8a3210491ffcd7",
+      "startedAt": "2026-11-05T08:28:16.319801866Z",
+      "health": "healthy",
+      "oomKilled": false,
+      "restartCount": 0,
+      "memoryLimitBytes": 2147483648,
+      "nanoCPUs": 1000000000,
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "mdg-mt5-lean-20261105d_terminal-home",
+          "destination": "/home/mt5"
+        }
+      ],
+      "ports": {}
+    },
+    {
+      "name": "/mdg-mt5-lean-20261105d-gateway-1",
+      "id": "d4588637c0116355e9d30ef0dbe54378e3ff49b79b288f51b72d13c8069ebfcd",
+      "imageId": "sha256:fbb05cdad7703d5b7847025665fb8a2c4ab04abace46d9a16c4daecd3fb4eb6e",
+      "startedAt": "2026-11-05T08:23:37.248818213Z",
+      "health": "healthy",
+      "oomKilled": false,
+      "restartCount": 0,
+      "memoryLimitBytes": 0,
+      "nanoCPUs": 0,
+      "mounts": [],
+      "ports": {
+        "8000/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "18088"
+          }
+        ]
+      }
+    },
+    {
+      "name": "/mdg-mt5-lean-20261105d-database-1",
+      "id": "6b175cebae61897fdec36e73d083901ea83e0d3e10741e24ce03ed1c4c1b028c",
+      "imageId": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+      "startedAt": "2026-11-05T08:23:15.005213438Z",
+      "health": "healthy",
+      "oomKilled": false,
+      "restartCount": 0,
+      "memoryLimitBytes": 0,
+      "nanoCPUs": 0,
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "mdg-mt5-lean-20261105d_database-data",
+          "destination": "/var/lib/postgresql/data"
+        }
+      ],
+      "ports": {
+        "5432/tcp": null
+      }
+    }
+  ],
+  "native": {
+    "authorizedOnVantageDemo": true,
+    "quoteTcpConnections": 2,
+    "socketPermissionErrors": 0,
+    "terminalBuilds": [
+      "6300"
+    ],
+    "metaeditorFiles": [
+      {
+        "name": "MetaEditor64.exe",
+        "bytes": 109414288
+      },
+      {
+        "name": "metaeditor.log",
+        "bytes": 48950
+      }
+    ],
+    "services": {
+      "MarketDataService": {
+        "sha256": "915e2f6c9b663d7e2365fdf55cf7d68de1331f616376faf2ec1a9ef36adf75b7",
+        "matchesBuilder": true
+      },
+      "CalendarService": {
+        "sha256": "7ef59df9100500be269f718af7166987bb8d3e056446e98d17af57189f3e274c",
+        "matchesBuilder": true
+      }
+    },
+    "tradingDisabled": true,
+    "tokenMode": "0o600",
+    "calendarGuardErrors": 0,
+    "cgroupMemoryPeakBytes": 667340800,
+    "compilerObservationAfterBenchmark": {
+      "compilerProcesses": [],
+      "compilerLogs": [
+        {
+          "name": "metaeditor.log",
+          "modified": "2026-11-05T08:30:14.792277+00:00",
+          "bytes": 48950
+        }
+      ]
+    }
+  },
+  "resources": {
+    "first-candles": {
+      "samples": 50,
+      "from": "2026-11-05T08:25:21.979810+00:00",
+      "to": "2026-11-05T08:28:07.176926+00:00",
+      "cpuMeanPercent": 95.03,
+      "cpuPeakPercent": 112.19,
+      "memoryMeanMiB": 675.76,
+      "memoryPeakMiB": 873.0
+    },
+    "first-recovery": {
+      "samples": 17,
+      "from": "2026-11-05T08:23:54.844325+00:00",
+      "to": "2026-11-05T08:24:48.772045+00:00",
+      "cpuMeanPercent": 100.94,
+      "cpuPeakPercent": 106.1,
+      "memoryMeanMiB": 254.0,
+      "memoryPeakMiB": 374.3
+    },
+    "first-stream": {
+      "samples": 9,
+      "from": "2026-11-05T08:24:52.059984+00:00",
+      "to": "2026-11-05T08:25:18.769498+00:00",
+      "cpuMeanPercent": 101.64,
+      "cpuPeakPercent": 105.69,
+      "memoryMeanMiB": 402.27,
+      "memoryPeakMiB": 442.8
+    },
+    "restart-candles": {
+      "samples": 14,
+      "from": "2026-11-05T08:29:51.000604+00:00",
+      "to": "2026-11-05T08:30:33.480725+00:00",
+      "cpuMeanPercent": 97.82,
+      "cpuPeakPercent": 102.54,
+      "memoryMeanMiB": 531.09,
+      "memoryPeakMiB": 598.2
+    },
+    "restart-recovery": {
+      "samples": 21,
+      "from": "2026-11-05T08:28:10.392742+00:00",
+      "to": "2026-11-05T08:29:17.192987+00:00",
+      "cpuMeanPercent": 94.64,
+      "cpuPeakPercent": 105.9,
+      "memoryMeanMiB": 418.83,
+      "memoryPeakMiB": 863.4
+    },
+    "restart-stream": {
+      "samples": 9,
+      "from": "2026-11-05T08:29:20.625468+00:00",
+      "to": "2026-11-05T08:29:47.780116+00:00",
+      "cpuMeanPercent": 101.94,
+      "cpuPeakPercent": 109.89,
+      "memoryMeanMiB": 547.56,
+      "memoryPeakMiB": 556.8
+    },
+    "steady": {
+      "samples": 18,
+      "from": "2026-11-05T08:30:36.668445+00:00",
+      "to": "2026-11-05T08:31:34.378560+00:00",
+      "cpuMeanPercent": 93.04,
+      "cpuPeakPercent": 101.29,
+      "memoryMeanMiB": 503.04,
+      "memoryPeakMiB": 505.5
+    }
+  },
+  "sampledPeakMemoryMiB": 873.0,
+  "sampledPeakCPUPercent": 112.19,
+  "historicalFullImageBytes": 7716306251,
+  "sizeReductionPercent": 10.91,
+  "sourceHashes": {
+    "scripts/mt5/Dockerfile": "8290c48c415942d75d8917938c06c39d8e307c35ce43275135bdfd687548a5b6",
+    "scripts/mt5/entrypoint.sh": "a486b3b3ae83744644d81f086afec3d9f7a5333a04faf911c9e5459beb81db5a",
+    "scripts/mt5/compile.sh": "a848b2161cc80b1855504259506770fe55bf8ef687b643134c07fb5a14473c8e",
+    "scripts/mt5/MarketDataService.mq5": "c318c09acca49de52a4b0c86ae0be14cfd9fef36372e9fa87d99d0989c109381",
+    "scripts/mt5/CalendarService.mq5": "37623a3d10c2e89950c669f05e3fd4fd9274043463a01748f356118f533c56ec",
+    "scripts/mt5/FileSharingCheck.mq5": "9047cf2ae2815341f6d8d04d1f729fd7634f7b27dd28ecb8c1ab54af212e1f87",
+    "scripts/mt5/configure.py": "297f21a7583982c992ab22aca9bd915c4a17aacff4a4f23ba54026a78902ac82",
+    "scripts/mt5/prepare_factory.py": "6f8995ed58cfebdf17fd8032e6b43be2e9c3c32042bc082edd8077ec72a2cd00",
+    "scripts/mt5/install.sh": "4dc262d65a3a6b851b07bd8b6dd9b81833a4739f9bad657ddd8291cb66ed38a8",
+    "scripts/mt5/factory.sh": "20f21e6830eb55064a037e7f81fa5d1b358da3620e3d483f18c0db7b0c57ec42",
+    "scripts/mt5/factory-common.ini": "bdac6220d7962e563938a0adc4d58c91147d51d35eab4311e4f0f102d676a87c",
+    "compose.mt5.yaml": "73bd9cf427a02532541ac5494528d0530ca804e175640c6df2b0d53e8e66f949",
+    "deploy/mt5-compose.yml": "c726d7520d3b8d54cdd923af73936899139f63f655128bda6ea661bbdb18a160",
+    ".env.mt5.example": "9142c311e16254b88012c75f38132efd197c2f46310573972d4fdaf939241b12",
+    "scripts/verify_mt5_lean.py": "e55cdb2a7db9f4e3a6693dd792c8724a6ca66160294bc7666d78be574410cf55",
+    "scripts/mt5/verify_image.py": "3037883f45ed30ee10b0fe531a2594f3bb02c53988fb7dbc749566f37bae01b3"
+  },
+  "checks": {
+    "unitPassed": 675,
+    "ruffCheck": "PASS",
+    "ruffFormatFiles": 163,
+    "mypyAppFiles": 65,
+    "bashSyntax": "PASS"
+  },
+  "settings": {
+    "calendarPollSeconds": 15,
+    "defaultCalendarPollSeconds": 300,
+    "terminalCPUs": 1,
+    "terminalMemoryGiB": 2
+  },
+  "measurementNotes": [
+    "Docker stats memory is working set; cgroup memory.peak includes additional charged cache.",
+    "CPU 100% corresponds to approximately one core; sample mean is not a guaranteed minimum.",
+    "Full-image size is historical 2026-11-04 evidence; no matched full-image RAM/CPU baseline is available.",
+    "cgroup memory.peak was read after the terminal restart and applies to that current cgroup; sampledPeakMemoryMiB covers the full run."
+  ],
+  "cleanup": {
+    "scratchProjectsRemoved": [
+      "mdg-mt5-lean-20261105",
+      "mdg-mt5-lean-20261105b",
+      "mdg-mt5-lean-20261105c"
+    ],
+    "ownershipLabelsChecked": true,
+    "finalStackStopped": true,
+    "finalVolumesRetained": true,
+    "serverChanges": false
+  },
+  "tooling": {
+    "apiVerification": "Repository HTTP/WS native verifier and pytest; no Postman collection required",
+    "postmanCLI": "Not installed on this workstation"
+  }
+}

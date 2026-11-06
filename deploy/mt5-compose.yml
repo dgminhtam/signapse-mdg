@@ -23,15 +23,13 @@ services:
         max-size: 5m
         max-file: "2"
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f '[t]erminal64.exe' >/dev/null && curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null"]
+      test: ["CMD-SHELL", "pgrep -f '[t]erminal64.exe' >/dev/null && xdpyinfo >/dev/null 2>&1"]
       interval: 15s
       timeout: 5s
       retries: 6
       start_period: 180s
     volumes:
       - terminal-home:/home/mt5
-    ports:
-      - "127.0.0.1:6085:6080"
     networks: [mt5]
 networks:
   mt5:

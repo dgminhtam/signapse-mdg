@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-06T06:43:22.084029+00:00",
+  "calendarNativeCount": 376,
+  "calendarMinimumLastSeenAt": "2026-11-04T14:29:13.342306Z",
+  "symbolCount": 22,
+  "gatewayRevision": "9ca69a5b696d923453507c09478ddaef024bb75f",
+  "calendarLatestLastSeenAt": "2026-11-06T06:41:37.449207Z",
+  "calendarLatestBatchCount": 373,
+  "calendarHistoricalRetainedCount": 3,
+  "nativeMappingCount": 20,
+  "registryChanged": false
+}

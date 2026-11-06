@@ -1,0 +1,284 @@
+{
+  "at": "2026-11-05T09:40:13.855012+00:00",
+  "baseRevision": "5986885f70e7c3c1cda2dc72b60c6ded1e5aa0b9",
+  "branch": "codex/mt5-runtime-cpu",
+  "workingTree": true,
+  "localOnly": true,
+  "images": [
+    {
+      "tag": "signapse-mt5:cpu-lean-local",
+      "id": "sha256:7e2322b850aeada9495633b490dc70233f00f0bdef986d224c7c9f681fa8c6cf",
+      "sizeBytes": 6874581232,
+      "revision": "5986885-mt5-cpu-local",
+      "credentialEnvironmentPresent": false
+    },
+    {
+      "tag": "signapse-mdg:mt5-compose-local",
+      "id": "sha256:fbb05cdad7703d5b7847025665fb8a2c4ab04abace46d9a16c4daecd3fb4eb6e",
+      "sizeBytes": 937189939,
+      "revision": "5986885-mt5-lean-local",
+      "credentialEnvironmentPresent": false
+    }
+  ],
+  "containers": [
+    {
+      "name": "/mdg-mt5-cpu-20261105b-terminal-1",
+      "id": "99c10b16f43887cff5d0125201a1fdf7a64b84b2c942d94d17db8db7ec80d6d9",
+      "imageId": "sha256:7e2322b850aeada9495633b490dc70233f00f0bdef986d224c7c9f681fa8c6cf",
+      "startedAt": "2026-11-05T09:32:45.985861998Z",
+      "health": "healthy",
+      "oomKilled": false,
+      "restartCount": 0,
+      "memoryLimitBytes": 1073741824,
+      "nanoCPUs": 1000000000,
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "mdg-mt5-cpu-20261105b_terminal-home",
+          "destination": "/home/mt5"
+        }
+      ],
+      "ports": {},
+      "memorySwapTotalBytes": 1073741824
+    },
+    {
+      "name": "/mdg-mt5-cpu-20261105b-gateway-1",
+      "id": "395cd1020e5ce903092251a1c115eef8f0d7493a88ab40edc87764dbab126548",
+      "imageId": "sha256:fbb05cdad7703d5b7847025665fb8a2c4ab04abace46d9a16c4daecd3fb4eb6e",
+      "startedAt": "2026-11-05T09:29:27.751461216Z",
+      "health": "healthy",
+      "oomKilled": false,
+      "restartCount": 0,
+      "memoryLimitBytes": 0,
+      "nanoCPUs": 0,
+      "mounts": [],
+      "ports": {
+        "8000/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "18090"
+          }
+        ]
+      }
+    },
+    {
+      "name": "/mdg-mt5-cpu-20261105b-database-1",
+      "id": "198834b77dbe066efbf5c489a1b8b602174b58f9d58fb5a47f4fec8a6c8a3d11",
+      "imageId": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+      "startedAt": "2026-11-05T09:29:09.829206272Z",
+      "health": "healthy",
+      "oomKilled": false,
+      "restartCount": 0,
+      "memoryLimitBytes": 0,
+      "nanoCPUs": 0,
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "mdg-mt5-cpu-20261105b_database-data",
+          "destination": "/var/lib/postgresql/data"
+        }
+      ],
+      "ports": {
+        "5432/tcp": null
+      }
+    }
+  ],
+  "native": {
+    "authorizedOnVantageDemo": true,
+    "quoteTcpConnections": 2,
+    "socketPermissionErrors": 0,
+    "terminalBuilds": [
+      "6300"
+    ],
+    "metaeditorFiles": [
+      {
+        "name": "MetaEditor64.exe",
+        "bytes": 109414288
+      },
+      {
+        "name": "metaeditor.log",
+        "bytes": 48964
+      }
+    ],
+    "services": {
+      "MarketDataService": {
+        "sha256": "6c20c9c1da807e99194042c77c1f37a35d7a1f670e24cbfa4296c3c9c3615564",
+        "matchesBuilder": true
+      },
+      "CalendarService": {
+        "sha256": "17c99e7575dbc342797066d8df794e1f0280b2dae24d106a2b4133080eae3322",
+        "matchesBuilder": true
+      }
+    },
+    "tradingDisabled": true,
+    "tokenMode": "0o600",
+    "calendarGuardErrors": 0,
+    "cgroupMemoryPeakBytes": 735895552
+  },
+  "resources": {
+    "first-candles": {
+      "samples": 18,
+      "from": "2026-11-05T09:31:32.234079+00:00",
+      "to": "2026-11-05T09:32:28.521539+00:00",
+      "cpuMeanPercent": 76.07,
+      "cpuPeakPercent": 102.55,
+      "memoryMeanMiB": 643.77,
+      "memoryPeakMiB": 686.5
+    },
+    "first-recovery": {
+      "samples": 14,
+      "from": "2026-11-05T09:29:45.904942+00:00",
+      "to": "2026-11-05T09:30:28.100980+00:00",
+      "cpuMeanPercent": 100.97,
+      "cpuPeakPercent": 105.15,
+      "memoryMeanMiB": 235.63,
+      "memoryPeakMiB": 350.1
+    },
+    "first-stream": {
+      "samples": 18,
+      "from": "2026-11-05T09:30:31.532910+00:00",
+      "to": "2026-11-05T09:31:28.610954+00:00",
+      "cpuMeanPercent": 97.45,
+      "cpuPeakPercent": 107.69,
+      "memoryMeanMiB": 437.61,
+      "memoryPeakMiB": 524.9
+    },
+    "restart-candles": {
+      "samples": 19,
+      "from": "2026-11-05T09:33:48.132112+00:00",
+      "to": "2026-11-05T09:34:48.526221+00:00",
+      "cpuMeanPercent": 100.24,
+      "cpuPeakPercent": 104.13,
+      "memoryMeanMiB": 575.39,
+      "memoryPeakMiB": 645.5
+    },
+    "restart-recovery": {
+      "samples": 5,
+      "from": "2026-11-05T09:32:31.807115+00:00",
+      "to": "2026-11-05T09:32:45.543880+00:00",
+      "cpuMeanPercent": 99.11,
+      "cpuPeakPercent": 104.92,
+      "memoryMeanMiB": 678.66,
+      "memoryPeakMiB": 691.8
+    },
+    "restart-stream": {
+      "samples": 18,
+      "from": "2026-11-05T09:32:48.734785+00:00",
+      "to": "2026-11-05T09:33:44.919485+00:00",
+      "cpuMeanPercent": 97.15,
+      "cpuPeakPercent": 103.96,
+      "memoryMeanMiB": 403.58,
+      "memoryPeakMiB": 538.6
+    },
+    "steady": {
+      "samples": 18,
+      "from": "2026-11-05T09:34:51.738661+00:00",
+      "to": "2026-11-05T09:35:48.873834+00:00",
+      "cpuMeanPercent": 85.91,
+      "cpuPeakPercent": 103.68,
+      "memoryMeanMiB": 514.29,
+      "memoryPeakMiB": 516.3
+    }
+  },
+  "sampledPeakMemoryMiB": 691.8,
+  "sampledPeakCPUPercent": 107.69,
+  "historicalFullImageBytes": 7716306251,
+  "sizeReductionPercent": 10.91,
+  "sourceHashes": {
+    "scripts/mt5/Dockerfile": "5f94bbdacf0ed69413368ef20dd6d64637e82f6ba6b69983e158329a6b6a550f",
+    "scripts/mt5/entrypoint.sh": "5927df0ac0f25027dcd6030aa06f7c5aebd1f28ddd96ea1085c1199bee7443e4",
+    "scripts/mt5/compile.sh": "a848b2161cc80b1855504259506770fe55bf8ef687b643134c07fb5a14473c8e",
+    "scripts/mt5/MarketDataService.mq5": "5e557e77441b28d1b31e895ef5d74b358a2c79fdc3f8b93f67c2165d45b00b05",
+    "scripts/mt5/CalendarService.mq5": "92e30f28e1e790c186a7b2b748fc87dff70cff77b717253b274e92b7a29fcee8",
+    "scripts/mt5/FileSharingCheck.mq5": "9047cf2ae2815341f6d8d04d1f729fd7634f7b27dd28ecb8c1ab54af212e1f87",
+    "scripts/mt5/configure.py": "297f21a7583982c992ab22aca9bd915c4a17aacff4a4f23ba54026a78902ac82",
+    "scripts/mt5/prepare_factory.py": "6f8995ed58cfebdf17fd8032e6b43be2e9c3c32042bc082edd8077ec72a2cd00",
+    "scripts/mt5/install.sh": "4dc262d65a3a6b851b07bd8b6dd9b81833a4739f9bad657ddd8291cb66ed38a8",
+    "scripts/mt5/factory.sh": "20f21e6830eb55064a037e7f81fa5d1b358da3620e3d483f18c0db7b0c57ec42",
+    "scripts/mt5/factory-common.ini": "bdac6220d7962e563938a0adc4d58c91147d51d35eab4311e4f0f102d676a87c",
+    "compose.mt5.yaml": "73bd9cf427a02532541ac5494528d0530ca804e175640c6df2b0d53e8e66f949",
+    "deploy/mt5-compose.yml": "c726d7520d3b8d54cdd923af73936899139f63f655128bda6ea661bbdb18a160",
+    ".env.mt5.example": "e93f11a133a9830a17244ba5ae7b09d05b57aa68d2bbe7a47075dfa4257cb178",
+    "scripts/verify_mt5_lean.py": "0b9f4a87f8c82fd183b866597f72f5e6bb2d2877e489244a0f4462e9b8217467",
+    "scripts/mt5/runtime_ui.py": "c9501f255920779b03446b913fe3c2e5f500b2923279521d3680b97c53508371",
+    "scripts/mt5/profile_runtime.py": "b4752fca029033731afade7cdda46d65b647cf72a85ff1fa90455d4e9f36bddc",
+    "scripts/mt5/verify_image.py": "3037883f45ed30ee10b0fe531a2594f3bb02c53988fb7dbc749566f37bae01b3",
+    "tests/unit/test_mt5_runtime_ui.py": "1dbddcd941cf469156211bc95eb4022decebefe5b013a502bb515edd6f65324c"
+  },
+  "checks": {
+    "unitPassed": 679,
+    "ruffCheck": "PASS",
+    "ruffFormatFiles": 166,
+    "mypyAppFiles": 65,
+    "bashSyntax": "PASS"
+  },
+  "settings": {
+    "calendarPollSeconds": 15,
+    "defaultCalendarPollSeconds": 300,
+    "terminalCPUs": 1,
+    "terminalMemoryGiB": 1,
+    "terminalMemorySwapTotalBytes": 1073741824,
+    "testComposeChanges": {
+      "terminal.mem_limit": "1g",
+      "terminal.memswap_limit": "1g"
+    },
+    "testComposeSha256": "22c83de7fb095a6464a5e0299944558de088daed1707effdeb44282e7a7f5eb4",
+    "sourceComposeTerminalMemoryGiB": 2
+  },
+  "measurementNotes": [
+    "Docker stats memory is working set; cgroup memory.peak includes additional charged cache.",
+    "CPU 100% corresponds to approximately one core; sample mean is not a guaranteed minimum.",
+    "Full-image size is historical 2026-11-04 evidence; no matched full-image RAM/CPU baseline is available.",
+    "cgroup memory.peak applies only to the post-restart cgroup generation; sampled peak spans the complete verifier run.",
+    "Additional diagnostic restart occurred after the full verifier. Original container snapshot timestamps above are retained as that verifier evidence.",
+    "Initial causal diagnostic used invalid provider MT5; superseded by the valid MT5_VANTAGE_DEMO diagnostic."
+  ],
+  "additionalEvidence": [
+    "mt5-cpu-capacity-20261105.json",
+    "mt5-cpu-history-activation-valid-20261105.json",
+    "mt5-cpu-final-health-20261105.json"
+  ],
+  "tooling": {
+    "apiVerification": "Repository native HTTP/WS harness and pytest; API contract unchanged",
+    "postmanCLI": "Not installed on this workstation"
+  },
+  "cleanup": {
+    "scratchProjectsRemoved": [
+      "mdg-mt5-cpu-20261105"
+    ],
+    "ownershipLabelsChecked": true,
+    "finalStackStopped": true,
+    "finalVolumesRetained": true,
+    "baselineVolumesRetained": true,
+    "serverChanges": false,
+    "finalStates": [
+      {
+        "service": "terminal",
+        "status": "exited",
+        "exitCode": 0,
+        "oomKilled": false,
+        "restartCount": 0,
+        "startedAt": "2026-11-05T09:53:58.827277707Z",
+        "finishedAt": "2026-11-05T10:02:13.235540901Z"
+      },
+      {
+        "service": "gateway",
+        "status": "exited",
+        "exitCode": 0,
+        "oomKilled": false,
+        "restartCount": 0,
+        "startedAt": "2026-11-05T09:29:27.751461216Z",
+        "finishedAt": "2026-11-05T10:02:16.210972428Z"
+      },
+      {
+        "service": "database",
+        "status": "exited",
+        "exitCode": 0,
+        "oomKilled": false,
+        "restartCount": 0,
+        "startedAt": "2026-11-05T09:29:09.829206272Z",
+        "finishedAt": "2026-11-05T10:02:16.904057537Z"
+      }
+    ]
+  }
+}

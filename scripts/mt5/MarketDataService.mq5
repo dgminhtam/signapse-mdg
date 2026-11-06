@@ -92,7 +92,7 @@ void OnStart()
    while(!IsStopped() && !TerminalInfoInteger(TERMINAL_CONNECTED)) Sleep(1000);
    if(AccountInfoString(ACCOUNT_SERVER)!="VantageMarkets-Demo" || TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
    { Print("MarketDataService: unexpected broker or Algo Trading enabled"); return; }
-   int file=FileOpen("MarketDataToken.txt",FILE_READ|FILE_TXT|FILE_ANSI,0,CP_UTF8);
+   int file=FileOpen("MarketDataToken.txt",FILE_READ|FILE_TXT|FILE_ANSI|FILE_SHARE_READ,0,CP_UTF8);
    if(file==INVALID_HANDLE) { Print("MarketDataService: token missing"); return; }
    string token=FileReadString(file);
    FileClose(file);
@@ -156,16 +156,16 @@ void OnStart()
             // shortcut: latest quote snapshots; add durable cursors only for a raw-tick delivery requirement.
             for(int i=0;i<total && active;i++)
             {
-               MqlTick ticks[];
-               if(CopyTicks(symbols[i],ticks,COPY_TICKS_ALL,0,1)!=1) continue;
+               MqlTick latest;
+               if(!SymbolInfoTick(symbols[i],latest) || latest.time_msc<=0) continue;
                int digits=(int)SymbolInfoInteger(symbols[i],SYMBOL_DIGITS);
                string tick=StringFormat("{\"type\":\"tick\",\"seq\":%I64d,\"symbol\":\"%s\",\"connected\":true,\"timeMscRaw\":%I64d,\"bid\":\"%s\",\"ask\":\"%s\"}",
-                  ++sequence,symbols[i],ticks[0].time_msc,DoubleToString(ticks[0].bid,digits),DoubleToString(ticks[0].ask,digits));
+                  ++sequence,symbols[i],latest.time_msc,DoubleToString(latest.bid,digits),DoubleToString(latest.ask,digits));
                active=SendLine(socket,tick);
             }
             next_poll=GetTickCount64()+MathMax(PollMilliseconds,100);
          }
-         Sleep(20);
+         Sleep(50);
       }
       SocketClose(socket);
       Print("MarketDataService: reconnecting");

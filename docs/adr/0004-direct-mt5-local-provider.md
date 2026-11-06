@@ -7,7 +7,7 @@ status: accepted for local and dev verification
 The user accepted the direct architecture on 2026-11-02 and authorized local
 implementation and tests before any dev deployment. Extend the successful TCP
 spike; keep the SDK exception in ADR 0003. No Go, message broker, or Python
-helper in the terminal container. The existing FastAPI process owns the TCP
+data-feed helper in the terminal container. The existing FastAPI process owns the TCP
 listener, quote ingestion and candle RPC. It runs as one worker, disabled by
 default. The listener is private to the local Docker network.
 
@@ -28,12 +28,17 @@ Test both DST boundaries and broker-native H4/D1/W1/MN1 opens. Session gaps come
 from native bars; do not filter broker CFD candles by another provider's calendar.
 
 The bridge delivers latest quote state, not a durable raw-tick log. MQL5 polls
-CopyTicks for the latest observation; sequence/time checks suppress stale or
+SymbolInfoTick for the latest observation; sequence/time checks suppress stale or
 duplicate updates. Reconnect resynchronizes latest state. Preserve the original
 market time and gateway receipt time when REST reads an existing snapshot, so
 polling, replay, or heartbeat cannot make an old price fresh. Ingestion starts
 with the application, even with zero WebSocket subscribers. Existing quote/status
 WebSocket and HTTP response shapes remain unchanged.
+
+The 2026-11-05 local optimization replaces CopyTicks with SymbolInfoTick without
+changing quote semantics, and uses 50 ms idle waits plus a minimized terminal.
+See [runtime performance evidence](../mt5-runtime-performance.md); CPU after full
+history still approaches one core. This does not authorize deployment.
 
 Wire v1 uses UTF-8 newline-delimited frames, capped at 64 KiB. An initial
 `HELLO <shared-token>` line authenticates before JSON metadata or market data is

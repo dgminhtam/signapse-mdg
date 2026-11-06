@@ -1,0 +1,37 @@
+{
+  "at": "2026-11-06T07:09:41.705851+00:00",
+  "beforeQuotes": {
+    "quotes": [
+      {
+        "symbol": "XAU/USD",
+        "price": "4046.46",
+        "receivedAt": "2026-11-06T07:08:15.872546Z"
+      },
+      {
+        "symbol": "EUR/USD",
+        "price": "1.11824",
+        "receivedAt": "2026-11-06T07:08:14.864914Z"
+      }
+    ],
+    "errors": []
+  },
+  "registryUnchanged": true,
+  "restartReturnedAt": "2026-11-06T07:09:46.257993+00:00",
+  "freshQuotes": {
+    "quotes": [
+      {
+        "symbol": "XAU/USD",
+        "price": "4047.91",
+        "receivedAt": "2026-11-06T07:09:53.944069Z"
+      },
+      {
+        "symbol": "EUR/USD",
+        "price": "1.11833",
+        "receivedAt": "2026-11-06T07:09:53.683002Z"
+      }
+    ],
+    "errors": []
+  },
+  "recoveredAt": "2026-11-06T07:09:54.708857+00:00",
+  "passed": true
+}

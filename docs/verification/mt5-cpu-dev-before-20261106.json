@@ -1,0 +1,3412 @@
+{
+  "at": "2026-11-06T06:47:02.862339+00:00",
+  "target": "dev",
+  "provider": "MT5_VANTAGE_DEMO",
+  "matrix": [
+    {
+      "symbol": "AAPL",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 754.85,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:57:00Z",
+      "lastOpen": "2026-11-05T20:59:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 488.21,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:45:00Z",
+      "lastOpen": "2026-11-05T20:55:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 419.85,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:15:00Z",
+      "lastOpen": "2026-11-05T20:45:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 422.13,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T19:30:00Z",
+      "lastOpen": "2026-11-05T20:30:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 423.18,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T18:00:00Z",
+      "lastOpen": "2026-11-05T20:00:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 322.03,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-04T18:00:00Z",
+      "lastOpen": "2026-11-05T18:00:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 344.04,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-02T22:00:00Z",
+      "lastOpen": "2026-11-04T22:00:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 922.13,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "AAPL",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 553.23,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1012.05,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:45:00Z",
+      "lastOpen": "2026-11-06T06:47:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 485.89,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 521.34,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 441.92,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 6497.35,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 622.04,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 278.07,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 228.09,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "AUD/USD",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 287.97,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1602.18,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:45:00Z",
+      "lastOpen": "2026-11-06T06:47:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 199.51,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 197.45,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 183.76,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 309.23,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 400.62,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 296.16,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 215.1,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "BRENT",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 194.38,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 988.63,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T18:27:00Z",
+      "lastOpen": "2026-11-05T18:29:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 290.82,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T18:15:00Z",
+      "lastOpen": "2026-11-05T18:25:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 296.28,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T17:45:00Z",
+      "lastOpen": "2026-11-05T18:15:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 287.36,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T17:00:00Z",
+      "lastOpen": "2026-11-05T18:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 207.44,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T16:00:00Z",
+      "lastOpen": "2026-11-05T18:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 204.44,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T10:00:00Z",
+      "lastOpen": "2026-11-05T18:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 420.37,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-02T22:00:00Z",
+      "lastOpen": "2026-11-04T22:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 162.69,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "COFFEE",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 196.02,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 295.16,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:45:00Z",
+      "lastOpen": "2026-11-06T06:47:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 226.16,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 181.23,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 194.54,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 211.21,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 199.92,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 197.37,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 857.17,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1029.8,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 191.84,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:45:00Z",
+      "lastOpen": "2026-11-06T06:47:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 517.75,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 201.49,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 213.05,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 206.31,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 5505.57,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 300.52,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 147.89,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "GBP/USD",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 458.91,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 435.49,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:57:00Z",
+      "lastOpen": "2026-11-05T20:59:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 324.45,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:45:00Z",
+      "lastOpen": "2026-11-05T20:55:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 283.6,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:15:00Z",
+      "lastOpen": "2026-11-05T20:45:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 421.42,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T19:30:00Z",
+      "lastOpen": "2026-11-05T20:30:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 264.96,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T18:00:00Z",
+      "lastOpen": "2026-11-05T20:00:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 217.26,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-04T18:00:00Z",
+      "lastOpen": "2026-11-05T18:00:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 192.84,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-02T22:00:00Z",
+      "lastOpen": "2026-11-04T22:00:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 684.29,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "MSFT",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 320.73,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1566.68,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:45:00Z",
+      "lastOpen": "2026-11-06T06:47:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 211.37,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 214.86,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 173.05,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 208.26,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 210.99,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 198.01,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 201.96,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "NATGAS",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 192.18,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1580.12,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:46:00Z",
+      "lastOpen": "2026-11-06T06:48:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1305.51,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 282.28,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 215.21,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 205.69,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 214.09,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 170.66,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 197.83,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "NDX",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 194.79,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 708.39,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:57:00Z",
+      "lastOpen": "2026-11-05T20:59:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 303.05,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:45:00Z",
+      "lastOpen": "2026-11-05T20:55:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 289.86,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:15:00Z",
+      "lastOpen": "2026-11-05T20:45:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 305.96,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T19:30:00Z",
+      "lastOpen": "2026-11-05T20:30:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 586.79,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T18:00:00Z",
+      "lastOpen": "2026-11-05T20:00:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 428.35,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-04T18:00:00Z",
+      "lastOpen": "2026-11-05T18:00:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 212.84,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-02T22:00:00Z",
+      "lastOpen": "2026-11-04T22:00:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 321.34,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "NVDA",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 263.78,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 622.47,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:57:00Z",
+      "lastOpen": "2026-11-05T20:59:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 3580.71,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:45:00Z",
+      "lastOpen": "2026-11-05T20:55:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 269.96,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:15:00Z",
+      "lastOpen": "2026-11-05T20:45:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 278.07,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T19:30:00Z",
+      "lastOpen": "2026-11-05T20:30:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 805.58,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T18:00:00Z",
+      "lastOpen": "2026-11-05T20:00:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 190.87,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-04T18:00:00Z",
+      "lastOpen": "2026-11-05T18:00:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 196.56,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-02T22:00:00Z",
+      "lastOpen": "2026-11-04T22:00:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 206.67,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "QQQ",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 394.12,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1595.09,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:46:00Z",
+      "lastOpen": "2026-11-06T06:48:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 189.87,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 199.63,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 211.78,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 193.3,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 212.64,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 181.16,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 223.6,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "SPX",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 212.6,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 560.88,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:57:00Z",
+      "lastOpen": "2026-11-05T20:59:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 439.18,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:45:00Z",
+      "lastOpen": "2026-11-05T20:55:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 271.88,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:15:00Z",
+      "lastOpen": "2026-11-05T20:45:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 222.76,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T19:30:00Z",
+      "lastOpen": "2026-11-05T20:30:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 885.55,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T18:00:00Z",
+      "lastOpen": "2026-11-05T20:00:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 471.7,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-04T18:00:00Z",
+      "lastOpen": "2026-11-05T18:00:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 258.26,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-02T22:00:00Z",
+      "lastOpen": "2026-11-04T22:00:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 242.44,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "SPY",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 220.39,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 2067.1,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T17:57:00Z",
+      "lastOpen": "2026-11-05T17:59:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 571.59,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T17:45:00Z",
+      "lastOpen": "2026-11-05T17:55:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 337.84,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T17:15:00Z",
+      "lastOpen": "2026-11-05T17:45:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 288.43,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T16:30:00Z",
+      "lastOpen": "2026-11-05T17:30:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 203.6,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T15:00:00Z",
+      "lastOpen": "2026-11-05T17:00:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 200.74,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T06:00:00Z",
+      "lastOpen": "2026-11-05T14:00:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 392.61,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-02T22:00:00Z",
+      "lastOpen": "2026-11-04T22:00:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 219.23,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "SUGAR",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 183.0,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 580.39,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:57:00Z",
+      "lastOpen": "2026-11-05T20:59:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 504.37,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:45:00Z",
+      "lastOpen": "2026-11-05T20:55:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 343.0,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T20:15:00Z",
+      "lastOpen": "2026-11-05T20:45:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 295.83,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T19:30:00Z",
+      "lastOpen": "2026-11-05T20:30:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 208.92,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T18:00:00Z",
+      "lastOpen": "2026-11-05T20:00:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 292.72,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-04T18:00:00Z",
+      "lastOpen": "2026-11-05T18:00:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 181.23,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-02T22:00:00Z",
+      "lastOpen": "2026-11-04T22:00:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 578.02,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "TSLA",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 213.65,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 190.84,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:46:00Z",
+      "lastOpen": "2026-11-06T06:48:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 193.47,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 198.3,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 202.69,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 186.42,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 247.68,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 159.26,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 182.92,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "USD/JPY",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1027.64,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1471.94,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:44:00Z",
+      "lastOpen": "2026-11-06T06:47:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 212.1,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 215.86,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 163.72,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 198.86,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 218.58,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 174.96,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 217.44,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "WHEAT",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 197.64,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1861.51,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:46:00Z",
+      "lastOpen": "2026-11-06T06:48:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 318.89,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 203.98,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 223.88,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 274.7,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 183.3,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 198.38,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 200.39,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "WTI",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 192.04,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1229.75,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:46:00Z",
+      "lastOpen": "2026-11-06T06:48:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 754.5,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 1133.09,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 265.95,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 309.85,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 276.6,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 205.9,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 192.6,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "XAG/USD",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 195.4,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 223.84,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:46:00Z",
+      "lastOpen": "2026-11-06T06:48:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "5m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 191.36,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:35:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "15m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 189.58,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T06:15:00Z",
+      "lastOpen": "2026-11-06T06:45:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "30m",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 208.44,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T05:30:00Z",
+      "lastOpen": "2026-11-06T06:30:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 409.46,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-06T04:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "4h",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 191.95,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-05T22:00:00Z",
+      "lastOpen": "2026-11-06T06:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1d",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 150.0,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-11-03T22:00:00Z",
+      "lastOpen": "2026-11-05T22:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1w",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 197.66,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-10-17T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1mo",
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": 200,
+          "ms": 643.52,
+          "count": 3
+        }
+      ],
+      "valid": true,
+      "validOHLC": true,
+      "firstOpen": "2026-08-31T21:00:00Z",
+      "lastOpen": "2026-10-31T21:00:00Z"
+    }
+  ],
+  "count": 3,
+  "registry": {
+    "symbols": [
+      {
+        "symbol": "AAPL",
+        "assetClass": "US_STOCK",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "AAPL",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "AAPL",
+            "isDefault": true
+          },
+          {
+            "provider": "TWELVE_DATA",
+            "providerSymbol": "AAPL",
+            "isDefault": false
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "AAPL",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "AUD/USD",
+        "assetClass": "FOREX",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "AUDUSD",
+        "enabled": true,
+        "priceDisplayDecimals": 5,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "AUDUSD",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "AUDUSD=X",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "BRENT",
+        "assetClass": "COMMODITY",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "UKOUSD",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "UKOUSD",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "BZ=F",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "BTC/USDT",
+        "assetClass": "CRYPTO",
+        "provider": "BINANCE_SPOT",
+        "providerSymbol": "BTCUSDT",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "BINANCE_SPOT",
+            "providerSymbol": "BTCUSDT",
+            "isDefault": true
+          }
+        ]
+      },
+      {
+        "symbol": "COFFEE",
+        "assetClass": "COMMODITY",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "Coffee-Cr",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "Coffee-Cr",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "KC=F",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "ETH/USDT",
+        "assetClass": "CRYPTO",
+        "provider": "BINANCE_SPOT",
+        "providerSymbol": "ETHUSDT",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "BINANCE_SPOT",
+            "providerSymbol": "ETHUSDT",
+            "isDefault": true
+          }
+        ]
+      },
+      {
+        "symbol": "EUR/USD",
+        "assetClass": "FOREX",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "EURUSD",
+        "enabled": true,
+        "priceDisplayDecimals": 5,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "EURUSD",
+            "isDefault": true
+          },
+          {
+            "provider": "TWELVE_DATA",
+            "providerSymbol": "EUR/USD",
+            "isDefault": false
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "EURUSD=X",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "GBP/USD",
+        "assetClass": "FOREX",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "GBPUSD",
+        "enabled": true,
+        "priceDisplayDecimals": 5,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "GBPUSD",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "GBPUSD=X",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "MSFT",
+        "assetClass": "US_STOCK",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "MSFT",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "MSFT",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "MSFT",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "NATGAS",
+        "assetClass": "COMMODITY",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "NG-Cr",
+        "enabled": true,
+        "priceDisplayDecimals": 3,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "NG-Cr",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "NG=F",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "NDX",
+        "assetClass": "STOCK_INDEX",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "NAS100.r",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "NAS100.r",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "^NDX",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "NVDA",
+        "assetClass": "US_STOCK",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "NVIDIA",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "NVIDIA",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "NVDA",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "QQQ",
+        "assetClass": "ETF",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "QQQ",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "QQQ",
+            "isDefault": true
+          },
+          {
+            "provider": "TWELVE_DATA",
+            "providerSymbol": "QQQ",
+            "isDefault": false
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "QQQ",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "SPX",
+        "assetClass": "STOCK_INDEX",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "SP500.r",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "SP500.r",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "^GSPC",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "SPY",
+        "assetClass": "ETF",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "SPY",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "SPY",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "SPY",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "SUGAR",
+        "assetClass": "COMMODITY",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "Sugar-Cr",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "Sugar-Cr",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "SB=F",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "TSLA",
+        "assetClass": "US_STOCK",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "TSLA",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "TSLA",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "TSLA",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "USD/JPY",
+        "assetClass": "FOREX",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "USDJPY",
+        "enabled": true,
+        "priceDisplayDecimals": 3,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "USDJPY",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "JPY=X",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "WHEAT",
+        "assetClass": "COMMODITY",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "Wheat-Cr",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "Wheat-Cr",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "ZW=F",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "WTI",
+        "assetClass": "COMMODITY",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "USOUSD",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "USOUSD",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "CL=F",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "XAG/USD",
+        "assetClass": "COMMODITY",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "XAGUSD",
+        "enabled": true,
+        "priceDisplayDecimals": 3,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "XAGUSD",
+            "isDefault": true
+          },
+          {
+            "provider": "YFINANCE",
+            "providerSymbol": "SI=F",
+            "isDefault": false
+          }
+        ]
+      },
+      {
+        "symbol": "XAU/USD",
+        "assetClass": "COMMODITY",
+        "provider": "MT5_VANTAGE_DEMO",
+        "providerSymbol": "XAUUSD",
+        "enabled": true,
+        "priceDisplayDecimals": 2,
+        "providerMappings": [
+          {
+            "provider": "MT5_VANTAGE_DEMO",
+            "providerSymbol": "XAUUSD",
+            "isDefault": true
+          },
+          {
+            "provider": "TWELVE_DATA",
+            "providerSymbol": "XAU/USD",
+            "isDefault": false
+          }
+        ]
+      }
+    ]
+  },
+  "nativeSymbols": [
+    "AAPL",
+    "AUD/USD",
+    "BRENT",
+    "COFFEE",
+    "EUR/USD",
+    "GBP/USD",
+    "MSFT",
+    "NATGAS",
+    "NDX",
+    "NVDA",
+    "QQQ",
+    "SPX",
+    "SPY",
+    "SUGAR",
+    "TSLA",
+    "USD/JPY",
+    "WHEAT",
+    "WTI",
+    "XAG/USD",
+    "XAU/USD"
+  ],
+  "quotesBefore": {
+    "quotes": [
+      {
+        "symbol": "XAU/USD",
+        "price": "4046.44",
+        "receivedAt": "2026-11-06T06:47:02.723167Z"
+      },
+      {
+        "symbol": "EUR/USD",
+        "price": "1.11827",
+        "receivedAt": "2026-11-06T06:47:02.466982Z"
+      }
+    ],
+    "errors": []
+  },
+  "streamStatuses": [
+    "CONNECTING",
+    "SUBSCRIBED"
+  ],
+  "quoteEvents": {
+    "XAU/USD": 76,
+    "EUR/USD": 28
+  },
+  "externalProviderSmoke": [
+    {
+      "symbol": "BTC/USDT",
+      "status": 200,
+      "count": 3
+    },
+    {
+      "symbol": "ETH/USDT",
+      "status": 200,
+      "count": 3
+    }
+  ],
+  "quotesAfter": {
+    "quotes": [
+      {
+        "symbol": "XAU/USD",
+        "price": "4047.14",
+        "receivedAt": "2026-11-06T06:48:48.233123Z"
+      },
+      {
+        "symbol": "EUR/USD",
+        "price": "1.11828",
+        "receivedAt": "2026-11-06T06:48:45.973883Z"
+      }
+    ],
+    "errors": []
+  },
+  "gatewayRevision": "9ca69a5b696d923453507c09478ddaef024bb75f",
+  "passed": true,
+  "completedAt": "2026-11-06T06:48:48.845154+00:00"
+}

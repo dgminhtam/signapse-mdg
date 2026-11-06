@@ -1,0 +1,695 @@
+{
+  "at": "2026-11-05T09:57:57.653286+00:00",
+  "provider": "MT5_VANTAGE_DEMO",
+  "requests": [
+    {
+      "symbol": "EUR/USD",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "GBP/USD",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "USD/JPY",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "AUD/USD",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "XAU/USD",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "XAG/USD",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "AAPL",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "TSLA",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "NVDA",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "MSFT",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "BTC/USD",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "ETH/USD",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "SPY",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "QQQ",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "WTI",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "BRENT",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "NATGAS",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "COFFEE",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "SUGAR",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "WHEAT",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "SPX",
+      "status": 200,
+      "count": 20
+    },
+    {
+      "symbol": "NDX",
+      "status": 200,
+      "count": 20
+    }
+  ],
+  "beforeQuoteReceipts": [
+    "2026-11-05T09:57:57.648695Z",
+    "2026-11-05T09:57:57.649858Z"
+  ],
+  "before": {
+    "at": "2026-11-05T09:58:28.076930+00:00",
+    "label": "settled-restart-before-valid-candles",
+    "seconds": 30.01,
+    "cpuPercent": 37.77,
+    "workingSetMiB": 262.53,
+    "processes": [
+      {
+        "id": "125",
+        "name": "main",
+        "process": "main",
+        "cpuPercent": 18.06
+      },
+      {
+        "id": "41",
+        "name": "wineserver",
+        "process": "wineserver",
+        "cpuPercent": 15.13
+      },
+      {
+        "id": "81",
+        "name": "winedevice.exe",
+        "process": "winedevice.exe",
+        "cpuPercent": 4.13
+      },
+      {
+        "id": "345",
+        "name": "python3",
+        "process": "python3",
+        "cpuPercent": 0.07
+      },
+      {
+        "id": "1",
+        "name": "docker-init",
+        "process": "docker-init",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "7",
+        "name": "bash",
+        "process": "bash",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "8",
+        "name": "Xvfb",
+        "process": "Xvfb",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "17",
+        "name": "openbox",
+        "process": "openbox",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "37",
+        "name": "start.exe",
+        "process": "start.exe",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "48",
+        "name": "services.exe",
+        "process": "services.exe",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "51",
+        "name": "winedevice.exe",
+        "process": "winedevice.exe",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "63",
+        "name": "plugplay.exe",
+        "process": "plugplay.exe",
+        "cpuPercent": 0.0
+      }
+    ],
+    "threads": [
+      {
+        "id": "41/41",
+        "name": "wineserver",
+        "process": "wineserver",
+        "cpuPercent": 15.13
+      },
+      {
+        "id": "81/86",
+        "name": "winedevice.exe",
+        "process": "winedevice.exe",
+        "cpuPercent": 4.13
+      },
+      {
+        "id": "125/232",
+        "name": "service MarketD",
+        "process": "main",
+        "cpuPercent": 2.7
+      },
+      {
+        "id": "125/125",
+        "name": "main",
+        "process": "main",
+        "cpuPercent": 2.3
+      },
+      {
+        "id": "125/213",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 2.07
+      },
+      {
+        "id": "125/214",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 2.07
+      },
+      {
+        "id": "125/222",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 2.03
+      },
+      {
+        "id": "125/231",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 2.0
+      },
+      {
+        "id": "125/234",
+        "name": "service Calenda",
+        "process": "main",
+        "cpuPercent": 1.43
+      },
+      {
+        "id": "125/145",
+        "name": "ioport pool thr",
+        "process": "main",
+        "cpuPercent": 0.87
+      },
+      {
+        "id": "125/146",
+        "name": "ioport pool thr",
+        "process": "main",
+        "cpuPercent": 0.83
+      },
+      {
+        "id": "125/235",
+        "name": "calendar dispat",
+        "process": "main",
+        "cpuPercent": 0.8
+      }
+    ],
+    "threadGroups": {
+      "docker-init": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "bash": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "Xvfb": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "openbox": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "start.exe": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "wineserver": {
+        "threads": 1,
+        "cpuPercent": 15.13
+      },
+      "services.exe": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "wine_rpcrt4_ser": {
+        "threads": 6,
+        "cpuPercent": 0.0
+      },
+      "wine_rpcrt4_io": {
+        "threads": 8,
+        "cpuPercent": 0.0
+      },
+      "winedevice.exe": {
+        "threads": 8,
+        "cpuPercent": 4.13
+      },
+      "wine_sechost_se": {
+        "threads": 9,
+        "cpuPercent": 0.0
+      },
+      "wine_nsi_notifi": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "plugplay.exe": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "svchost.exe": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "libusb_event": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "rpcss.exe": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "main": {
+        "threads": 1,
+        "cpuPercent": 2.3
+      },
+      "ioport dispatch": {
+        "threads": 1,
+        "cpuPercent": 0.03
+      },
+      "ioport pool thr": {
+        "threads": 2,
+        "cpuPercent": 1.7
+      },
+      "python interpro": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "server port poo": {
+        "threads": 8,
+        "cpuPercent": 0.0
+      },
+      "mcp port accept": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "symbols": {
+        "threads": 1,
+        "cpuPercent": 0.43
+      },
+      "history symbol": {
+        "threads": 4,
+        "cpuPercent": 8.17
+      },
+      "net dispatcher": {
+        "threads": 1,
+        "cpuPercent": 0.47
+      },
+      "service MarketD": {
+        "threads": 1,
+        "cpuPercent": 2.7
+      },
+      "service Calenda": {
+        "threads": 1,
+        "cpuPercent": 1.43
+      },
+      "calendar dispat": {
+        "threads": 1,
+        "cpuPercent": 0.8
+      },
+      "wine_mmdevapi_n": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "explorer.exe": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "wine_explorer_d": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "python3": {
+        "threads": 1,
+        "cpuPercent": 0.03
+      }
+    }
+  },
+  "after": {
+    "at": "2026-11-05T09:59:13.591427+00:00",
+    "label": "after-valid-all-symbol-candles",
+    "seconds": 30.02,
+    "cpuPercent": 89.25,
+    "workingSetMiB": 299.63,
+    "processes": [
+      {
+        "id": "125",
+        "name": "main",
+        "process": "main",
+        "cpuPercent": 45.27
+      },
+      {
+        "id": "41",
+        "name": "wineserver",
+        "process": "wineserver",
+        "cpuPercent": 39.04
+      },
+      {
+        "id": "81",
+        "name": "winedevice.exe",
+        "process": "winedevice.exe",
+        "cpuPercent": 4.33
+      },
+      {
+        "id": "395",
+        "name": "python3",
+        "process": "python3",
+        "cpuPercent": 0.1
+      },
+      {
+        "id": "1",
+        "name": "docker-init",
+        "process": "docker-init",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "7",
+        "name": "bash",
+        "process": "bash",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "8",
+        "name": "Xvfb",
+        "process": "Xvfb",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "17",
+        "name": "openbox",
+        "process": "openbox",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "37",
+        "name": "start.exe",
+        "process": "start.exe",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "48",
+        "name": "services.exe",
+        "process": "services.exe",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "51",
+        "name": "winedevice.exe",
+        "process": "winedevice.exe",
+        "cpuPercent": 0.0
+      },
+      {
+        "id": "63",
+        "name": "plugplay.exe",
+        "process": "plugplay.exe",
+        "cpuPercent": 0.0
+      }
+    ],
+    "threads": [
+      {
+        "id": "41/41",
+        "name": "wineserver",
+        "process": "wineserver",
+        "cpuPercent": 39.04
+      },
+      {
+        "id": "81/86",
+        "name": "winedevice.exe",
+        "process": "winedevice.exe",
+        "cpuPercent": 4.33
+      },
+      {
+        "id": "125/232",
+        "name": "service MarketD",
+        "process": "main",
+        "cpuPercent": 3.0
+      },
+      {
+        "id": "125/125",
+        "name": "main",
+        "process": "main",
+        "cpuPercent": 2.33
+      },
+      {
+        "id": "125/214",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 1.67
+      },
+      {
+        "id": "125/369",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 1.67
+      },
+      {
+        "id": "125/222",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 1.63
+      },
+      {
+        "id": "125/231",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 1.6
+      },
+      {
+        "id": "125/384",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 1.6
+      },
+      {
+        "id": "125/394",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 1.6
+      },
+      {
+        "id": "125/383",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 1.57
+      },
+      {
+        "id": "125/387",
+        "name": "history symbol",
+        "process": "main",
+        "cpuPercent": 1.57
+      }
+    ],
+    "threadGroups": {
+      "docker-init": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "bash": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "Xvfb": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "openbox": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "start.exe": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "wineserver": {
+        "threads": 1,
+        "cpuPercent": 39.04
+      },
+      "services.exe": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "wine_rpcrt4_ser": {
+        "threads": 6,
+        "cpuPercent": 0.0
+      },
+      "wine_rpcrt4_io": {
+        "threads": 8,
+        "cpuPercent": 0.0
+      },
+      "winedevice.exe": {
+        "threads": 8,
+        "cpuPercent": 4.33
+      },
+      "wine_sechost_se": {
+        "threads": 9,
+        "cpuPercent": 0.0
+      },
+      "wine_nsi_notifi": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "plugplay.exe": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "svchost.exe": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "libusb_event": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "rpcss.exe": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "main": {
+        "threads": 1,
+        "cpuPercent": 2.33
+      },
+      "ioport dispatch": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "ioport pool thr": {
+        "threads": 2,
+        "cpuPercent": 1.6
+      },
+      "python interpro": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "server port poo": {
+        "threads": 8,
+        "cpuPercent": 0.0
+      },
+      "mcp port accept": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "symbols": {
+        "threads": 1,
+        "cpuPercent": 0.4
+      },
+      "history symbol": {
+        "threads": 23,
+        "cpuPercent": 34.73
+      },
+      "net dispatcher": {
+        "threads": 1,
+        "cpuPercent": 0.5
+      },
+      "service MarketD": {
+        "threads": 1,
+        "cpuPercent": 3.0
+      },
+      "service Calenda": {
+        "threads": 1,
+        "cpuPercent": 1.5
+      },
+      "calendar dispat": {
+        "threads": 1,
+        "cpuPercent": 1.07
+      },
+      "wine_mmdevapi_n": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "explorer.exe": {
+        "threads": 2,
+        "cpuPercent": 0.0
+      },
+      "wine_explorer_d": {
+        "threads": 1,
+        "cpuPercent": 0.0
+      },
+      "python3": {
+        "threads": 1,
+        "cpuPercent": 0.03
+      }
+    }
+  },
+  "afterQuoteReceipts": [
+    "2026-11-05T09:59:12.773545Z",
+    "2026-11-05T09:59:13.573884Z"
+  ],
+  "passed": true
+}
