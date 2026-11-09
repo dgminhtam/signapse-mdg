@@ -19,7 +19,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     outputs:
       digest: ${{ steps.publish.outputs.digest }}
     services:
@@ -120,7 +120,7 @@ jobs:
           # Expand the validated release path on the runner, not on the server.
           # shellcheck disable=SC2029
           ssh "${ssh_opts[@]}" "$target" "mkdir -p '$release'"
-          scp "${ssh_opts[@]}" docker-compose.yml deploy/dev.py "$target:$release/"
+          scp "${ssh_opts[@]}" docker-compose.yml deploy/dev.py deploy/mt5-compose.yml "$target:$release/"
           # Revision and digest above are validated before entering the remote command.
           # shellcheck disable=SC2029
           printf '%s' "$DOCKERHUB_TOKEN" | ssh "${ssh_opts[@]}" "$target" \

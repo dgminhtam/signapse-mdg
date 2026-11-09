@@ -20,6 +20,9 @@ from app.main import app
 
 pytestmark = pytest.mark.integration
 
+# Exercise the historical registry and its migrations at their original boundary.
+MIGRATION_TARGET = "20260727_0020"
+
 
 async def use_legacy_registry_schema() -> None:
     await to_thread(command.downgrade, Config("alembic.ini"), "20260727_0019")

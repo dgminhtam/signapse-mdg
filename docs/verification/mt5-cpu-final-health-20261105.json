@@ -1,0 +1,30 @@
+{
+  "at": "2026-11-05T10:00:49.135121+00:00",
+  "localOnly": true,
+  "calendarCount": 334,
+  "calendarBeforeLastSeen": "2026-11-05T10:00:36.973082Z",
+  "quotesBefore": [
+    "2026-11-05T10:00:49.381363Z",
+    "2026-11-05T10:00:49.382865Z"
+  ],
+  "quotesAfter": [
+    "2026-11-05T10:01:07.292294Z",
+    "2026-11-05T10:01:07.566873Z"
+  ],
+  "calendarAfterLastSeen": "2026-11-05T10:00:53.789768Z",
+  "native": {
+    "mainWindowFound": true,
+    "minimized": true,
+    "memoryEvents": {
+      "low": "0",
+      "high": "0",
+      "max": "0",
+      "oom": "0",
+      "oom_kill": "0",
+      "oom_group_kill": "0"
+    },
+    "swapCurrent": 0,
+    "swapMax": "0"
+  },
+  "passed": true
+}

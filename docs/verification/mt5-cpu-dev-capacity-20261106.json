@@ -1,0 +1,31 @@
+{
+  "at": "2026-11-06T07:12:44.529119+00:00",
+  "requests": [
+    {
+      "symbol": "EUR/USD",
+      "timeframe": "1m",
+      "status": 200,
+      "count": 1000,
+      "ms": 1047.67,
+      "validOHLC": true
+    },
+    {
+      "symbol": "XAU/USD",
+      "timeframe": "1h",
+      "status": 200,
+      "count": 1000,
+      "ms": 1098.05,
+      "validOHLC": true
+    }
+  ],
+  "quoteEvents": {
+    "XAU/USD": 156,
+    "EUR/USD": 58
+  },
+  "streamStatuses": [
+    "CONNECTING",
+    "SUBSCRIBED"
+  ],
+  "passed": true,
+  "completedAt": "2026-11-06T07:13:29.603408+00:00"
+}

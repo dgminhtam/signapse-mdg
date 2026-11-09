@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.mt5_dependency import get_mt5_provider
 from app.api.openapi import (
     MARKET_DATA_UNAVAILABLE_RESPONSE,
     PRICE_DESCRIPTION,
@@ -31,6 +32,8 @@ from app.domain.candles import CandleProvider, CandleRepository, CandleResult
 from app.domain.errors import CandleRequestError, ProviderSelectionError
 from app.domain.timeframes import TIMEFRAMES
 from app.providers.binance_spot import build_binance_spot_candle_provider
+from app.providers.mt5 import PROVIDER as MT5_PROVIDER
+from app.providers.mt5 import MT5Provider
 from app.providers.twelvedata_market_data import build_twelvedata_market_data_provider
 from app.providers.yfinance_market_data import build_yfinance_candle_provider
 from app.services.candle_provider_router import CandleProviderRouter
@@ -92,6 +95,7 @@ def get_yfinance_candle_provider(timeout_seconds: float) -> CandleProvider:
 
 def get_candle_provider(
     settings: Annotated[Settings, Depends(get_settings)],
+    mt5: Annotated[MT5Provider | None, Depends(get_mt5_provider)] = None,
 ) -> CandleProvider:
     providers = {
         "BINANCE_SPOT": get_binance_candle_provider(
@@ -109,6 +113,8 @@ def get_candle_provider(
             settings.twelvedata_rest_base_url,
             settings.provider_http_timeout_seconds,
         )
+    if mt5 is not None:
+        providers[MT5_PROVIDER] = mt5
     return CandleProviderRouter(providers)
 
 
@@ -164,6 +170,8 @@ def get_candle_request_clock() -> Callable[[], datetime]:
     "an empty array. No synthetic candles, cursor or partial-result metadata are added. "
     "Response boundaries describe the window scanned. Forming candles have complete=false; "
     "completed rows win when openTime coincides. Only completed candles are persisted. "
+    "MT5 backward/latest count scans exclude future opens while retaining the requested cutoff "
+    "and including an already-open forming candle. "
     "Boundaries need not align to timeframe opens; provider timestamps are preserved. "
     "before is unsupported and returns 400 INVALID_TIME_RANGE. Operational failures return 503. "
     + RAW_QUERY_DESCRIPTION,
@@ -213,7 +221,7 @@ def get_candle_request_clock() -> Callable[[], datetime]:
             "content": {
                 "application/json": {
                     "example": {
-                        "symbol": "BTC/USD",
+                        "symbol": "BTC/USDT",
                         "timeframe": "1h",
                         "from": "2026-06-19T00:00:00Z",
                         "to": "2026-06-19T01:00:00Z",

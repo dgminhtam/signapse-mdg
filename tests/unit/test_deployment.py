@@ -97,6 +97,31 @@ def test_deploy_rejects_mutable_or_unidentified_builds(image: str, revision: str
         dev.deploy(image, revision)
 
 
+def test_activated_mt5_requires_private_provisioning(
+    docker: tuple[Mock, Mock], tmp_path: Path
+) -> None:
+    (tmp_path / "mt5").mkdir()
+    (tmp_path / "mt5" / "enabled").touch()
+    with pytest.raises(ValueError, match="private MT5 token"):
+        dev.deploy(IMAGE, REVISION)
+    docker[0].assert_not_called()
+
+
+def test_activated_mt5_deploys_gateway_only(docker: tuple[Mock, Mock], tmp_path: Path) -> None:
+    run, _ = docker
+    (tmp_path / "mt5").mkdir()
+    (tmp_path / "mt5" / "enabled").touch()
+    (tmp_path / "mt5" / "token.txt").write_text("private")
+
+    dev.deploy(IMAGE, REVISION)
+
+    commands = [call.args[0] for call in run.call_args_list]
+    assert [command[-1] for command in commands if "pull" in command] == ["gateway"]
+    assert [command[-1] for command in commands if "up" in command] == ["gateway"]
+    assert "mt5-compose.yml" in " ".join(commands[0])
+    assert run.call_args.kwargs["env"]["MDG_MT5_DIR"] == str(tmp_path / "mt5")
+
+
 @pytest.mark.parametrize(
     "path,bad",
     [

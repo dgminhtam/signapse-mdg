@@ -1,0 +1,116 @@
+name: mdg-mt5
+
+services:
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mdg_mt5_local
+      POSTGRES_USER: mdg
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a URL-safe database password}
+    volumes:
+      - database-data:/var/lib/postgresql/data
+    networks: [database]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mdg -d mdg_mt5_local"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  initialize:
+    image: ${MDG_IMAGE:?Set the MDG image}
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mdg:${POSTGRES_PASSWORD:?}@database:5432/mdg_mt5_local
+      ECONOMIC_CALENDAR_POLL_SECONDS: "0"
+      MT5_ENABLED: "false"
+    command:
+      - sh
+      - -ec
+      - alembic upgrade head && python -m scripts.seed_mt5_local
+    networks: [database]
+    depends_on:
+      database:
+        condition: service_healthy
+
+  gateway:
+    image: ${MDG_IMAGE:?Set the MDG image}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mdg:${POSTGRES_PASSWORD:?}@database:5432/mdg_mt5_local
+      MT5_ENABLED: "true"
+      MT5_TOKEN: ${MT5_TOKEN:?Set a private token of at least 32 characters}
+      MT5_TOKEN_FILE: /tmp/mt5-token
+      MT5_TCP_HOST: 0.0.0.0
+      MT5_TCP_PORT: "9001"
+      MT5_CALENDAR_TCP_PORT: "9002"
+      MT5_CALENDAR_TIMEOUT_SECONDS: ${MT5_CALENDAR_TIMEOUT_SECONDS:-60}
+      ECONOMIC_CALENDAR_POLL_SECONDS: ${ECONOMIC_CALENDAR_POLL_SECONDS:-300}
+    command:
+      - sh
+      - -ec
+      - |
+        umask 077
+        printf '%s' "$$MT5_TOKEN" > /tmp/mt5-token
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+    tmpfs: [/tmp]
+    ports:
+      - "127.0.0.1:${MDG_HTTP_PORT:-18081}:8000"
+    networks:
+      database:
+      terminal:
+        aliases: [mdg-tcp-smoke.test]
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json, urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3))['status'] == 'READY'"
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 15s
+
+  terminal:
+    image: ${MT5_IMAGE:?Set the packaged MT5 image}
+    restart: unless-stopped
+    init: true
+    cpus: 1.0
+    mem_limit: 2g
+    stop_grace_period: 30s
+    shm_size: 256mb
+    environment:
+      MT5_LOGIN: ${MT5_LOGIN:?Set the Vantage demo account login}
+      MT5_PASSWORD: ${MT5_PASSWORD:?Set the Vantage demo account password}
+      MT5_SERVER: ${MT5_SERVER:-VantageMarkets-Demo}
+      MT5_TOKEN: ${MT5_TOKEN:?Set a private token of at least 32 characters}
+      MT5_SYMBOLS: ${MT5_SYMBOLS:-EURUSD,GBPUSD,USDJPY,AUDUSD,XAUUSD,XAGUSD,AAPL,TSLA,NVIDIA,MSFT,SPY,QQQ,USOUSD,UKOUSD,NG-Cr,Coffee-Cr,Sugar-Cr,Wheat-Cr,SP500.r,NAS100.r}
+    volumes:
+      - terminal-home:/home/mt5
+    tmpfs: [/tmp]
+    networks: [terminal]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    logging:
+      options:
+        max-size: 5m
+        max-file: "2"
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f '[t]erminal64.exe' >/dev/null && xdpyinfo >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 180s
+
+networks:
+  database:
+    internal: true
+  terminal:
+    driver: bridge
+
+volumes:
+  database-data:
+  terminal-home:

@@ -1,0 +1,58 @@
+{
+  "at": "2026-11-06T07:15:05.388104+00:00",
+  "calendarAfterRestart": {
+    "cutoff": "2026-11-06T07:09:46.257993+00:00",
+    "nativeCount": 376,
+    "freshCount": 373,
+    "historicalRetainedCount": 3,
+    "lastSeenDistribution": {
+      "2026-11-06T07:14:44.262268Z": 373,
+      "2026-11-04T14:29:13.342306Z": 1,
+      "2026-11-04T14:39:14.902399Z": 1,
+      "2026-11-05T11:53:19.504149Z": 1
+    }
+  },
+  "gatewayRevision": "9ca69a5b696d923453507c09478ddaef024bb75f",
+  "registryUnchanged": true,
+  "finalQuotes": {
+    "quotes": [
+      {
+        "symbol": "XAU/USD",
+        "price": "4045.02",
+        "receivedAt": "2026-11-06T07:15:04.613800Z"
+      },
+      {
+        "symbol": "EUR/USD",
+        "price": "1.11824",
+        "receivedAt": "2026-11-06T07:15:02.814907Z"
+      }
+    ],
+    "errors": []
+  },
+  "ready": true,
+  "passed": true,
+  "server": {
+    "gatewayContainerUnchanged": true,
+    "terminalImageId": "sha256:7e2322b850aeada9495633b490dc70233f00f0bdef986d224c7c9f681fa8c6cf",
+    "terminalContainerId": "2bcb918c6f0756b1f2630dd1e7aa5958c1cd8f1e93202abf68be006221229368",
+    "terminalStartedAt": "2026-11-06T07:09:45.628980766Z",
+    "terminalHealth": "healthy",
+    "terminalOOMKilled": false,
+    "terminalAutoRestarts": 0,
+    "calendarCompletedLogs": [
+      {
+        "timestamp": "2026-11-06T07:09:42.255154+00:00",
+        "event": "economic_calendar_refresh_completed",
+        "provider_rows": 373,
+        "latency_ms": 3103.928
+      },
+      {
+        "timestamp": "2026-11-06T07:14:45.060939+00:00",
+        "event": "economic_calendar_refresh_completed",
+        "provider_rows": 373,
+        "latency_ms": 2804.638
+      }
+    ],
+    "activationMarkerPresent": true
+  }
+}

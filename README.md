@@ -1,5 +1,11 @@
 # Signapse Market Data Gateway
 
+Crypto cutover (2026-11-05): `BTC/USDT -> BINANCE_SPOT:BTCUSDT` and
+`ETH/USDT -> BINANCE_SPOT:ETHUSDT` replace the retired USD pairs. Both use 24/7 UTC
+sessions and two price display decimals. USD mappings from MT5, Twelve Data and Yahoo
+are not overrides for these USDT instruments. Earlier provider experiments below are
+historical; the current registry and [cutover runbook](docs/crypto-usdt-cutover.md) govern crypto.
+
 FastAPI service for the Signapse crypto market data gateway.
 
 ## Getting Started
@@ -96,8 +102,8 @@ The API is available at:
 
 - Health check: <http://127.0.0.1:8000/health>
 - Supported symbols: <http://127.0.0.1:8000/v1/symbols>
-- Latest quotes: <http://127.0.0.1:8000/v1/quotes?symbols=BTC%2FUSD%2CETH%2FUSD>
-- Historical candles: <http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSD&timeframe=1m&from=2026-06-19T00%3A00%3A00Z&to=2026-06-19T00%3A02%3A00Z>
+- Latest quotes: <http://127.0.0.1:8000/v1/quotes?symbols=BTC%2FUSDT%2CETH%2FUSDT>
+- Historical candles: <http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSDT&timeframe=1m&from=2026-06-19T00%3A00%3A00Z&to=2026-06-19T00%3A02%3A00Z>
 - Generated HTTP contract: <http://127.0.0.1:8000/openapi.json>
 - OpenAPI docs UI: <http://127.0.0.1:8000/docs>
 
@@ -129,7 +135,7 @@ values are ignored.
 Fetch the two supported Binance-backed quotes:
 
 ```powershell
-Invoke-RestMethod "http://127.0.0.1:8000/v1/quotes?symbols=BTC%2FUSD%2CETH%2FUSD"
+Invoke-RestMethod "http://127.0.0.1:8000/v1/quotes?symbols=BTC%2FUSDT%2CETH%2FUSDT"
 ```
 
 Fetch the supported Twelve Data-backed Forex, commodity, US stock, and ETF quotes:
@@ -146,7 +152,7 @@ one configured key.
 Fetch an aligned half-open UTC candle range:
 
 ```powershell
-Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSD&timeframe=1m&from=2026-06-19T00%3A00%3A00Z&to=2026-06-19T00%3A02%3A00Z"
+Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSDT&timeframe=1m&from=2026-06-19T00%3A00%3A00Z&to=2026-06-19T00%3A02%3A00Z"
 ```
 
 Fetch candles through the current request time by omitting `to`:
@@ -163,7 +169,7 @@ For sparse assets, request actual provider-backed rows with `count` instead of c
 slot-based `limit` semantics:
 
 ```powershell
-Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSD&timeframe=1h&to=2026-06-19T10%3A00%3A00Z&count=300"
+Invoke-RestMethod "http://127.0.0.1:8000/v1/candles?symbol=BTC%2FUSDT&timeframe=1h&to=2026-06-19T10%3A00%3A00Z&count=300"
 ```
 
 `count` returns up to 1,000 real provider-backed candles and may return fewer when history or the
@@ -203,7 +209,7 @@ The response exposes only canonical series context:
 
 ```json
 {
-  "symbol": "BTC/USD",
+  "symbol": "BTC/USDT",
   "timeframe": "1m",
   "from": "2026-06-19T00:00:00Z",
   "to": "2026-06-19T00:02:00Z",
@@ -234,7 +240,7 @@ Use the internal backfill command to pre-warm `market_data_candles` before user 
 range:
 
 ```powershell
-uv run python -m app.backfill_candles --from 2026-06-19T00:00:00Z --to 2026-06-20T00:00:00Z --timeframes 1m,5m --symbols BTC/USD,ETH/USD
+uv run python -m app.backfill_candles --from 2026-06-19T00:00:00Z --to 2026-06-20T00:00:00Z --timeframes 1m,5m --symbols BTC/USDT,ETH/USDT
 ```
 
 The command requires `DATABASE_URL` and the same provider configuration as `/v1/candles`.
@@ -248,7 +254,7 @@ a non-zero exit status; completed writes remain valid for an idempotent rerun.
 Optional filters:
 
 ```powershell
---symbols BTC/USD,EUR/USD
+--symbols BTC/USDT,EUR/USD
 --providers BINANCE_SPOT,TWELVE_DATA,YFINANCE
 --asset-classes CRYPTO,FOREX,ETF
 ```
@@ -262,7 +268,7 @@ are idempotent.
 Postman can test `WS /v1/stream` directly with a WebSocket request:
 
 ```text
-ws://127.0.0.1:8000/v1/stream?symbols=BTC%2FUSD,EUR%2FUSD
+ws://127.0.0.1:8000/v1/stream?symbols=BTC%2FUSDT,EUR%2FUSD
 ```
 
 Forex-only example:
@@ -283,7 +289,7 @@ Expected status events keep the same shape:
 {
   "type": "status",
   "state": "CONNECTING",
-  "symbols": ["BTC/USD", "EUR/USD"],
+  "symbols": ["BTC/USDT", "EUR/USD"],
   "channels": ["quote"],
   "observedAt": "2026-06-22T00:00:00Z"
 }
@@ -295,6 +301,13 @@ Requests containing any `timeframe` value close with `1008 TIMEFRAME_NOT_ALLOWED
 response is self-contained and uses the process-local five-second forming-cache TTL.
 
 ## Development Checks
+
+Local MT5 transport experiment: [TCP smoke test and results](docs/mt5-tcp-smoke.md).
+Direct MT5 integration: [local runbook and verification](docs/mt5-local-integration.md).
+Native economic calendar: [local integration and verification](docs/mt5-calendar-integration.md).
+Fresh-machine MT5/MDG Compose bundle: [configuration and startup](docs/mt5-compose.md).
+Local MT5 CPU/RAM investigation: [measurements and remaining limits](docs/mt5-runtime-performance.md).
+Dev MT5 rollout: [2026-11-06 verification and rollback](docs/mt5-dev-cpu-20261106.md).
 
 CI/CD dev is defined in [the dev workflow](.github/workflows/dev.yml). Pull requests to `dev`
 run checks; pushes to `dev` publish and deploy only after checks pass. Server setup, secrets,

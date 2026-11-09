@@ -1,0 +1,152 @@
+{
+  "phase": "RESTART",
+  "startedAt": "2026-11-04T16:39:16.289490+00:00",
+  "passed": true,
+  "window": {
+    "from": "2026-11-02T00:00:00+00:00",
+    "to": "2026-11-11T00:00:00+00:00",
+    "limit": 5000
+  },
+  "nativeStartupWaitSeconds": 16.8,
+  "quotesBeforeWebSocket": {
+    "quotes": [
+      {
+        "symbol": "XAU/USD",
+        "price": "4055.43",
+        "receivedAt": "2026-11-04T16:39:32.848329Z"
+      },
+      {
+        "symbol": "EUR/USD",
+        "price": "1.12189",
+        "receivedAt": "2026-11-04T16:39:30.430697Z"
+      }
+    ],
+    "errors": []
+  },
+  "calendar": {
+    "countBefore": 341,
+    "countAfter": 341,
+    "uniqueKeys": 341,
+    "firstLastSeenAt": "2026-11-04T16:39:31.725965Z",
+    "latestLastSeenAt": "2026-11-04T16:39:48.179555Z",
+    "samples": [
+      {
+        "key": "FOREX:mt5:289571",
+        "type": "FOREX",
+        "name": "JOLTS Job Openings",
+        "currency": "USD",
+        "impact": "HIGH",
+        "scheduledAt": "2026-11-03T15:00:00Z",
+        "actual": "7.523M",
+        "forecast": "6.779M",
+        "previous": "7.079M",
+        "revision": "7.190M",
+        "actualBetterWorse": null,
+        "revisionBetterWorse": null,
+        "description": null,
+        "newsUrl": null,
+        "firstSeenAt": "2026-11-04T16:36:25.041846Z",
+        "lastSeenAt": "2026-11-04T16:39:48.179555Z",
+        "lastChangedAt": "2026-11-04T16:36:25.041846Z"
+      },
+      {
+        "key": "FOREX:mt5:277625",
+        "type": "FOREX",
+        "name": "Nonfarm Payrolls",
+        "currency": "USD",
+        "impact": "HIGH",
+        "scheduledAt": "2026-11-06T13:30:00Z",
+        "actual": null,
+        "forecast": "55K",
+        "previous": "29K",
+        "revision": null,
+        "actualBetterWorse": null,
+        "revisionBetterWorse": null,
+        "description": null,
+        "newsUrl": null,
+        "firstSeenAt": "2026-11-04T16:36:25.041846Z",
+        "lastSeenAt": "2026-11-04T16:39:48.179555Z",
+        "lastChangedAt": "2026-11-04T16:36:25.041846Z"
+      },
+      {
+        "key": "FOREX:mt5:277493",
+        "type": "FOREX",
+        "name": "CPI m/m",
+        "currency": "USD",
+        "impact": "HIGH",
+        "scheduledAt": "2026-11-10T13:30:00Z",
+        "actual": null,
+        "forecast": "0.5%",
+        "previous": "0.6%",
+        "revision": null,
+        "actualBetterWorse": null,
+        "revisionBetterWorse": null,
+        "description": null,
+        "newsUrl": null,
+        "firstSeenAt": "2026-11-04T16:36:25.041846Z",
+        "lastSeenAt": "2026-11-04T16:39:48.179555Z",
+        "lastChangedAt": "2026-11-04T16:36:25.041846Z"
+      }
+    ]
+  },
+  "quoteMetrics": {
+    "XAU/USD": {
+      "events": 109,
+      "uniqueReceivedAt": 109,
+      "maxGapMs": 549.7,
+      "first": {
+        "at": 224915.9555256,
+        "receivedAt": "2026-11-04T16:39:33.117187Z",
+        "price": "4055.52"
+      },
+      "last": {
+        "at": 224945.8482603,
+        "receivedAt": "2026-11-04T16:40:03.035470Z",
+        "price": "4057.24"
+      }
+    },
+    "EUR/USD": {
+      "events": 51,
+      "uniqueReceivedAt": 51,
+      "maxGapMs": 2453.59,
+      "first": {
+        "at": 224915.9555599,
+        "receivedAt": "2026-11-04T16:39:30.430697Z",
+        "price": "1.12189"
+      },
+      "last": {
+        "at": 224945.8471382,
+        "receivedAt": "2026-11-04T16:40:03.033818Z",
+        "price": "1.12208"
+      }
+    }
+  },
+  "streamStatuses": [
+    {
+      "type": "status",
+      "state": "CONNECTING",
+      "symbols": [
+        "XAU/USD",
+        "EUR/USD"
+      ],
+      "channels": [
+        "quote"
+      ],
+      "observedAt": "2026-11-04T16:39:33.141408Z"
+    },
+    {
+      "type": "status",
+      "state": "SUBSCRIBED",
+      "symbols": [
+        "XAU/USD",
+        "EUR/USD"
+      ],
+      "channels": [
+        "quote"
+      ],
+      "observedAt": "2026-11-04T16:39:33.141719Z"
+    }
+  ],
+  "openapiRevision": "5986885-mt5-bootstrap-local",
+  "completedAt": "2026-11-04T16:40:03.209429+00:00"
+}

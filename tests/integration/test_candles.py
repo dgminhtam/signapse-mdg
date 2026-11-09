@@ -19,6 +19,9 @@ from app.main import app
 
 pytestmark = pytest.mark.integration
 
+# Exercise the historical registry and its migrations at their original boundary.
+MIGRATION_TARGET = "20260727_0020"
+
 START = datetime(2026, 6, 19, 0, 0, tzinfo=UTC)
 BTC = SupportedSymbol("BTC/USD", "CRYPTO", "TWELVE_DATA", "BTC/USD", True, 2)
 
@@ -201,7 +204,7 @@ async def test_forex_weekend_cleanup_migration_scope(
                 },
             )
 
-    await asyncio.to_thread(command.upgrade, config, "head")
+    await asyncio.to_thread(command.upgrade, config, MIGRATION_TARGET)
 
     async with database_engine.connect() as connection:
         remaining = await connection.execute(
@@ -222,7 +225,7 @@ async def test_forex_weekend_cleanup_migration_scope(
     ]
 
     await asyncio.to_thread(command.downgrade, config, "20260622_0003")
-    await asyncio.to_thread(command.upgrade, config, "head")
+    await asyncio.to_thread(command.upgrade, config, MIGRATION_TARGET)
 
 
 async def test_cold_repeated_and_partial_requests_use_persisted_provider_mapping(

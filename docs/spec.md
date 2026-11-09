@@ -1,5 +1,15 @@
 # Signapse Market Data Gateway Crypto MVP
 
+Crypto cutover (2026-11-05): the only crypto mappings are `BTC/USDT -> BINANCE_SPOT:BTCUSDT`
+and `ETH/USDT -> BINANCE_SPOT:ETHUSDT`, 24/7 UTC, price display decimals 2.
+USD alternatives are retired; earlier provider experiment descriptions are historical.
+See [cutover runbook](crypto-usdt-cutover.md).
+
+Local MT5 behavior and its verified scope are recorded in the
+[MT5 integration runbook](mt5-local-integration.md). Public HTTP response shapes
+and the quote-only WebSocket contract remain unchanged. MT5 is disabled by
+default; experimental mappings are seeded only into the dedicated local database.
+
 HTTP integration uses the producer environment's published `/openapi.json`. The HTTP API Contract
 and Error Contract sections below retain accepted behavior and target design context; they do not
 prove runtime publication or replace missing generated metadata. Apply the
@@ -36,8 +46,8 @@ Registry hiện chứa các asset được hỗ trợ hoặc đã được seed 
 
 | Canonical symbol | Asset class | Provider | Provider symbol | Status |
 | --- | --- | --- | --- | --- |
-| `BTC/USD` | `CRYPTO` | `TWELVE_DATA` | `BTC/USD` | Supported |
-| `ETH/USD` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSD` | Supported |
+| `BTC/USDT` | `CRYPTO` | `BINANCE_SPOT` | `BTCUSDT` | Supported |
+| `ETH/USDT` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSDT` | Supported |
 | `EUR/USD` | `FOREX` | `TWELVE_DATA` | `EUR/USD` | Supported |
 | `GBP/USD` | `FOREX` | `YFINANCE` | `GBPUSD=X` | Supported |
 | `USD/JPY` | `FOREX` | `YFINANCE` | `JPY=X` | Supported |
@@ -67,9 +77,8 @@ accept a stream symbol without emitting ticks; such interests remain `CONNECTING
 arrives. Commodity mappings are futures or rolling-futures proxies; for example, `XAG/USD` maps to
 `SI=F` rather than spot silver.
 
-Five additional Supported Provider mappings are available for request-wide Provider Override:
-`AAPL -> YFINANCE:AAPL`, `BTC/USD -> YFINANCE:BTC-USD`,
-`ETH/USD -> YFINANCE:ETH-USD`, `EUR/USD -> YFINANCE:EURUSD=X`, and
+Three additional Supported Provider mappings are available for request-wide Provider Override:
+`AAPL -> YFINANCE:AAPL`, `EUR/USD -> YFINANCE:EURUSD=X`, and
 `QQQ -> YFINANCE:QQQ`. `XAU/USD` is Twelve Data-only; `GC=F` and `XAUUSD=X` are not approved
 alternatives. The active mapping defines the Default Provider. Each request or subscription resolves
 one immutable Provider Selection, using the default when no override is supplied. Mapping existence
@@ -78,7 +87,7 @@ streaming; temporary provider failures do not change support or trigger automati
 
 MVP không hỗ trợ:
 
-- crypto ngoài `BTC/USD` và `ETH/USD`
+- crypto ngoài `BTC/USDT` và `ETH/USDT`
 - synthetic basket price hoặc consolidated global price
 - exchange aggregation across nhiều sàn
 - trading, order book depth, hoặc execution
@@ -94,7 +103,7 @@ Gateway phải được thiết kế như một service contract độc lập. C
 
 ### Canonical symbol stable, provider symbol replaceable
 
-Client dùng canonical symbol như `BTC/USD`. Provider adapter chịu trách nhiệm map sang provider symbol như `BTC/USD` hoặc `BTCUSD`.
+Client dùng canonical symbol như `BTC/USDT`. Provider adapter maps it to Binance Spot `BTCUSDT`.
 
 Nếu sau này provider đổi từ Binance sang nguồn khác, contract bên ngoài không nên đổi.
 
@@ -210,27 +219,25 @@ Response:
 {
   "symbols": [
     {
-      "symbol": "BTC/USD",
+      "symbol": "BTC/USDT",
       "assetClass": "CRYPTO",
-      "provider": "TWELVE_DATA",
-      "providerSymbol": "BTC/USD",
+      "provider": "BINANCE_SPOT",
+      "providerSymbol": "BTCUSDT",
       "enabled": true,
       "priceDisplayDecimals": 2,
       "providerMappings": [
-        {"provider": "TWELVE_DATA", "providerSymbol": "BTC/USD", "isDefault": true},
-        {"provider": "YFINANCE", "providerSymbol": "BTC-USD", "isDefault": false}
+        {"provider": "BINANCE_SPOT", "providerSymbol": "BTCUSDT", "isDefault": true}
       ]
     },
     {
-      "symbol": "ETH/USD",
+      "symbol": "ETH/USDT",
       "assetClass": "CRYPTO",
       "provider": "BINANCE_SPOT",
-      "providerSymbol": "ETHUSD",
+      "providerSymbol": "ETHUSDT",
       "enabled": true,
       "priceDisplayDecimals": 2,
       "providerMappings": [
-        {"provider": "BINANCE_SPOT", "providerSymbol": "ETHUSD", "isDefault": true},
-        {"provider": "YFINANCE", "providerSymbol": "ETH-USD", "isDefault": false}
+        {"provider": "BINANCE_SPOT", "providerSymbol": "ETHUSDT", "isDefault": true}
       ]
     }
   ]
@@ -252,7 +259,7 @@ from 0 through 18 inclusive.
 ### Get latest quotes
 
 ```http
-GET /v1/quotes?symbols=BTC/USD,ETH/USD
+GET /v1/quotes?symbols=BTC/USDT,ETH/USDT
 ```
 
 Response:
@@ -261,7 +268,7 @@ Response:
 {
   "quotes": [
     {
-      "symbol": "BTC/USD",
+      "symbol": "BTC/USDT",
       "price": "104250.12",
       "receivedAt": "2026-06-19T10:30:01Z"
     }
@@ -276,7 +283,9 @@ Semantics:
 - `symbol` is the canonical gateway symbol; provider identity and mapping remain internal.
 - `price` is the latest trade/market price rounded with `ROUND_HALF_UP` and padded to the symbol's
   exact `priceDisplayDecimals`.
-- `receivedAt` is the gateway receive/snapshot timestamp.
+- `receivedAt` is the gateway receive/snapshot timestamp. For the local MT5 feed,
+  repeated REST reads preserve the original receipt time; freshness also checks
+  normalized broker event time, so a replay or heartbeat cannot refresh old data.
 - Asset class, provider metadata, volume, provider time, and freshness state are not exposed.
 - `provider` is optional, request-wide, and case-sensitive. It selects a mapping only for assets
   that list that provider in `providerMappings`; quote requests keep HTTP `200` partial outcomes
@@ -285,7 +294,7 @@ Semantics:
 - Duplicate symbols are collapsed in first-seen order; each of the `quotes` and `errors` arrays
   preserves that request order, including when every symbol fails.
 - Request-level errors are reserved for malformed input such as missing or empty `symbols`.
-- Twelve Data cache misses for `BTC/USD`, `ETH/USD`, `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`,
+- Twelve Data cache misses for `EUR/USD`, `GBP/USD`, `USD/JPY`, `AUD/USD`,
   `XAU/USD`, `AAPL`, `TSLA`, `NVDA`, `MSFT`, `WTI`, `SPY`, and `QQQ` are grouped by their
   persisted `TWELVE_DATA` mapping and fetched
   through the Twelve Data SDK.
@@ -301,14 +310,14 @@ Semantics:
 ### Get candles
 
 ```http
-GET /v1/candles?symbol=BTC/USD&timeframe=1m&from=2026-06-19T00:00:00Z&to=2026-06-19T01:00:00Z
+GET /v1/candles?symbol=BTC/USDT&timeframe=1m&from=2026-06-19T00:00:00Z&to=2026-06-19T01:00:00Z
 ```
 
 Response:
 
 ```json
 {
-  "symbol": "BTC/USD",
+  "symbol": "BTC/USDT",
   "timeframe": "1m",
   "from": "2026-06-19T00:00:00Z",
   "to": "2026-06-19T01:00:00Z",
@@ -370,6 +379,10 @@ Semantics:
   contains no more than the requested `count` and the provider-safe page capacity; later pages are
   derived only when earlier pages did not supply enough unique rows, up to the same internal scan
   budget. A fully persisted page makes no provider request.
+- MT5 backward/latest `count` scans exclude opens after captured current time, even when `to`
+  is in the future; an open exactly at current time remains eligible when it is before `to`.
+  The response retains the requested cutoff. Follow-up MT5 pages target the remaining row count;
+  empty pages grow progressively within the page capacity and existing scan budget to cross gaps.
 - When a count page is incomplete, MDG makes one logical contiguous request through the immutable
   selected Provider Mapping, even when the window crosses a closed session. The selected adapter
   may split that logical window into provider-native range-limited requests; Count Query Execution
@@ -434,14 +447,14 @@ Semantics:
 ### Get historical price
 
 ```http
-GET /v1/historical-price?symbol=BTC/USD&at=2026-06-19T10:30:12Z
+GET /v1/historical-price?symbol=BTC/USDT&at=2026-06-19T10:30:12Z
 ```
 
 Response:
 
 ```json
 {
-  "symbol": "BTC/USD",
+  "symbol": "BTC/USDT",
   "price": "104250.12",
   "pricedAt": "2026-06-19T10:30:00Z",
   "resolution": "1m"
@@ -522,12 +535,18 @@ Semantics:
 - Events are ordered by `scheduledAt`, then `type`, then `key`.
 - `key` is `{type}:{external_event_id}`. Database `id`, `externalEventId`, provider source, and
   upstream site fields are not exposed.
-- `description` and `newsUrl` are nullable enrichment fields from upstream event details. `newsUrl`
-  is a single related article redirect URL for downstream article retrieval; raw news HTML, article
-  content, and history rows are not exposed.
-- The refresh keeps the configured polling cadence (`300` seconds in production) for base values.
-  Each run uses non-extended base scraping, preserves stored enrichment when base values are null,
-  and requests details only for incomplete events not attempted during the current UTC day.
+- MT5 is the active macro source, mapped to FOREX only. Other types retain readable
+  legacy rows. New key is `FOREX:mt5:<occurrenceId>`; old IDs/rows are retained and
+  never automatically merged across sources.
+- previous retains the original previous value; revision is revised previous,
+  not the native revision counter. Numbers retain native digits, K/M/B/T and percent
+  suffixes. Unavailable values remain null.
+- New MT5 description, newsUrl and both better/worse assessments are null. Existing
+  legacy enrichment is retained; publisher source_url is not a related article URL.
+- The default refresh cadence remains 300 seconds. Dedicated CalendarService RPCs
+  read at most seven days each and stage the whole window before persistence.
+  Native/metadata/timeout/partial errors do not persist earlier pages. No scraper
+  or detail enrichment fallback remains; GET never queries the terminal.
 - Empty valid ranges return `200` with `events: []`.
 - Missing, invalid, non-UTC, or inverted/equal time boundaries return `400 INVALID_TIME_RANGE`.
   Invalid filters use `INVALID_TYPES`, `INVALID_CURRENCIES`, or `INVALID_IMPACT`; invalid limits
@@ -538,9 +557,9 @@ Semantics:
 ### Subscribe
 
 ```text
-WS /v1/stream?symbols=BTC/USD,ETH/USD
-WS /v1/stream?symbols=BTC/USD,EUR/USD&provider=TWELVE_DATA
-WS /v1/stream?symbols=BTC/USD,EUR/USD,XAG/USD
+WS /v1/stream?symbols=BTC/USDT,ETH/USDT
+WS /v1/stream?symbols=AAPL,EUR/USD&provider=TWELVE_DATA
+WS /v1/stream?symbols=BTC/USDT,EUR/USD,XAG/USD
 ```
 
 The quote stream requires `symbols` and accepts at most one optional, case-sensitive, request-wide
@@ -565,7 +584,7 @@ initial quote snapshot; clients needing an initial value use `GET /v1/quotes`.
 ```json
 {
   "type": "quote",
-  "symbol": "BTC/USD",
+  "symbol": "BTC/USDT",
   "price": "104250.12",
   "receivedAt": "2026-06-19T10:30:01Z"
 }
@@ -577,7 +596,7 @@ initial quote snapshot; clients needing an initial value use `GET /v1/quotes`.
 {
   "type": "status",
   "state": "SUBSCRIBED",
-  "symbols": ["BTC/USD", "ETH/USD"],
+  "symbols": ["BTC/USDT", "ETH/USDT"],
   "channels": ["quote"],
   "observedAt": "2026-06-19T10:30:01Z"
 }
@@ -602,7 +621,7 @@ or candle persistence handoff.
 ### Candle snapshots are REST-only
 
 ```http
-GET /v1/candles?symbol=BTC/USD&timeframe=1m&limit=1
+GET /v1/candles?symbol=BTC/USDT&timeframe=1m&limit=1
 ```
 
 The candle response shape is unchanged. `limit=1` returns the latest eligible forming candle with
@@ -744,8 +763,8 @@ Notes:
   24 active defaults and five inactive alternatives before resuming provider-selection writes.
 - Switching provider starts a new provider-owned candle history. Existing candle rows retain their
   recorded provider identity and are never relabeled.
-- `symbol` stores canonical symbol such as `BTC/USD`.
-- `symbol_provider_mappings.provider_symbol` stores an upstream identifier such as `BTC/USD`.
+- `symbol` stores canonical symbol such as `BTC/USDT`.
+- `symbol_provider_mappings.provider_symbol` stores an upstream identifier such as `BTC/USDT`.
 - Decimal values should use database decimal/numeric types, not float.
 
 ### Economic calendar persistence
@@ -771,11 +790,9 @@ while preserving `first_seen_at`; `last_changed_at` advances only for effective 
 changes, including enrichment. Incoming null enrichment preserves existing values. Neither raw
 provider details nor article content is persisted.
 
-The refresh claims incomplete events in its current window using a short row-locking transaction
-with `SKIP LOCKED`, recording `enrichment_attempted_at` before network access. Only events missing
-`description` or `news_url` with no attempt in the current UTC day qualify. Failed, empty, or
-malformed detail responses retain the base event and existing enrichment and wait until a later
-UTC day for another attempt. API reads never trigger refresh or detail requests.
+The active MT5 refresh does not claim detail enrichment. Legacy enrichment columns
+and repository behavior remain available for historical rows. API reads never trigger
+provider calls. See [ADR 0005](adr/0005-mt5-economic-calendar.md).
 
 ## Provider Adapter
 
@@ -798,8 +815,8 @@ Responsibilities:
 Binance stream names should be lowercase:
 
 ```text
-btcusd@ticker
-ethusd@ticker
+btcusdt@ticker
+ethusdt@ticker
 ```
 
 Gateway must handle Binance WebSocket reconnect and resubscribe behavior. Binance WebSocket connections are not a durable queue.
@@ -817,7 +834,7 @@ Recommended stack:
 | Settings | pydantic-settings 2.14.1 | Typed environment configuration. |
 | Binance provider SDK | binance-sdk-spot 9.2.0 | Official Spot REST/WebSocket foundation; synchronous REST calls are offloaded from the event loop. |
 | yfinance provider dependency | yfinance 1.6.0 | Open-source Yahoo Finance wrapper used for latest quotes, historical candles, and asynchronous price streaming on planned commodities and indexes. |
-| Economic calendar dependency | market-calendar-tool 0.2.2 | Scrapes ForexFactory, MetalsMine, EnergyExch, and CryptoCraft calendar rows for persistence. |
+| Economic calendar source | Native MQL5 CalendarService | Dedicated authenticated TCP connection, validated macro releases and persistence; no web scraping dependency. |
 | HTTP test client | HTTPX 0.28.1 | ASGI route and integration testing only. |
 | Database | PostgreSQL 18.4 | Reuse relational persistence for candle cache. |
 | DB driver | asyncpg 0.31.0 | Async PostgreSQL driver. |
@@ -863,7 +880,10 @@ Binance public market-data endpoints do not require API keys. `TWELVEDATA_API_KE
 Twelve Data key setting; one key or comma-separated keys are both valid. Twelve Data keys are
 optional at application startup, for crypto-only requests, and for fully persisted Forex candle
 reads; live Twelve Data quote or candle refreshes require at least one key.
-`ECONOMIC_CALENDAR_POLL_SECONDS=0` disables the in-process economic calendar refresh cronjob.
+`ECONOMIC_CALENDAR_POLL_SECONDS=0` disables the calendar listener and refresh job.
+When enabled with a database, MT5_TOKEN_FILE is required. Calendar uses
+MT5_CALENDAR_TCP_PORT=9002 and MT5_CALENDAR_TIMEOUT_SECONDS=60; match the MQL
+Service port. Quote TCP remains on 9001.
 
 ## Observability
 
@@ -894,7 +914,7 @@ Logs should include:
 - internal `failure_reason`, `retryable`, exception type, root error type/code, failure phase,
   timeout, upstream status/code, and latency when available
 - retry attempt fields (`attempt`, `max_attempts`, and `retry_in_ms`) when retries are used
-- enrichment totals (`attempted_count`, `succeeded_count`, `failed_count`, and `failure_reasons`)
+- calendar refresh totals (`provider_rows`, `latency_ms`) and structured job failures
 - provider-backed count diagnostics also include count direction, eligible slots scanned, page and
   logical provider-call counts, persisted/provider/returned row counts, stop reason, and calendar,
   database, and provider elapsed times
@@ -945,8 +965,8 @@ Authentication and per-client quota are out of scope for the first design. If ga
 
 ## Resolved MVP Decisions
 
-- Canonical symbols remain `BTC/USD` and `ETH/USD`.
-- `BTC/USD` and `ETH/USD` provider symbols are `BTC/USD` and `ETH/USD` for Twelve Data.
+- Canonical symbols remain `BTC/USDT` and `ETH/USDT`.
+- Their Binance Spot provider symbols are `BTCUSDT` and `ETHUSDT`.
 - The initial consumer is one internal Java backend service.
 - The gateway remains internal-only for the MVP, but design should allow future public exposure.
 - Multi-symbol quote responses return per-symbol errors instead of failing the full request.

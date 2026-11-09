@@ -14,6 +14,9 @@ from alembic import command
 
 pytestmark = pytest.mark.integration
 
+# Exercise the historical registry and its migrations at their original boundary.
+MIGRATION_TARGET = "20260727_0020"
+
 EXPECTED_DEFAULTS = {
     "AAPL": ("TWELVE_DATA", "AAPL"),
     "AUD/USD": ("YFINANCE", "AUDUSD=X"),
@@ -180,7 +183,7 @@ async def test_seed_is_repeatable_and_preserves_disabled_asset_and_custom_mappin
     assert len(mappings) == 30
     assert custom_after == (*custom_before, False)
     assert disabled == (False, "YFINANCE", "JPY=X", True)
-    await to_thread(command.upgrade, config, "head")
+    await to_thread(command.upgrade, config, MIGRATION_TARGET)
 
 
 async def test_seed_fails_on_provider_identity_owned_by_another_asset(
@@ -222,13 +225,13 @@ async def test_seed_fails_on_provider_identity_owned_by_another_asset(
         )
 
     with pytest.raises(IntegrityError):
-        await to_thread(command.upgrade, config, "head")
+        await to_thread(command.upgrade, config, MIGRATION_TARGET)
 
     async with database_engine.begin() as connection:
         await connection.execute(
             text("DELETE FROM supported_symbols WHERE symbol = 'CONFLICT/AAPL'")
         )
-    await to_thread(command.upgrade, config, "head")
+    await to_thread(command.upgrade, config, MIGRATION_TARGET)
 
 
 async def test_downgrade_restores_0018_defaults_and_preserves_custom_and_candles(
@@ -340,4 +343,4 @@ async def test_downgrade_restores_0018_defaults_and_preserves_custom_and_candles
     assert custom_after == (*custom_before, False)
     assert restored == ("TWELVE_DATA", "AUD/USD", True)
     assert candle == ("YFINANCE", "AUDUSD=X", open_time)
-    await to_thread(command.upgrade, config, "head")
+    await to_thread(command.upgrade, config, MIGRATION_TARGET)

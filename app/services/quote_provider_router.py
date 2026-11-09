@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from app.core.observability import failure_metadata, log_event
 from app.domain.errors import ProviderUnavailableError
-from app.domain.quotes import ProviderQuoteBatch, ProviderSymbolQuoteProvider
+from app.domain.quotes import ProviderQuoteBatch, ProviderSymbolQuoteProvider, Quote
 from app.domain.symbols import SupportedSymbol
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ class QuoteProviderRouter:
 
         prices: dict[str, Decimal] = {}
         unavailable: set[str] = set()
+        metadata: dict[tuple[str, str], Quote] = {}
         grouped = _group_by_provider(symbols)
 
         for provider_name, provider_symbols in grouped.items():
@@ -44,7 +45,7 @@ class QuoteProviderRouter:
                 batch = await provider.fetch_latest_prices(provider_symbols)
             except ProviderUnavailableError as exc:
                 unavailable.update(provider_symbols)
-                metadata = failure_metadata(exc)
+                failure = failure_metadata(exc)
                 log_event(
                     logger,
                     logging.ERROR,
@@ -52,16 +53,18 @@ class QuoteProviderRouter:
                     operation="quotes.fetch_latest_prices",
                     provider=provider_name,
                     symbols=provider_symbols,
-                    failure_reason=metadata["failure_reason"],
-                    retryable=metadata["retryable"],
+                    failure_reason=failure["failure_reason"],
+                    retryable=failure["retryable"],
                 )
                 continue
             prices.update(batch.prices)
             unavailable.update(batch.unavailable_symbols)
+            metadata.update(batch.quote_metadata)
 
         return ProviderQuoteBatch(
             prices=prices,
             unavailable_symbols=frozenset(unavailable),
+            quote_metadata=metadata,
         )
 
 

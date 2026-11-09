@@ -51,7 +51,7 @@ SYMBOL_PARAMETER = query_parameter(
     "disabled symbols produce UNSUPPORTED_SYMBOL.",
     {"type": "string", "minLength": 1},
     required=True,
-    example="BTC/USD",
+    example="BTC/USDT",
 )
 PROVIDER_PARAMETER = query_parameter(
     "provider",

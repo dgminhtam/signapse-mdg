@@ -64,6 +64,10 @@ for the data-loss window and cutover; use `pg_restore --exit-on-error` and recon
 ownership/grants before starting the matching image. Do not blindly rerun migrations from a
 newer image against a restored older schema. Verify readiness, schema and revision after recovery.
 
+The [MT5 runtime repository](https://github.com/signapse-group/mt5-services) owns the manual image release.
+The [MT5 cutover runbook](mt5-dev-deployment.md) describes its private volume and
+activation. Subsequent dev deployments update the gateway while the terminal keeps running.
+
 ## One-time setup before the first push
 
 These are operator prerequisites, not actions performed by editing this repository:

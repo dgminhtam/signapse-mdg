@@ -1,5 +1,20 @@
 # Signapse Market Data Gateway Crypto MVP - System Design
 
+Crypto cutover (2026-11-05): the only crypto mappings are `BTC/USDT -> BINANCE_SPOT:BTCUSDT`
+and `ETH/USDT -> BINANCE_SPOT:ETHUSDT`, 24/7 UTC, price display decimals 2.
+USD alternatives are retired; earlier provider experiment descriptions are historical.
+See [cutover runbook](crypto-usdt-cutover.md).
+
+## Local MT5 integration
+
+The accepted local architecture adds `MT5_VANTAGE_DEMO` as a disabled-by-default
+provider. A chart-independent MQL5 Service opens an authenticated private TCP
+connection directly to the FastAPI process; no sidecar is added. Tick ingestion
+starts without downstream subscriptions and reuses the existing quote cache and
+WebSocket fanout. Candle requests use the same connection and existing candle
+repository, preserving broker-native bucket boundaries after UTC conversion.
+See [local runbook and evidence](mt5-local-integration.md) and [ADR 0004](adr/0004-direct-mt5-local-provider.md).
+
 ## Request-scoped provider selection
 
 An asset may have multiple normalized provider mappings, with exactly one default mapping. The
@@ -27,8 +42,8 @@ Market Data Gateway is an independent service that exposes normalized market dat
 
 | Canonical symbol | Asset class | Provider | Provider symbol |
 | --- | --- | --- | --- |
-| `BTC/USD` | `CRYPTO` | `TWELVE_DATA` | `BTC/USD` |
-| `ETH/USD` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSD` |
+| `BTC/USDT` | `CRYPTO` | `BINANCE_SPOT` | `BTCUSDT` |
+| `ETH/USDT` | `CRYPTO` | `BINANCE_SPOT` | `ETHUSDT` |
 
 The gateway contract is provider-agnostic for clients. Provider-specific details stay inside the registry and adapter layer.
 
@@ -72,8 +87,8 @@ Commodity symbols are futures or rolling-futures proxies, including `XAG/USD -> 
 event coverage is not guaranteed for every accepted symbol.
 
 The registry contains five additional yfinance mappings available for Provider Override:
-`AAPL`, `BTC-USD`, `ETH-USD`, `EURUSD=X`, and `QQQ`, owned by canonical `AAPL`, `BTC/USD`,
-`ETH/USD`, `EUR/USD`, and `QQQ` respectively. `XAU/USD` has no yfinance alternative because
+`AAPL`, `BTC-USD`, `ETH-USD`, `EURUSD=X`, and `QQQ`, owned by canonical `AAPL`, `BTC/USDT`,
+`ETH/USDT`, `EUR/USD`, and `QQQ` respectively. `XAU/USD` has no yfinance alternative because
 `GC=F` is a futures proxy rather than an approved equivalent. The active mapping supplies the
 Default Provider; an explicit override selects a configured mapping for that request or subscription
 without mutating the default. Every listed mapping must support the complete market-data surface.
@@ -94,7 +109,7 @@ without mutating the default. Every listed mapping must support the complete mar
 - Multi-provider aggregation or automatic fallback.
 - Public authentication, multi-tenant quota, or billing.
 - Raw tick storage.
-- Support for crypto assets beyond `BTC/USD` and `ETH/USD`.
+- Support for crypto assets beyond `BTC/USDT` and `ETH/USDT`.
 
 ## 4. Architecture
 
@@ -171,8 +186,8 @@ without mutating the default. Every listed mapping must support the complete mar
 Recommended initial registry:
 
 ```python
-BTC/USD -> TWELVE_DATA:BTC/USD
-ETH/USD -> TWELVE_DATA:ETH/USD
+BTC/USDT -> BINANCE_SPOT:BTCUSDT
+ETH/USDT -> BINANCE_SPOT:ETHUSDT
 ```
 
 Recommended initial timeframes:
@@ -260,7 +275,8 @@ Recommended initial timeframes:
 
 - Stores latest quote per canonical symbol in memory.
 - Applies `QUOTE_CACHE_TTL_SECONDS` for HTTP quote cache reuse.
-- Marks quotes stale when `receivedAt` is older than `QUOTE_STALE_AFTER_SECONDS`.
+- Marks quotes stale after `QUOTE_STALE_AFTER_SECONDS`; MT5 also retains broker
+  event time so snapshot/replay receipt cannot make an old quote fresh.
 - May be replaced by Redis later without changing API DTOs.
 
 ### Candle Cache and Repository
@@ -306,30 +322,30 @@ Recommended initial timeframes:
 
 ### Economic Calendar Refresh
 
-When `DATABASE_URL` is configured and `ECONOMIC_CALENDAR_POLL_SECONDS > 0`, lifespan registers
-`economic-calendar-refresh` with `run_on_start=true`. Each run fetches `FOREX`, `METALS`, `ENERGY`,
-and `CRYPTO`, using UTC day boundaries from today minus two days to today plus seven days.
+When DATABASE_URL is configured and ECONOMIC_CALENDAR_POLL_SECONDS > 0, lifespan
+starts a dedicated MT5CalendarProvider listener and registers economic-calendar-refresh
+with run_on_start=true. MT5_TOKEN_FILE is required. Default calendar port 9002 is
+separate from quote port 9001; both MQL5 Services share one MT5/Wine terminal.
 
-The gateway-owned `MarketCalendarToolProvider` maps those types to ForexFactory, MetalsMine,
-EnergyExch, and CryptoCraft. Blocking base scraping runs in a worker thread without extended
-detail scraping. After base upsert, the repository claims only incomplete events not attempted in
-the current UTC day and commits the attempt marker before fetching their details. Successful
-non-null enrichment is then persisted. Description normalization prefers the `Measures` spec text,
-then the first usable spec text. News normalization selects the first usable `/news/.../hit` link
-and resolves it to an absolute URL; it does not fetch articles or retain raw news HTML.
+Each run reads FOREX macro data from UTC today minus two days through today plus
+seven days. Bounded seven-day RPCs stage the complete window before one upsert.
+Authentication, role, clock, correlation ID, row totals, native errors, duplicate
+occurrences and numeric metadata are validated. Partial/failed windows do not
+persist their earlier pages. Calendar session-offset conversion is separate from
+historical quote/candle clocks; offset changes during an RPC are rejected.
 
-Upstream refresh failures are isolated by the cronjob manager. Failed individual details leave
-base rows and prior enrichment intact and are not attempted again that UTC day. The read-only
-calendar API continues serving persisted rows even when refresh fails or polling is disabled.
-Persistence and change-tracking rules are defined in
-[Economic calendar persistence](spec.md#economic-calendar-persistence).
+MT5 IDs are namespaced, unavailable fields stay null, legacy data remains readable.
+There is no scraper/enrichment fallback. Calendar disconnects/deadlines fail the job
+without closing quote connections. GET continues serving persisted rows during an
+outage. See [ADR 0005](adr/0005-mt5-economic-calendar.md) and
+[persistence](spec.md#economic-calendar-persistence).
 
 ## 6. Data Flow
 
 ### Latest Quote HTTP Flow
 
 ```text
-Client -> GET /v1/quotes?symbols=BTC/USD,EUR/USD
+Client -> GET /v1/quotes?symbols=BTC/USDT,EUR/USD
   -> API validates query shape
   -> Symbol Registry validates every symbol
   -> Market Data Service checks Quote Cache
@@ -392,6 +408,9 @@ identity and mapping remain internal. Response `to` is always present. Exact-ran
 and backward/latest-count responses keep their requested or captured cutoff; a forward-count
 response moves `to` to the last page boundary actually scanned. For count mode, `from`/`to`
 therefore describe the consumed Candle History Window, not unused page capacity.
+MT5 backward count scans cap candidate opens at captured current time while retaining the public
+cutoff. MT5 pages shrink to the remaining row count and grow only after empty pages, within the
+existing capacity and scan budget, so one missing weekly row does not trigger years of history.
 Provider open timestamps remain authoritative. Binance uses the epoch-aligned schedule; verified
 WTI/SPY/QQQ hourly Twelve Data rows and NYSE hourly YFinance rows use a minute-30 schedule, while
 their shorter intervals remain epoch-aligned and daily values use date labels. Recognized Twelve
@@ -435,7 +454,7 @@ therefore remains provider-agnostic to clients while making its coarser precisio
 ### WebSocket Stream Flow
 
 ```text
-Client -> WS /v1/stream?symbols=BTC/USD,EUR/USD[&provider=...]
+Client -> WS /v1/stream?symbols=BTC/USDT,EUR/USD[&provider=...]
   -> API rejects any present timeframe query with 1008 TIMEFRAME_NOT_ALLOWED
   -> API validates symbols, Provider Override, registry rows, and selected mappings
   -> Stream Manager registers one quote interest per canonical symbol/mapping
@@ -480,10 +499,10 @@ refreshed. Per-client bounded queues isolate slow consumers; an overloaded clien
 ### Symbol Definition
 
 ```text
-symbol: canonical symbol, e.g. BTC/USD
+symbol: canonical symbol, e.g. BTC/USDT
 asset_class: CRYPTO
 provider: TWELVE_DATA
-provider_symbol: provider symbol, e.g. BTC/USD
+provider_symbol: provider symbol, e.g. BTC/USDT
 enabled: boolean
 ```
 
@@ -590,7 +609,7 @@ Inline calendar metadata is optional and internal. Seeded calendar families are:
 
 | Assets | Source / calendar | Timezone |
 | --- | --- | --- |
-| `BTC/USD`, `ETH/USD` | `internal` / `24/7` | `UTC` |
+| `BTC/USDT`, `ETH/USDT` | `internal` / `24/7` | `UTC` |
 | Forex pairs and `XAU/USD` | `pandas_market_calendars` / `FOREX` | `America/New_York` |
 | US stocks, ETFs, and stock indexes | `pandas_market_calendars` / `NYSE` | `America/New_York` |
 | `WTI`, `BRENT`, `NATGAS` | `pandas_market_calendars` / `CMEGlobex_Energy` | `America/New_York` |
@@ -920,7 +939,7 @@ Contract tests:
 
 | Decision | Default for MVP | Notes |
 | --- | --- | --- |
-| Provider symbol | `BTC/USD` / `ETH/USD` | Canonical symbols remain `BTC/USD` and `ETH/USD`; Twelve Data serves both required pairs. |
+| Provider symbol | `BTC/USDT` / `ETH/USDT` | Canonical symbols are `BTC/USDT` and `ETH/USDT`; Binance Spot serves both pairs. |
 | Stale threshold | 30 seconds | Make configurable through `QUOTE_STALE_AFTER_SECONDS`. |
 | Candle retention | No automatic deletion | Add retention only once product requirement is known. |
 | Partial quote response | Per-symbol errors | Return successful quotes and symbol-level errors in the same response. |

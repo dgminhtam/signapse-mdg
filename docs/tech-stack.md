@@ -1,5 +1,10 @@
 # Signapse Market Data Gateway Crypto MVP - Tech Stack Research
 
+Crypto mapping update 2026-11-05: USD crypto references in this earlier verification/integration
+record are historical. Current crypto uses Binance Spot `BTC/USDT -> BTCUSDT` and
+`ETH/USDT -> ETHUSDT`; MT5 is not a provider override for either pair.
+See [current cutover](crypto-usdt-cutover.md).
+
 Date: 2026-06-19
 
 This document records the recommended technology stack for the crypto MVP described in `docs/spec.md` and refined in `docs/system-design.md`.
@@ -320,19 +325,14 @@ Important constraints:
 
 ### Economic Calendar Provider
 
-Use the pinned `market-calendar-tool==0.2.2` behind `MarketCalendarToolProvider` for base calendar
-scraping, offloaded with `asyncio.to_thread`. The adapter uses the package's base scraper and
-cleaning helpers without full-window extended scraping; its request-local base timeout is 30
-seconds because this SDK version otherwise hard-codes 10 seconds.
+Use native MQL5 functions through CalendarService and the standard-library asyncio
+TCP listener in MT5CalendarProvider. The official Python module has no calendar API;
+see [ADR 0005](adr/0005-mt5-economic-calendar.md) for the direct-protocol exception,
+normalization and accepted source replacement. No helper process or new SDK is added.
 
-Selected event details use already-installed `aiohttp`, with at most five concurrent requests.
-This direct-protocol exception is required because the package's public extended API fetches
-details for every event, rather than selected event IDs. Persisted daily attempt markers bound
-request volume across restarts. Keeping the private detail URL/JSON handling inside the adapter
-and fixture tests contains upstream format risk; marking attempts before I/O accepts up to a day
-of enrichment delay after a transient failure. Base polling and API reads remain independent of
-detail success. See [refresh lifecycle](system-design.md#economic-calendar-refresh) and
-[persistence rules](spec.md#economic-calendar-persistence).
+A separate Service/listener isolates calendar waits from quote polling and candle
+RPC state. Missing descriptions/article URLs remain null; legacy enrichment columns
+are retained. market-calendar-tool and its active scraper adapter have been removed.
 
 ## 6. Persistence
 
@@ -696,6 +696,11 @@ mypy==2.1.0
 
 
 ## OpenAPI tooling
+
+The local MT5 adapter uses Python standard-library asyncio TCP plus a native
+MQL5 Service on Wine/Xvfb. It adds no runtime dependency. This always-on push
+feed is the exception to subscription-driven upstream WebSockets; the older
+providers retain their existing lifecycle. See [ADR 0004](adr/0004-direct-mt5-local-provider.md).
 
 The existing FastAPI/Pydantic stack generates OpenAPI 3.1 at `/openapi.json`; route `responses`
 and `openapi_extra` document custom errors and raw query parsers. HTTPX ASGITransport tests

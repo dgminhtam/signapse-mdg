@@ -1,0 +1,69 @@
+{
+  "passed": true,
+  "sourceSha256": "56b03483fa86657ab647bb93a9be53e9f6853d2edc052c08b141f5c9280cd52e",
+  "samples": [
+    {
+      "key": "FOREX:mt5:282585",
+      "name": "PCE Price Index m/m",
+      "scheduledAt": "2026-10-29T12:30:00Z",
+      "actual": "0.5%",
+      "forecast": "0.4%",
+      "previous": "0.3%",
+      "revision": null
+    },
+    {
+      "key": "FOREX:mt5:277714",
+      "name": "Employment Cost Index q/q",
+      "scheduledAt": "2026-10-30T12:30:00Z",
+      "actual": "0.8%",
+      "forecast": "0.8%",
+      "previous": "0.9%",
+      "revision": null
+    },
+    {
+      "key": "FOREX:mt5:289571",
+      "name": "JOLTS Job Openings",
+      "scheduledAt": "2026-11-03T15:00:00Z",
+      "actual": "7.523M",
+      "forecast": "6.779M",
+      "previous": "7.079M",
+      "revision": "7.190M"
+    },
+    {
+      "key": "FOREX:mt5:277729",
+      "name": "Nonfarm Productivity q/q",
+      "scheduledAt": "2026-11-05T13:30:00Z",
+      "actual": null,
+      "forecast": "1.9%",
+      "previous": "1.4%",
+      "revision": null
+    },
+    {
+      "key": "FOREX:mt5:277625",
+      "name": "Nonfarm Payrolls",
+      "scheduledAt": "2026-11-06T13:30:00Z",
+      "actual": null,
+      "forecast": "55K",
+      "previous": "29K",
+      "revision": null
+    },
+    {
+      "key": "FOREX:mt5:277493",
+      "name": "CPI m/m",
+      "scheduledAt": "2026-11-10T13:30:00Z",
+      "actual": null,
+      "forecast": "0.5%",
+      "previous": "0.6%",
+      "revision": null
+    },
+    {
+      "key": "FOREX:mt5:277445",
+      "name": "PPI m/m",
+      "scheduledAt": "2026-11-13T13:30:00Z",
+      "actual": null,
+      "forecast": "0.4%",
+      "previous": "1.3%",
+      "revision": null
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+# Gateway side of the private MT5 connection.
+services:
+  gateway:
+    environment:
+      MT5_ENABLED: "true"
+      MT5_TOKEN_FILE: /run/mt5-token
+    volumes:
+      - ${MDG_MT5_DIR:?}/token.txt:/run/mt5-token:ro
+    networks:
+      mt5:
+        aliases: [mdg-tcp-smoke.test]
+networks:
+  mt5:
+    driver: bridge

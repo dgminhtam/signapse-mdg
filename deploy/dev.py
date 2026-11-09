@@ -19,6 +19,11 @@ def deploy(image: str, revision: str) -> None:
     if not env_file.is_file():
         raise ValueError("Server .env must be provisioned before deployment.")
     env = {**os.environ, "MDG_IMAGE": image, "MDG_ENV_FILE": str(env_file)}
+    mt5_enabled = (root / "mt5" / "enabled").is_file()
+    if mt5_enabled:
+        if not (root / "mt5" / "token.txt").is_file():
+            raise ValueError("Provision the private MT5 token before activation.")
+        env["MDG_MT5_DIR"] = str(root / "mt5")
     compose = [
         "docker",
         "compose",
@@ -34,6 +39,8 @@ def deploy(image: str, revision: str) -> None:
     override = root / "docker-compose.override.yml"
     if override.is_file():
         compose += ["-f", str(override)]
+    if mt5_enabled:
+        compose += ["-f", str(release / "mt5-compose.yml")]
 
     def run(*args: str) -> None:
         subprocess.run(list(args), env=env, check=True)
@@ -42,7 +49,7 @@ def deploy(image: str, revision: str) -> None:
         return subprocess.check_output(list(args), env=env, text=True).strip()
 
     run(*compose, "config", "--quiet")
-    if output(*compose, "config", "--images") != image:
+    if set(output(*compose, "config", "--images").splitlines()) != {image}:
         raise ValueError("Server override must not replace the release image.")
     run(*compose, "pull", "gateway")
     metadata = json.loads(output("docker", "image", "inspect", image))[0]
@@ -66,7 +73,7 @@ def deploy(image: str, revision: str) -> None:
 if __name__ == "__main__":
     try:
         if len(sys.argv) != 3:
-            raise ValueError("Usage: python3 dev.py <image@sha256:digest> <full-commit-sha>")
+            raise ValueError("Usage: dev.py <image@digest> <commit>")
         deploy(sys.argv[1], sys.argv[2])
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as exc:
         # Do not include environment, credentials or database exceptions in deployment output.

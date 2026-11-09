@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.mt5_dependency import get_mt5_provider
 from app.api.openapi import (
     DATABASE_UNAVAILABLE_RESPONSE,
     PRICE_DESCRIPTION,
@@ -25,6 +26,8 @@ from app.domain.errors import ProviderSelectionError, QuoteRequestError
 from app.domain.quotes import ProviderSymbolQuoteProvider, QuoteError, QuoteProvider, QuoteResult
 from app.domain.symbols import SymbolRepository
 from app.providers.binance_spot import build_binance_spot_quote_provider
+from app.providers.mt5 import PROVIDER as MT5_PROVIDER
+from app.providers.mt5 import MT5Provider
 from app.providers.twelvedata_market_data import build_twelvedata_market_data_provider
 from app.providers.yfinance_market_data import build_yfinance_quote_provider
 from app.services.provider_selection import parse_provider_values
@@ -40,7 +43,8 @@ class QuoteResponse(BaseModel):
     symbol: str = Field(description="Canonical symbol from the request.")
     price: DecimalString = Field(description=PRICE_DESCRIPTION)
     received_at: UtcTimestamp = Field(
-        description="UTC gateway receipt time used for freshness checks."
+        description="Original UTC gateway receipt time. MT5 snapshot reads preserve this value; "
+        "MT5 freshness also checks the normalized broker event time."
     )
 
 
@@ -100,6 +104,7 @@ def get_yfinance_quote_provider(
 
 def get_quote_provider(
     settings: Annotated[Settings, Depends(get_settings)],
+    mt5: Annotated[MT5Provider | None, Depends(get_mt5_provider)] = None,
 ) -> QuoteProvider:
     providers: dict[str, ProviderSymbolQuoteProvider] = {
         "BINANCE_SPOT": get_binance_quote_provider(
@@ -117,6 +122,8 @@ def get_quote_provider(
             settings.twelvedata_rest_base_url,
             settings.provider_http_timeout_seconds,
         )
+    if mt5 is not None:
+        providers[MT5_PROVIDER] = mt5
     return QuoteProviderRouter(providers)
 
 
@@ -159,7 +166,7 @@ def get_quote_service(
                 "is required; the configured maximum counts distinct symbols after normalization.",
                 {"type": "string", "minLength": 1},
                 required=True,
-                example="BTC/USD,ETH/USD",
+                example="BTC/USDT,ETH/USDT",
             ),
             PROVIDER_PARAMETER,
         ]
@@ -172,7 +179,7 @@ def get_quote_service(
                     "example": {
                         "quotes": [
                             {
-                                "symbol": "BTC/USD",
+                                "symbol": "BTC/USDT",
                                 "price": "104250.12",
                                 "receivedAt": "2026-06-19T10:30:12Z",
                             }

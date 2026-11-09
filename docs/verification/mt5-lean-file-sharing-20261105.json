@@ -1,0 +1,7 @@
+{
+  "nativeCheck": true,
+  "exclusiveBlocksSecondReader": true,
+  "sharedAllowsBothReaders": true,
+  "fixture": "Public text file, two simultaneous MQL5 FileOpen handles; no token values logged",
+  "source": "scripts/mt5/FileSharingCheck.mq5"
+}
