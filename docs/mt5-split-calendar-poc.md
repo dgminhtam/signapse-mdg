@@ -17,9 +17,9 @@ Phép thử này ủng hộ tách `CalendarService` khỏi vòng quote/nến tr�
 - Cùng một container MT5/Wine, một login demo, clone volume local đã có; giới hạn
   1 CPU / 2 GiB. Không tạo terminal thứ hai, không truy cập server hoặc ghi DB.
 
-Source: [CalendarService](../scripts/mt5/CalendarService.mq5),
+Source: [CalendarService](https://github.com/signapse-group/mt5-services/blob/main/CalendarService.mq5),
 [collector](../scripts/verify_mt5_split_calendar.py),
-[entrypoint local](../scripts/mt5/calendar-poc-entrypoint.sh).
+[entrypoint local](https://github.com/signapse-group/mt5-services/blob/main/calendar-poc-entrypoint.sh).
 Clone volume có hai Service được đăng ký trong `Config/services.ini`, cùng host
 `mdg-tcp-smoke.test`, khác port. Private state/token vẫn ở ngoài Git.
 

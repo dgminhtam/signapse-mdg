@@ -86,7 +86,7 @@ services:
       MT5_PASSWORD: ${MT5_PASSWORD:?Set the Vantage demo account password}
       MT5_SERVER: ${MT5_SERVER:-VantageMarkets-Demo}
       MT5_TOKEN: ${MT5_TOKEN:?Set a private token of at least 32 characters}
-      MT5_SYMBOLS: ${MT5_SYMBOLS:-EURUSD,GBPUSD,USDJPY,AUDUSD,XAUUSD,XAGUSD,AAPL,TSLA,NVIDIA,MSFT,BTCUSD,ETHUSD,SPY,QQQ,USOUSD,UKOUSD,NG-Cr,Coffee-Cr,Sugar-Cr,Wheat-Cr,SP500.r,NAS100.r}
+      MT5_SYMBOLS: ${MT5_SYMBOLS:-EURUSD,GBPUSD,USDJPY,AUDUSD,XAUUSD,XAGUSD,AAPL,TSLA,NVIDIA,MSFT,SPY,QQQ,USOUSD,UKOUSD,NG-Cr,Coffee-Cr,Sugar-Cr,Wheat-Cr,SP500.r,NAS100.r}
     volumes:
       - terminal-home:/home/mt5
     tmpfs: [/tmp]

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 
-def deploy(image: str, revision: str, mt5_image: str | None = None) -> None:
+def deploy(image: str, revision: str) -> None:
     if not re.fullmatch(r"dgminhtam/signapse-mdg@sha256:[a-f0-9]{64}", image):
         raise ValueError("Expected an immutable MDG Docker Hub digest.")
     if not re.fullmatch(r"[a-f0-9]{40}", revision):
@@ -21,13 +21,9 @@ def deploy(image: str, revision: str, mt5_image: str | None = None) -> None:
     env = {**os.environ, "MDG_IMAGE": image, "MDG_ENV_FILE": str(env_file)}
     mt5_enabled = (root / "mt5" / "enabled").is_file()
     if mt5_enabled:
-        if mt5_image is None or not re.fullmatch(
-            r"dgminhtam/signapse-mdg@sha256:[a-f0-9]{64}", mt5_image
-        ):
-            raise ValueError("Activated MT5 requires an immutable runtime digest.")
         if not (root / "mt5" / "token.txt").is_file():
             raise ValueError("Provision the private MT5 token before activation.")
-        env.update(MT5_IMAGE=mt5_image, MDG_MT5_DIR=str(root / "mt5"))
+        env["MDG_MT5_DIR"] = str(root / "mt5")
     compose = [
         "docker",
         "compose",
@@ -53,17 +49,9 @@ def deploy(image: str, revision: str, mt5_image: str | None = None) -> None:
         return subprocess.check_output(list(args), env=env, text=True).strip()
 
     run(*compose, "config", "--quiet")
-    expected_images = {image, mt5_image} if mt5_enabled else {image}
-    if set(output(*compose, "config", "--images").splitlines()) != expected_images:
+    if set(output(*compose, "config", "--images").splitlines()) != {image}:
         raise ValueError("Server override must not replace the release image.")
     run(*compose, "pull", "gateway")
-    if mt5_enabled:
-        run(*compose, "pull", "terminal")
-        terminal_metadata = json.loads(output("docker", "image", "inspect", mt5_image))[0]
-        if (terminal_metadata["Config"].get("Labels") or {}).get(
-            "org.opencontainers.image.revision"
-        ) != revision:
-            raise ValueError("MT5 runtime revision does not match deployment.")
     metadata = json.loads(output("docker", "image", "inspect", image))[0]
     if (metadata["Config"].get("Labels") or {}).get(
         "org.opencontainers.image.revision"
@@ -72,8 +60,6 @@ def deploy(image: str, revision: str, mt5_image: str | None = None) -> None:
     # Migrate once before switching the running gateway; never downgrade on failure.
     run(*compose, "run", "--rm", "--no-deps", "-T", "gateway", "alembic", "upgrade", "head")
     run(*compose, "up", "-d", "--no-deps", "--force-recreate", "gateway")
-    if mt5_enabled:
-        run(*compose, "up", "-d", "--no-deps", "--force-recreate", "terminal")
     container = output(*compose, "ps", "-q", "gateway")
     if not container:
         raise ValueError("Gateway container is missing.")
@@ -86,9 +72,9 @@ def deploy(image: str, revision: str, mt5_image: str | None = None) -> None:
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) not in (3, 4):
-            raise ValueError("Usage: dev.py <image@digest> <commit> [mt5-image@digest]")
-        deploy(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else None)
+        if len(sys.argv) != 3:
+            raise ValueError("Usage: dev.py <image@digest> <commit>")
+        deploy(sys.argv[1], sys.argv[2])
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as exc:
         # Do not include environment, credentials or database exceptions in deployment output.
         print(

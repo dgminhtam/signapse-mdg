@@ -16,7 +16,7 @@ nằm trong cùng working tree; không coi toàn bộ diff là thay đổi riên
 Profiler stdlib đọc delta CPU của process/thread từ `/proc` và tổng cgroup trong
 30 giây; CPU 100% tương đương khoảng một core. Memory là working set Docker,
 không phải tổng bộ nhớ Docker Desktop hoặc RAM toàn bộ stack MDG/PostgreSQL.
-Xem [profiler](../scripts/mt5/profile_runtime.py) và định nghĩa trường
+Xem [profiler](https://github.com/signapse-group/mt5-services/blob/main/profile_runtime.py) và định nghĩa trường
 [`/proc/stat`](https://docs.kernel.org/filesystems/proc.html).
 
 Đối chiếu UI trên cùng baseline trước tải candle đầy đủ:

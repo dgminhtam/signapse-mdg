@@ -26,7 +26,7 @@ hai phần lệnh**; không dùng số này làm độ trễ broker → MDG.
 ## Chạy lại
 
 Source: [receiver Python](../scripts/mt5_tcp_smoke.py),
-[Service MQL5](../scripts/mt5/TcpSmoke.mq5),
+[Service MQL5](https://github.com/signapse-group/mt5-services/blob/main/TcpSmoke.mq5),
 [giới hạn và protocol thử](adr/0003-local-mt5-tcp-spike.md).
 
 1. Tạo token ngẫu nhiên ít nhất 32 ký tự trong file private ngoài Git. Đưa cùng

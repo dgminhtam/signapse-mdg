@@ -34,7 +34,9 @@ hạn quyền đọc `.env` cho người vận hành. Người có quyền Docke
 environment của container.
 
 Compose tạo volume trống theo project, chờ PostgreSQL sẵn sàng, rồi initializer
-chạy Alembic và seed 22 mapping MT5 hiện có vào database `mdg_mt5_local`. Gateway
+chạy Alembic và seed 20 mapping MT5 vào database `mdg_mt5_local`.
+BTC/USDT và ETH/USDT dùng Binance Spot. Danh sách MT5 mặc định đã khớp với
+registry, nên có thể để dòng `MT5_SYMBOLS` ở dạng comment trong `.env`. Gateway
 khởi động hai listener private 9001/9002; terminal tự cấu hình bằng các biến runtime.
 Không bind-mount source, installer, token file hoặc volume MT5 đã chuẩn bị từ máy cũ.
 
@@ -75,18 +77,20 @@ trên mọi lệnh nếu muốn nhiều instance tách biệt. Để kiểm ch�
 dùng project name mới và xác nhận chưa có volume của project đó trước khi chạy.
 Không dùng `down -v` trên instance cần giữ dữ liệu.
 
-Initializer áp dụng lại 22 mapping/default provider của bundle khi được chạy;
+Initializer áp dụng lại 20 mapping/default provider MT5 khi được chạy;
 bundle dành cho DB riêng và không kết nối DB dev/server. Không thay password DB
 trong `.env` rồi kỳ vọng PostgreSQL trên volume cũ tự đổi password; rotation cần
 đổi credential trong database trước. Thay image không tự reset volume.
 
 ## Build dành cho người phát triển
 
-Người triển khai bằng registry không cần bước build. Để thử source local:
+Người triển khai bằng registry không cần bước build. Để thử source local, clone
+[mt5-services](https://github.com/signapse-group/mt5-services) vào thư mục cùng cấp
+với checkout MDG, rồi chạy từ checkout MDG:
 
 ```sh
 docker build -t signapse-mdg:mt5-compose-local .
-docker build -t signapse-mt5:cpu-lean-local scripts/mt5
+docker build -t signapse-mt5:cpu-lean-local ../mt5-services
 ```
 
 Không đưa `.env` vào build context hoặc truyền credential bằng build argument.
@@ -115,7 +119,7 @@ Build cần Internet và phụ thuộc giao diện MT5 tiếng Anh hiện hành.
 phải kiểm lại build và lượt chạy từ volume trống; image cũ theo digest giữ bản đã
 kiểm chứng, không yêu cầu tải/cài MT5 lại trên mỗi máy chạy.
 
-Source runtime và việc tạo MT5 sạch thuộc `scripts/mt5/`; bằng chứng local về
+Source runtime và việc tạo MT5 sạch thuộc [repo mt5-services](https://github.com/signapse-group/mt5-services); bằng chứng local về
 đăng nhập, quote, calendar và restart phải được ghi riêng sau khi chạy thật.
 Build kiểm tra prefix không có tài khoản và các artifact công khai, nhưng không
 nhận credentials để xác minh đăng nhập broker. Native quote/calendar sau startup

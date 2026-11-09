@@ -1,4 +1,4 @@
-# Activated by dev.py only after the operator provisions mt5/enabled and the private volume.
+# Gateway side of the private MT5 connection.
 services:
   gateway:
     environment:
@@ -9,32 +9,6 @@ services:
     networks:
       mt5:
         aliases: [mdg-tcp-smoke.test]
-  terminal:
-    image: ${MT5_IMAGE:?Use the published runtime digest}
-    restart: unless-stopped
-    init: true
-    cpus: 1.0
-    mem_limit: 2g
-    stop_grace_period: 30s
-    shm_size: 256mb
-    tmpfs: [/tmp]
-    logging:
-      options:
-        max-size: 5m
-        max-file: "2"
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f '[t]erminal64.exe' >/dev/null && xdpyinfo >/dev/null 2>&1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 180s
-    volumes:
-      - terminal-home:/home/mt5
-    networks: [mt5]
 networks:
   mt5:
     driver: bridge
-volumes:
-  terminal-home:
-    external: true
-    name: mdg-mt5-terminal-home

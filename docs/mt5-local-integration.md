@@ -66,8 +66,8 @@ không xóa volume nếu muốn giữ cache nến. Integration pytest phải dù
 khác, ví dụ `mdg_mt5_pytest`, vì fixture downgrade schema.
 
 Runtime MT5 hiện có được provision ở workspace local riêng. Source tham chiếu
-[Dockerfile](../scripts/mt5/Dockerfile), [entrypoint](../scripts/mt5/entrypoint.sh),
-[Service](../scripts/mt5/MarketDataService.mq5). Compile Service bằng MetaEditor,
+[Dockerfile](https://github.com/signapse-group/mt5-services/blob/main/Dockerfile), [entrypoint](https://github.com/signapse-group/mt5-services/blob/main/entrypoint.sh),
+[Service](https://github.com/signapse-group/mt5-services/blob/main/MarketDataService.mq5). Compile Service bằng MetaEditor,
 copy EX5 vào `MQL5/Services`; cấu hình `MQL5/Files/MarketDataToken.txt` cùng token
 với MDG và `MarketDataSymbols.txt` là CSV exact symbols từ
 [seed mappings](../scripts/seed_mt5_local.py). Add Service một lần qua Navigator.

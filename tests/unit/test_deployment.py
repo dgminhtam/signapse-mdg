@@ -102,34 +102,24 @@ def test_activated_mt5_requires_private_provisioning(
 ) -> None:
     (tmp_path / "mt5").mkdir()
     (tmp_path / "mt5" / "enabled").touch()
-    with pytest.raises(ValueError, match="runtime digest"):
-        dev.deploy(IMAGE, REVISION)
     with pytest.raises(ValueError, match="private MT5 token"):
-        dev.deploy(IMAGE, REVISION, IMAGE)
+        dev.deploy(IMAGE, REVISION)
     docker[0].assert_not_called()
 
 
-def test_activated_mt5_deploys_both_reviewed_images(
-    docker: tuple[Mock, Mock], tmp_path: Path
-) -> None:
-    run, output = docker
-    runtime = "dgminhtam/signapse-mdg@sha256:" + "c" * 64
+def test_activated_mt5_deploys_gateway_only(docker: tuple[Mock, Mock], tmp_path: Path) -> None:
+    run, _ = docker
     (tmp_path / "mt5").mkdir()
     (tmp_path / "mt5" / "enabled").touch()
     (tmp_path / "mt5" / "token.txt").write_text("private")
-    metadata = json.dumps(
-        [{"Id": "image-id", "Config": {"Labels": {"org.opencontainers.image.revision": REVISION}}}]
-    )
-    output.side_effect = [f"{IMAGE}\n{runtime}", metadata, metadata, "gateway-id", "image-id"]
-    dev.deploy(IMAGE, REVISION, runtime)
+
+    dev.deploy(IMAGE, REVISION)
+
     commands = [call.args[0] for call in run.call_args_list]
-    assert any(command[-2:] == ["pull", "terminal"] for command in commands)
-    assert any(
-        command[-5:] == ["up", "-d", "--no-deps", "--force-recreate", "terminal"]
-        for command in commands
-    )
+    assert [command[-1] for command in commands if "pull" in command] == ["gateway"]
+    assert [command[-1] for command in commands if "up" in command] == ["gateway"]
     assert "mt5-compose.yml" in " ".join(commands[0])
-    assert run.call_args.kwargs["env"]["MT5_IMAGE"] == runtime
+    assert run.call_args.kwargs["env"]["MDG_MT5_DIR"] == str(tmp_path / "mt5")
 
 
 @pytest.mark.parametrize(

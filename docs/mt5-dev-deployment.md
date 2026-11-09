@@ -17,33 +17,21 @@ first-cutover instructions below describe the earlier activation.
 
 ## Release and private state
 
-CI builds and checks both MDG and the Wine runtime from the same revision. Both images
-are published to the existing private registry repository and deployed by digest.
-MT5's MQL5 Services are compiled with MetaEditor in the builder stage. The lean
-runtime contains their EX5 binaries, Wine/Xvfb and the installed terminal; it does
-not include MetaEditor, noVNC, x11vnc or websockify.
-No login, password, token or private account state is included in Git or either image.
-The packaged runtime also contains an account-free Wine prefix, installed MT5 and public
-factory configuration. The existing server volume remains in use; the independent
-[fresh-machine Compose bundle](mt5-compose.md) supplies credentials at runtime through `.env`.
+MDG CI builds and publishes only the gateway. When the server marker
+`/opt/apps/signapse/mdg/mt5/enabled` is present, the gateway joins the private
+`mdg_mt5` network with alias `mdg-tcp-smoke.test` and reads its existing token.
+The release updates only the gateway and leaves the running terminal attached.
 
-The existing [dev pipeline](deploy-docker.md) deploys MDG alone until the operator creates
-`/opt/apps/signapse/mdg/mt5/enabled`. Once enabled, it also applies
-[`mt5-compose.yml`](../deploy/mt5-compose.yml) and recreates the terminal with the
-matching release digest. MDG's private override keeps its existing bindings and DNS.
-The terminal has 1 CPU, 2 GiB RAM, a persistent external volume
-`mdg-mt5-terminal-home`. The lean runtime has no browser desktop or published terminal port.
-TCP 9001 is not published. The Docker bridge provides the private connection to MDG
-using the terminal's already-allowlisted hostname `mdg-tcp-smoke.test`.
+[mt5-services](https://github.com/signapse-group/mt5-services) owns the runtime
+image, manual release and terminal Compose. The operator pins the terminal
+image digest and retains the existing volume `mdg-mt5-terminal-home`.
+Quote/candle and calendar use private TCP 9001/9002. Keep these ports private.
 
-The lean/CPU image was deployed on 2026-11-06 as an image-ID-pinned manual terminal
-release, preserving the running gateway. Source remains unmerged; a later CI
-deployment can replace this manual image. Existing private volumes can retain an older MetaEditor installation;
-replacing the image does not delete files in persistent state.
-MT5 LiveUpdate can also download MetaEditor back into that volume when connecting
-to the broker; lean packaging does not disable the vendor's automatic updates.
+When adopting the independent terminal Compose project, follow the handoff
+and rollback steps in the runtime repo. Verify quote, candle and calendar
+afterwards. For fresh local volumes, use the [MDG Compose bundle](mt5-compose.md).
 
-## First cutover
+## First cutover (historical, paired pipeline)
 
 1. Inspect architecture, space, running gateway, database and bindings. Back up the MDG
    database and private environment/override before changing mappings.
@@ -68,7 +56,7 @@ to the broker; lean packaging does not disable the vendor's automatic updates.
    state after a terminal restart. Read the live `/openapi.json` build revision.
    Save sanitized evidence under `docs/verification/`.
 
-## Recovery and limits
+## First-cutover recovery and limits
 
 Stop the terminal and remove the activation marker to disable the additional runtime.
 Restore the backed-up symbol/default mapping rows and private override/environment

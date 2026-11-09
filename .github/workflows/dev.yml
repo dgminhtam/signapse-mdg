@@ -11,7 +11,6 @@ permissions:
 
 env:
   CI_IMAGE: dgminhtam/signapse-mdg:sha-${{ github.sha }}
-  MT5_CI_IMAGE: dgminhtam/signapse-mdg:mt5-sha-${{ github.sha }}
 
 concurrency:
   group: mdg-${{ github.event_name }}-${{ github.ref }}
@@ -23,7 +22,6 @@ jobs:
     timeout-minutes: 35
     outputs:
       digest: ${{ steps.publish.outputs.digest }}
-      mt5_digest: ${{ steps.publish.outputs.mt5_digest }}
     services:
       postgres:
         image: postgres:16-alpine
@@ -49,11 +47,6 @@ jobs:
       - run: uv run --no-sync ruff format --check .
       - run: uv run --no-sync mypy app
       - run: uv run --no-sync pytest --junitxml=test-results/pytest.xml
-      - name: Build the MT5 runtime without account data
-        run: |
-          docker build --build-arg BUILD_REVISION="$GITHUB_SHA" -t "$MT5_CI_IMAGE" scripts/mt5
-          docker run --rm --entrypoint bash "$MT5_CI_IMAGE" -n /opt/mt5/entrypoint.sh
-          docker run --rm -i --entrypoint python3 "$MT5_CI_IMAGE" - < scripts/mt5/verify_image.py
       - name: Check the runtime image with an isolated database
         run: |
           docker build --build-arg BUILD_REVISION="$GITHUB_SHA" -t "$CI_IMAGE" .
@@ -75,10 +68,6 @@ jobs:
           image=$(docker image inspect --format '{{index .RepoDigests 0}}' "$CI_IMAGE")
           [[ "$image" =~ ^dgminhtam/signapse-mdg@sha256:[a-f0-9]{64}$ ]]
           printf 'digest=%s\n' "${image##*@}" >> "$GITHUB_OUTPUT"
-          docker push "$MT5_CI_IMAGE"
-          mt5_image=$(docker image inspect --format '{{index .RepoDigests 0}}' "$MT5_CI_IMAGE")
-          [[ "$mt5_image" =~ ^dgminhtam/signapse-mdg@sha256:[a-f0-9]{64}$ ]]
-          printf 'mt5_digest=%s\n' "${mt5_image##*@}" >> "$GITHUB_OUTPUT"
       - name: Remove test gateway
         if: always()
         run: docker rm -f mdg-ci >/dev/null 2>&1 || true
@@ -118,14 +107,12 @@ jobs:
           DEV_SERVER_HOST: ${{ vars.DEV_SERVER_HOST }}
           DEV_SERVER_USER: ${{ vars.DEV_SERVER_USER }}
           IMAGE: dgminhtam/signapse-mdg@${{ needs.check.outputs.digest }}
-          MT5_IMAGE: dgminhtam/signapse-mdg@${{ needs.check.outputs.mt5_digest }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$IMAGE" =~ ^dgminhtam/signapse-mdg@sha256:[a-f0-9]{64}$ ]]
-          [[ "$MT5_IMAGE" =~ ^dgminhtam/signapse-mdg@sha256:[a-f0-9]{64}$ ]]
           [[ "$DOCKERHUB_USERNAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]]
           target="$DEV_SERVER_USER@$DEV_SERVER_HOST"
           release="/opt/apps/signapse/mdg/releases/$GITHUB_SHA"
@@ -137,5 +124,5 @@ jobs:
           # Revision and digest above are validated before entering the remote command.
           # shellcheck disable=SC2029
           printf '%s' "$DOCKERHUB_TOKEN" | ssh "${ssh_opts[@]}" "$target" \
-            "set -eu; umask 077; export DOCKER_CONFIG='$release/.docker'; mkdir -p '$release/.docker'; trap 'rm -rf -- $release/.docker' EXIT; docker login --username '$DOCKERHUB_USERNAME' --password-stdin; cd /opt/apps/signapse/mdg; flock -w 300 .deploy.lock python3 '$release/dev.py' '$IMAGE' '$GITHUB_SHA' '$MT5_IMAGE'"
+            "set -eu; umask 077; export DOCKER_CONFIG='$release/.docker'; mkdir -p '$release/.docker'; trap 'rm -rf -- $release/.docker' EXIT; docker login --username '$DOCKERHUB_USERNAME' --password-stdin; cd /opt/apps/signapse/mdg; flock -w 300 .deploy.lock python3 '$release/dev.py' '$IMAGE' '$GITHUB_SHA'"
           printf 'Revision: %s\n\nImage: %s\n\nOperating checks: PASS\n' "$GITHUB_SHA" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"
