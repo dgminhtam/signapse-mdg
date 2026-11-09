@@ -5,6 +5,7 @@ on:
     branches: [dev, main]
   push:
     branches: [dev, main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -55,13 +56,13 @@ jobs:
             -e ECONOMIC_CALENDAR_POLL_SECONDS=0 "$CI_IMAGE"
           docker exec mdg-ci python -m scripts.verify_deployment "$GITHUB_SHA"
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Publish the exact image that passed operating checks
         id: publish
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
         run: |
           set -euo pipefail
           docker push "$CI_IMAGE"
@@ -128,32 +129,23 @@ jobs:
           printf 'Revision: %s\n\nImage: %s\n\nOperating checks: PASS\n' "$GITHUB_SHA" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"
 
   deploy-prod:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    environment: production
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
           ping: ${{ vars.PROD_SERVER_HOST }}
-      - name: Configure prod SSH
+      - name: Deploy the verified main image
         env:
+          PROD_HOST: ${{ vars.PROD_SERVER_HOST }}
           SSH_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
           KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
-        run: |
-          test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/mdg-prod
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/mdg-prod ~/.ssh/known_hosts
-      - name: Backup, migrate, deploy and verify prod
-        env:
-          PROD_SERVER_HOST: ${{ vars.PROD_SERVER_HOST }}
-          PROD_SERVER_USER: ${{ vars.PROD_SERVER_USER }}
           IMAGE: dgminhtam/signapse-mdg@${{ needs.check.outputs.digest }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -162,18 +154,12 @@ jobs:
           [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
           [[ "$IMAGE" =~ ^dgminhtam/signapse-mdg@sha256:[a-f0-9]{64}$ ]]
           [[ "$DOCKERHUB_USERNAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]]
-          target="$PROD_SERVER_USER@$PROD_SERVER_HOST"
-          release="/opt/signapse/mdg/releases/$GITHUB_SHA"
-          upload="/home/$PROD_SERVER_USER/mdg-release-$GITHUB_SHA"
-          ssh_opts=(-i ~/.ssh/mdg-prod -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10)
-          # Paths use the validated SHA; configuration supplies the deployment user.
-          # shellcheck disable=SC2029
-          ssh "${ssh_opts[@]}" "$target" "umask 077; mkdir -p '$upload'; sudo -n install -d -m 700 '$release'"
-          scp "${ssh_opts[@]}" deploy/prod.py deploy/docker-compose.prod.yml "$target:$upload/"
-          # Install root-owned copies before executing the reviewed release.
-          # shellcheck disable=SC2029
-          ssh "${ssh_opts[@]}" "$target" "sudo -n install -m 600 '$upload/prod.py' '$upload/docker-compose.prod.yml' '$release/'; rm -- '$upload/prod.py' '$upload/docker-compose.prod.yml'; rmdir '$upload'"
-          # Digest, SHA and registry username are validated before remote interpolation.
-          # shellcheck disable=SC2029
-          printf '%s' "$DOCKERHUB_TOKEN" | ssh "${ssh_opts[@]}" "$target" "sudo -n flock -w 300 /opt/signapse/mdg/.deploy.lock python3 '$release/prod.py' '$IMAGE' '$GITHUB_SHA' '$DOCKERHUB_USERNAME'"
-          printf 'Prod revision: %s\nImage: %s\nBackup and operating checks: PASS\n' "$GITHUB_SHA" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"
+          test -n "$PROD_HOST" && test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/mdg-prod
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/mdg-prod ~/.ssh/known_hosts
+          printf '%s\n' "$IMAGE" "$GITHUB_SHA" "$DOCKERHUB_USERNAME" "$DOCKERHUB_TOKEN" |
+            ssh -T -i ~/.ssh/mdg-prod -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=10 "mdg-deploy@$PROD_HOST"
+          printf 'Prod revision: %s\nImage: %s\n' "$GITHUB_SHA" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"

@@ -1,4 +1,4 @@
-"""Run under sudo on prod; callers hold /opt/signapse/mdg/.deploy.lock."""
+"""Run under the production deployment lock."""
 
 import json
 import os
@@ -10,10 +10,10 @@ import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-ROOT = Path("/opt/signapse/mdg")
+ROOT = Path("/opt/signapse-prod/mdg")
 BACKUPS = Path("/var/backups/signapse-mdg")
 GATEWAY = "signapse-prod-mdg-gateway-1"
-DATABASE = "signapse-prod-database-database-1"
+DATABASE = "signapse-prod-database-1"
 
 
 def output(*args: str) -> str:
@@ -36,20 +36,11 @@ def backup(revision: str) -> Path:
     folder = BACKUPS / (datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ-") + revision)
     folder.mkdir(mode=0o700)
     user = database_user()
-    # Resolve the runtime target without exposing the URL or provider credentials.
-    db = output(
-        "docker",
-        "exec",
-        GATEWAY,
-        "python",
-        "-c",
-        "from app.core.config import get_settings; "
-        "from sqlalchemy.engine import make_url; "
-        "print(make_url(get_settings().database_url).database)",
-    )
+    previous = json.loads(output("docker", "inspect", GATEWAY))[0]
+    runtime = dict(item.split("=", 1) for item in previous["Config"]["Env"] if "=" in item)
+    db = runtime.get("DATABASE_URL", "").rsplit("/", 1)[-1]
     if db != "signapse_mdg":
         raise ValueError("Unexpected production database.")
-    previous = json.loads(output("docker", "inspect", GATEWAY))[0]
     schema = output(
         "docker",
         "exec",
@@ -78,8 +69,9 @@ def backup(revision: str) -> Path:
         )
         + "\n"
     )
-    shutil.copyfile(ROOT / "docker-compose.yml", folder / "docker-compose.yml")
-    shutil.copyfile(ROOT / ".env", folder / "compose.env")
+    for name in ("docker-compose.yml", ".env"):
+        if (ROOT / name).is_file():
+            shutil.copyfile(ROOT / name, folder / name)
     partial = folder / "database.dump.partial"
     with partial.open("wb") as target:
         subprocess.run(
@@ -119,7 +111,7 @@ def deploy(image: str, revision: str) -> None:
         raise ValueError("Expected immutable MDG image.")
     if not re.fullmatch(r"[a-f0-9]{40}", revision):
         raise ValueError("Expected full source SHA.")
-    if output("hostname") != "signapse-prod":
+    if output("tailscale", "ip", "-4") != "100.74.15.80":
         raise ValueError("Wrong deployment host.")
     os.environ["MDG_IMAGE"] = image
     release = Path(__file__).resolve().parent
@@ -142,9 +134,29 @@ def deploy(image: str, revision: str) -> None:
         "org.opencontainers.image.revision"
     ) != revision:
         raise ValueError("Image revision mismatch.")
-    folder = backup(revision)
+    first_release = not (ROOT / ".env").exists()
+    previous = subprocess.run(
+        ["docker", "container", "inspect", GATEWAY],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    folder = backup(revision) if previous.returncode == 0 else None
     run(*compose, "run", "--rm", "--no-deps", "-T", "gateway", "alembic", "upgrade", "head")
-    run(*compose, "up", "-d", "--no-deps", "--force-recreate", "gateway")
+    if first_release:
+        run(
+            *compose,
+            "run",
+            "--rm",
+            "--no-deps",
+            "-T",
+            "gateway",
+            "python",
+            "-c",
+            "import asyncio; from scripts.seed_mt5_local import main; "
+            "asyncio.run(main('signapse_mdg'))",
+        )
+    run(*compose, "up", "-d", "--no-deps", "--wait", "--wait-timeout", "120", "gateway")
     container = output(*compose, "ps", "-q", "gateway")
     if (
         not container
