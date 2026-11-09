@@ -21,16 +21,21 @@ services:
       DATABASE_POOL_MAX_OVERFLOW: '2'
       DATABASE_POOL_TIMEOUT_SECONDS: '5'
       ECONOMIC_CALENDAR_POLL_SECONDS: '300'
-    volumes:
-      - type: bind
-        source: /etc/signapse/secrets/mdg-runtime.env
-        target: /app/.env
-        read_only: true
-        bind:
-          create_host_path: false
-    ports: ['127.0.0.1:8000:8000']
-    dns: [1.1.1.1, 1.0.0.1]
-    networks: [database]
+      MT5_ENABLED: 'true'
+      MT5_TOKEN_FILE: /tmp/mt5-token
+    env_file: /opt/signapse-prod/mdg/runtime.env
+    command:
+      - sh
+      - -ec
+      - |
+        umask 077
+        printf '%s' "$$MT5_TOKEN" > /tmp/mt5-token
+        unset MT5_TOKEN
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+    networks:
+      database:
+      mt5:
+        aliases: [mdg-tcp-smoke.test]
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=4).close()"]
       interval: 30s
@@ -45,4 +50,7 @@ services:
 networks:
   database:
     external: true
-    name: signapse-prod-database
+    name: signapse-prod_default
+  mt5:
+    external: true
+    name: signapse-prod-mt5
