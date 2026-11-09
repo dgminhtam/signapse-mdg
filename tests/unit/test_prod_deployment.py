@@ -11,15 +11,23 @@ REVISION = "a" * 40
 IMAGE = "dgminhtam/signapse-mdg@sha256:" + "b" * 64
 
 
-@pytest.mark.parametrize("failure", [None, "backup", "migration"])
+@pytest.mark.parametrize(
+    ("first_release", "failure"),
+    [(False, None), (False, "backup"), (False, "migration"), (True, None)],
+)
 def test_prod_backup_precedes_migration_and_failures_stop_replacement(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure: str | None
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, first_release: bool, failure: str | None
 ) -> None:
     monkeypatch.setattr(prod, "ROOT", tmp_path)
     monkeypatch.setattr(prod.shutil, "copyfile", Mock())
+    if not first_release:
+        (tmp_path / ".env").touch()
+    monkeypatch.setattr(
+        prod.subprocess, "run", Mock(return_value=Mock(returncode=int(first_release)))
+    )
     responses = iter(
         [
-            "signapse-prod",
+            "100.74.15.80",
             IMAGE,
             json.dumps(
                 [
@@ -49,6 +57,8 @@ def test_prod_backup_precedes_migration_and_failures_stop_replacement(
                 raise subprocess.CalledProcessError(1, args)
         if "up" in args:
             events.append("replace")
+        if any("seed_mt5_local" in arg for arg in args):
+            events.append("seed")
 
     monkeypatch.setattr(prod, "backup", backup)
     monkeypatch.setattr(prod, "run", run)
@@ -58,7 +68,12 @@ def test_prod_backup_precedes_migration_and_failures_stop_replacement(
         assert "replace" not in events
     else:
         prod.deploy(IMAGE, REVISION)
-        assert events == ["backup", "migration", "replace"]
+        expected = (
+            ["migration", "seed", "replace"]
+            if first_release
+            else ["backup", "migration", "replace"]
+        )
+        assert events == expected
 
 
 def test_failed_dump_is_never_marked_complete(
@@ -72,8 +87,18 @@ def test_failed_dump_is_never_marked_complete(
         "output",
         Mock(
             side_effect=[
-                "signapse_mdg",
-                json.dumps([{"Image": "old", "Config": {"Image": "old-ref", "Labels": {}}}]),
+                json.dumps(
+                    [
+                        {
+                            "Image": "old",
+                            "Config": {
+                                "Image": "old-ref",
+                                "Labels": {},
+                                "Env": ["DATABASE_URL=postgresql+asyncpg://database/signapse_mdg"],
+                            },
+                        }
+                    ]
+                ),
                 "head",
             ]
         ),
