@@ -1,0 +1,16 @@
+{
+  "at": "2026-11-02T14:58:57.063727+07:00",
+  "database": "dev-signapse-mdg",
+  "deletedAssets": [
+    "CORN",
+    "DJI"
+  ],
+  "deletedMappings": 2,
+  "deletedCandles": 291,
+  "remainingAssets": 22,
+  "remainingEnabledDefaultMappings": 22,
+  "otherAssetsUnchanged": true,
+  "otherCandleRowsUnchanged": true,
+  "backup": "[private database backup]",
+  "status": "COMMITTED"
+}
