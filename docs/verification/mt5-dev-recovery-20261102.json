@@ -1,0 +1,60 @@
+{
+  "closedCandleCount": 3,
+  "closedCandlesUnchanged": true,
+  "passed": true,
+  "restartAt": "2026-11-02T07:52:04.2926488+00:00",
+  "at": "2026-11-02T07:52:06.6650361+00:00",
+  "freshQuote": {
+    "quotes": [
+      {
+        "symbol": "XAU/USD",
+        "price": "3903.91",
+        "receivedAt": "2026-11-02T07:52:46.362823Z"
+      }
+    ],
+    "errors": []
+  },
+  "postRestartObservationAt": "2026-11-02T07:52:46.6077747+00:00",
+  "websocketAfterRestart": [
+    {
+      "type": "status",
+      "state": "CONNECTING",
+      "symbols": [
+        "XAU/USD"
+      ],
+      "channels": [
+        "quote"
+      ],
+      "observedAt": "2026-11-02T07:53:20.356329Z"
+    },
+    {
+      "type": "quote",
+      "symbol": "XAU/USD",
+      "price": "3903.23",
+      "receivedAt": "2026-11-02T07:53:20.274828Z"
+    },
+    {
+      "type": "status",
+      "state": "SUBSCRIBED",
+      "symbols": [
+        "XAU/USD"
+      ],
+      "channels": [
+        "quote"
+      ],
+      "observedAt": "2026-11-02T07:53:20.356588Z"
+    },
+    {
+      "type": "quote",
+      "symbol": "XAU/USD",
+      "price": "3903.22",
+      "receivedAt": "2026-11-02T07:53:20.535302Z"
+    },
+    {
+      "type": "quote",
+      "symbol": "XAU/USD",
+      "price": "3903.14",
+      "receivedAt": "2026-11-02T07:53:20.802610Z"
+    }
+  ]
+}

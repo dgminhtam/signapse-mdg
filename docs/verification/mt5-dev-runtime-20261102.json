@@ -1,0 +1,62 @@
+{
+  "at": "2026-11-02T14:49:06.289955+07:00",
+  "environment": "dev",
+  "revision": "93ea4f5021fbe9821c0e9b421ccee9a65ae89ba1",
+  "pr": "https://github.com/dgminhtam/signapse-mdg/pull/2",
+  "actions": "https://github.com/dgminhtam/signapse-mdg/actions/runs/41407429030",
+  "runtimeArchiveChecksum": "974545db9bac51599598b7ed8d5d0f5761371ab40d6b929251573c91e72409f3",
+  "archiveChecksumMatched": true,
+  "privateTokenMatched": true,
+  "databaseBackupVerified": true,
+  "containers": [
+    {
+      "name": "mdg-gateway-1",
+      "image": "dgminhtam/signapse-mdg@sha256:7d6200b38c2aa641d075c99f51dd227eafbc2b218c1e27adc90f50bec1701dd8",
+      "imageId": "sha256:7d6200b38c2aa641d075c99f51dd227eafbc2b218c1e27adc90f50bec1701dd8",
+      "revision": "93ea4f5021fbe9821c0e9b421ccee9a65ae89ba1",
+      "ports": {
+        "8000/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "8000"
+          },
+          {
+            "HostIp": "[private Tailnet address]",
+            "HostPort": "8000"
+          }
+        ]
+      },
+      "networks": [
+        "mdg_mt5",
+        "signapse_default"
+      ]
+    },
+    {
+      "name": "mdg-terminal-1",
+      "image": "dgminhtam/signapse-mdg@sha256:2c200b5d9710da5293797e01ea389fb5dff2937dc79ebaace19c736c29c39b74",
+      "imageId": "sha256:2c200b5d9710da5293797e01ea389fb5dff2937dc79ebaace19c736c29c39b74",
+      "revision": "93ea4f5021fbe9821c0e9b421ccee9a65ae89ba1",
+      "ports": {
+        "6080/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "6085"
+          }
+        ]
+      },
+      "networks": [
+        "mdg_mt5"
+      ],
+      "cpuLimit": 1,
+      "memoryLimitBytes": 2147483648,
+      "health": "healthy"
+    }
+  ],
+  "wineVersion": "wine-11.0",
+  "persistence": {
+    "closedCandleRows": 2028,
+    "persistedSymbolTimeframePairs": 198
+  },
+  "currentDemoAccountVerified": true,
+  "localRuntimeStopped": true
+}
