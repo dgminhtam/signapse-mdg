@@ -27,6 +27,7 @@ from app.domain.timeframes import candle_close_time, get_timeframe
 from app.providers.normalization import parse_decimal
 
 PROVIDER = "MT5_VANTAGE_DEMO"
+SUPPORTED_VANTAGE_SERVERS = ("VantageMarkets-Demo", "VantageMarkets-Live 13")
 FRAME_LIMIT = 65536
 PAGE_SIZE = 128
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ class MT5Provider:
             if (
                 hello.get("type") != "hello"
                 or hello.get("version") != 1
-                or hello.get("server") != "VantageMarkets-Demo"
+                or hello.get("server") not in SUPPORTED_VANTAGE_SERVERS
                 or hello.get("service") is not True
                 or hello.get("algoTrading") is not False
             ):
