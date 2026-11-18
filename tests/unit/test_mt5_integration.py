@@ -69,7 +69,10 @@ def test_nominal_scan_crosses_dst_weekend_for_closed_stock_history() -> None:
     assert all(schedule.end_after(t) > t for t in opens)
 
 
-async def test_tcp_ingests_without_subscriber_rejects_bad_auth_and_replay(tmp_path: Path) -> None:
+@pytest.mark.parametrize("server", ["VantageMarkets-Demo", "VantageMarkets-Live 13"])
+async def test_tcp_ingests_without_subscriber_rejects_bad_auth_and_replay(
+    tmp_path: Path, server: str
+) -> None:
     token = tmp_path / "token"
     token.write_text("a" * 64)
     provider = MT5Provider([symbol()], token_file=token, host="127.0.0.1", port=0)
@@ -88,7 +91,7 @@ async def test_tcp_ingests_without_subscriber_rejects_bad_auth_and_replay(tmp_pa
         hello = {
             "type": "hello",
             "version": 1,
-            "server": "VantageMarkets-Demo",
+            "server": server,
             "service": True,
             "algoTrading": False,
             "serverTime": int(to_broker_wall(now).timestamp()),

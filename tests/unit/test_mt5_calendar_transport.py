@@ -8,7 +8,7 @@ from app.domain.errors import ProviderUnavailableError
 from app.providers.mt5_calendar import MT5CalendarProvider
 
 
-async def connect(provider, *, role="calendar"):
+async def connect(provider, *, role="calendar", server="VantageMarkets-Demo"):
     port = provider._server.sockets[0].getsockname()[1]
     reader, writer = await asyncio.open_connection("127.0.0.1", port)
     now = int(datetime.now(UTC).timestamp())
@@ -18,7 +18,7 @@ async def connect(provider, *, role="calendar"):
             {
                 "type": "hello",
                 "version": 1,
-                "server": "VantageMarkets-Demo",
+                "server": server,
                 "symbols": ["XAUUSD"],
                 "role": role,
                 "service": True,
@@ -75,10 +75,11 @@ async def response(reader, writer, *, incomplete=False):
 
 
 @pytest.mark.asyncio
-async def test_calendar_splits_range_and_uses_session_offset_across_dst(tmp_path):
+@pytest.mark.parametrize("server", ["VantageMarkets-Demo", "VantageMarkets-Live 13"])
+async def test_calendar_splits_range_and_uses_session_offset_across_dst(tmp_path, server):
     provider = provider_for(tmp_path)
     await provider.start()
-    reader, writer = await connect(provider)
+    reader, writer = await connect(provider, server=server)
     start = datetime(2026, 10, 26, tzinfo=UTC)
     task = asyncio.create_task(provider.fetch_rows(start, start + timedelta(days=9)))
     first = await response(reader, writer)
@@ -110,10 +111,13 @@ async def test_partial_calendar_response_is_failure_not_empty_success(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_calendar_timeout_and_wrong_service_role_fail_closed(tmp_path):
+@pytest.mark.parametrize(
+    ("role", "server"), [("quotes", "VantageMarkets-Demo"), ("calendar", "OtherServer")]
+)
+async def test_calendar_timeout_and_unexpected_handshake_fail_closed(tmp_path, role, server):
     provider = provider_for(tmp_path, timeout=0.05)
     await provider.start()
-    reader, writer = await connect(provider, role="quotes")
+    reader, writer = await connect(provider, role=role, server=server)
     assert await asyncio.wait_for(reader.read(), 1) == b""
     start = datetime.now(UTC)
     with pytest.raises(ProviderUnavailableError):
