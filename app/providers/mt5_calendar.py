@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from app.domain.economic_calendar import EconomicCalendarFetchedEvent
 from app.domain.errors import ProviderUnavailableError
-from app.providers.mt5 import FRAME_LIMIT, integer
+from app.providers.mt5 import FRAME_LIMIT, SUPPORTED_VANTAGE_SERVERS, integer
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ class MT5CalendarProvider:
             if (
                 hello.get("type") != "hello"
                 or hello.get("version") != 1
-                or hello.get("server") != "VantageMarkets-Demo"
+                or hello.get("server") not in SUPPORTED_VANTAGE_SERVERS
                 or hello.get("role") != "calendar"
                 or hello.get("service") is not True
                 or hello.get("algoTrading") is not False
